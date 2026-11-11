@@ -2,7 +2,7 @@ import { copyFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 
 import { basename, join } from 'node:path';
 import { parseDocument, stringify } from 'yaml';
 import { runCommand } from '../util/process.js';
-import { BRIEF_LIMIT, knowledgePaths } from './notes.js';
+import { BRIEF_LIMIT, knowledgePaths, looksLikeSecret } from './notes.js';
 
 /**
  * Filing a note: the filer agent works on a copy of the knowledge base in a folder of its
@@ -20,16 +20,6 @@ export const ABOUT_YOU_SUGGESTION = 'about-you.suggested.md';
 export const MAX_PAGE_LOSS = 0.25;
 
 const PAGE_NAME = /^[a-z0-9][a-z0-9-]{0,79}\.md$/;
-
-/** Text that looks like a credential; a page holding any is never kept. */
-const SECRET_PATTERNS = [
-  /xox[abposr]-[A-Za-z0-9-]{10,}/,
-  /xapp-[A-Za-z0-9-]{10,}/,
-  /\bsk-[A-Za-z0-9_-]{20,}/,
-  /\bgh[pousr]_[A-Za-z0-9]{30,}/,
-  /\bAKIA[0-9A-Z]{16}\b/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-];
 
 export type Snapshot = Map<string, string>;
 
@@ -101,7 +91,7 @@ export async function reviewFiling(
       const body = text.trim();
       if (body.length > BRIEF_LIMIT) {
         rejected.push({ path, reason: `it is longer than ${String(BRIEF_LIMIT)} characters` });
-      } else if (holdsSecret(body)) {
+      } else if (looksLikeSecret(body)) {
         rejected.push({ path, reason: 'it looks like it holds a credential' });
       } else {
         accepted.set(path, `${body}\n`);
@@ -118,7 +108,7 @@ export async function reviewFiling(
       rejected.push({ path, reason: 'it is empty' });
       continue;
     }
-    if (holdsSecret(text)) {
+    if (looksLikeSecret(text)) {
       rejected.push({ path, reason: 'it looks like it holds a credential' });
       continue;
     }
@@ -141,7 +131,7 @@ export async function reviewFiling(
 
   const suggestion = await readFile(join(folder, ABOUT_YOU_SUGGESTION), 'utf8').catch(() => null);
   const aboutYouSuggestion =
-    suggestion !== null && suggestion.trim() !== '' && !holdsSecret(suggestion)
+    suggestion !== null && suggestion.trim() !== '' && !looksLikeSecret(suggestion)
       ? `${suggestion.trim()}\n`
       : null;
   return { accepted, rejected, aboutYouSuggestion };
@@ -181,15 +171,25 @@ export function renderPage(page: {
 
 /**
  * Writes the accepted changes into the knowledge folder and moves the note from the inbox
- * to `notes/<year>/<month>/`. Returns the paths changed, relative to the workspace folder.
+ * to `notes/<year>/<month>/`. Nothing is written if any file it would change has changed
+ * since the filer took its copy (`before`): a person's edit is never overwritten, and the
+ * note is filed again from the new version. Returns the paths changed, relative to the
+ * workspace folder, or the files that changed meanwhile.
  */
 export async function applyFiling(
   workspaceDir: string,
   noteFile: string,
   accepted: Map<string, string>,
+  before: Snapshot,
   now = new Date(),
-): Promise<string[]> {
+): Promise<{ ok: true; changed: string[] } | { ok: false; conflicts: string[] }> {
   const knowledge = knowledgePaths(workspaceDir);
+  const conflicts: string[] = [];
+  for (const path of accepted.keys()) {
+    const current = await readFile(join(knowledge.root, path), 'utf8').catch(() => null);
+    if (current !== (before.get(path) ?? null)) conflicts.push(path);
+  }
+  if (conflicts.length > 0) return { ok: false, conflicts };
   const changed: string[] = [];
   for (const [path, text] of accepted) {
     const target = join(knowledge.root, path);
@@ -203,7 +203,7 @@ export async function applyFiling(
   await rename(noteFile, filed);
   changed.push(join('knowledge', 'inbox', basename(noteFile)));
   changed.push(join('knowledge', 'notes', month, basename(noteFile)));
-  return changed;
+  return { ok: true, changed };
 }
 
 /**
@@ -258,10 +258,6 @@ export async function commitFiling(
   ]);
   if (commit.code !== 0) return { ok: false, reason: (commit.stderr || commit.stdout).trim() };
   return { ok: true };
-}
-
-function holdsSecret(text: string): boolean {
-  return SECRET_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function titleFromName(name: string): string {

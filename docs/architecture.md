@@ -95,9 +95,14 @@ then checks every change in code before it reaches the real knowledge base:
 
 Opinr writes the changes that pass, moves the note to `notes/<year>/<month>/`, and commits those
 paths, and only those, in the install's git folder as "Opinr". A suggested change to
-`about-you.md` waits in `.opinr/review/about-you/` for you to approve it. A note the filer can't
-file stays in the inbox and is tried again; after three failed tries, it waits until the service
-restarts.
+`about-you.md` waits in `.opinr/review/about-you/` for you to approve it. If a page or the brief changed while the filer
+worked, such as an edit by hand, nothing is applied and the note is filed again from the new
+version, so an edit is never overwritten. A note the filer can't file stays in the inbox and is
+tried again; after three failed tries, it waits until the service restarts.
+
+Nothing that looks like a password, token or key is kept: `opinr note` refuses such a note, a
+note that reaches the inbox anyway is moved to `.opinr/quarantine/<workspace>/` and never filed or
+committed, and pages and the brief that hold one are not kept.
 
 `OPINR_HOME` moves the install folder.
 

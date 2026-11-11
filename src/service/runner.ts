@@ -79,6 +79,15 @@ export class TaskRunner {
     await writePlanFiles(plan);
     const existing = await this.runtime.get(run.name);
     if (existing) {
+      // Only a session of this same job is replaced, never one that just shares its name.
+      const theirs = existing.labels;
+      if (Object.entries(run.labels).some(([key, value]) => theirs[key] !== value)) {
+        return {
+          ok: false,
+          reason: `another session is already called ${run.name}`,
+          sessionId: null,
+        };
+      }
       if (existing.state === 'live') await this.runtime.stop(existing.id).catch(() => undefined);
       await this.runtime.remove(existing.id).catch(() => undefined);
     }

@@ -129,12 +129,16 @@ describe('checking what the filer changed', () => {
   });
 
   it('applies the changes and moves the note out of the inbox', async () => {
-    const changed = await applyFiling(
+    const before = await prepare();
+    const applied = await applyFiling(
       workspace,
       note,
       new Map([['pages/sailing.md', 'Sundays.\n']]),
+      before,
       new Date('2026-11-11T21:00:00Z'),
     );
+    expect(applied.ok).toBe(true);
+    const changed = applied.ok ? applied.changed : [];
     const knowledge = knowledgePaths(workspace);
     expect(readFileSync(join(knowledge.pages, 'sailing.md'), 'utf8')).toBe('Sundays.\n');
     expect(readdirSync(knowledge.inbox)).toEqual([]);
@@ -146,15 +150,38 @@ describe('checking what the filer changed', () => {
     ]);
   });
 
+  it('applies nothing when a person changed a file while the filer worked', async () => {
+    const before = await prepare();
+    const knowledge = knowledgePaths(workspace);
+    writeFileSync(join(knowledge.pages, 'boat-name.md'), 'Edited by hand.\n');
+    writeFileSync(join(knowledge.pages, 'sailing.md'), 'Also new by hand.\n');
+    const applied = await applyFiling(
+      workspace,
+      note,
+      new Map([
+        ['pages/boat-name.md', 'From the filer.\n'],
+        ['pages/sailing.md', 'From the filer.\n'],
+        ['brief.md', 'From the filer.\n'],
+      ]),
+      before,
+    );
+    expect(applied).toEqual({ ok: false, conflicts: ['pages/boat-name.md', 'pages/sailing.md'] });
+    expect(readFileSync(join(knowledge.pages, 'boat-name.md'), 'utf8')).toBe('Edited by hand.\n');
+    expect(readFileSync(knowledge.brief, 'utf8')).toBe('The brief.\n');
+    expect(readdirSync(knowledge.inbox)).toEqual([noteName()]);
+  });
+
   it('commits only the paths it is given', async () => {
     git(dir, 'init', '--quiet');
     writeFileSync(join(dir, 'unrelated.txt'), 'Not mine.\n');
     git(dir, 'add', 'unrelated.txt');
-    const changed = await applyFiling(
+    const applied = await applyFiling(
       workspace,
       note,
       new Map([['pages/sailing.md', 'Sundays.\n']]),
+      await prepare(),
     );
+    const changed = applied.ok ? applied.changed : [];
     const result = await commitFiling(
       dir,
       changed.map((p) => join('ws', p)),
@@ -242,6 +269,45 @@ describe('the task runner', () => {
     expect(own.result).toMatchObject({ ok: true, answer: 'Wrote hello.txt' });
   });
 
+  it('never replaces a session of another job that happens to share its name', async () => {
+    const runtime = new MemoryRuntime({ filer: fakeFiler({ answers, act: writesHello }) });
+    await runtime.start({
+      name: 'filer-ws',
+      command: ['filer'],
+      cwd: dir,
+      env: {},
+      labels: { opinr: 'filer', workspace: 'other' },
+    });
+    const runner = new TaskRunner({ runtime, pollMs: 5, startupSeconds: 1 });
+    const result = await runner.run({
+      agent: {
+        name: 'filer',
+        description: null,
+        engine: 'stub',
+        model: 'm',
+        account: 'a',
+        skills: [],
+        integrations: [],
+        permissions: 'auto',
+        instructions: 'Do the task.',
+      },
+      engine: new StubEngine({ command: ['filer'], answers }),
+      workspace: { id: 'ws', dir },
+      account: { name: 'a', driver: 'stub' },
+      dir,
+      task: 'Write hello.txt',
+      name: 'filer-ws',
+      labels: { opinr: 'filer', workspace: 'ws' },
+      env: {},
+      timeoutSeconds: 5,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      reason: 'another session is already called filer-ws',
+    });
+    expect(await runtime.list({ labels: { workspace: 'other' } })).toHaveLength(1);
+  });
+
   it('gives up when the agent runs out of time or gives no answer, and still stops it', async () => {
     const hung = await run(
       { answers, act: () => null, hang: true },
@@ -324,6 +390,38 @@ describe('the filing queue', () => {
     expect(git(home, 'log', '--format=%s')).toBe('Filed "Picked Halcyon" in personal');
     expect(git(home, 'log', '--format=%b')).toContain('Created pages/boat-name.md');
     expect(git(home, 'status', '--porcelain', 'workspaces/personal/knowledge')).toBe('');
+  });
+
+  it('never files, archives or commits a note that looks like it holds a credential', async () => {
+    const inbox = knowledgePaths(join(home, 'workspaces', 'personal')).inbox;
+    writeFileSync(
+      join(inbox, '2026-11-11-000000-x-keys.md'),
+      '# Keys\n\nghp_abcdefghijklmnopqrstuvwxyz0123456789\n',
+    );
+    await (await queue()).file('personal');
+    expect(readdirSync(inbox)).toEqual([]);
+    expect(readdirSync(join(home, '.opinr', 'quarantine', 'personal'))).toEqual([
+      '2026-11-11-000000-x-keys.md',
+    ]);
+    expect(() => git(home, 'log')).toThrow();
+  });
+
+  it("files again from a person's edit made while the filer worked, keeping the edit", async () => {
+    const real = join(knowledgePaths(join(home, 'workspaces', 'personal')).pages, 'boat-name.md');
+    let runs = 0;
+    act = (cwd) => {
+      if (runs++ === 0) writeFileSync(real, 'Edited by hand: the mooring is booked.\n');
+      const copy = join(cwd, 'pages', 'boat-name.md');
+      const current = existsSync(copy) ? readFileSync(copy, 'utf8') : '';
+      writeFileSync(copy, `${current}\nThe boat is Halcyon.\n`);
+      return 'Updated pages/boat-name.md.';
+    };
+    await addNote('# Halcyon');
+    await (await queue()).file('personal');
+    expect(runs).toBe(2);
+    expect(readFileSync(real, 'utf8')).toContain('Edited by hand: the mooring is booked.');
+    expect(readFileSync(real, 'utf8')).toContain('The boat is Halcyon.');
+    expect(logs.some((l) => l.includes('changed while the filer worked'))).toBe(true);
   });
 
   it('leaves a note it could not file in the inbox, and stops trying after three tries', async () => {

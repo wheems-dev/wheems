@@ -35,6 +35,21 @@ export const ABOUT_YOU_LIMIT = 4000;
 /** The most a single note may hold. A note is a summary, not a transcript. */
 export const NOTE_LIMIT = 32 * 1024;
 
+/** Text that looks like a credential. Notes and pages holding any are never kept. */
+const SECRET_PATTERNS = [
+  /xox[abposr]-[A-Za-z0-9-]{10,}/,
+  /xapp-[A-Za-z0-9-]{10,}/,
+  /\bsk-[A-Za-z0-9_-]{20,}/,
+  /\bgh[pousr]_[A-Za-z0-9]{30,}/,
+  /\bgithub_pat_[A-Za-z0-9_]{30,}/,
+  /\bAKIA[0-9A-Z]{16}\b/,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+];
+
+export function looksLikeSecret(text: string): boolean {
+  return SECRET_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 /** A file's text, cut to a limit, or null when it is missing or holds nothing yet. */
 export async function readCapped(file: string, limit: number): Promise<string | null> {
   let text: string;
@@ -77,6 +92,11 @@ export async function writeNote(
   if (Buffer.byteLength(body) > NOTE_LIMIT) {
     throw new Error(
       `The note is longer than ${String(NOTE_LIMIT / 1024)} KB. A note is a short summary: what happened, why, and what's next.`,
+    );
+  }
+  if (looksLikeSecret(body)) {
+    throw new Error(
+      'The note looks like it holds a password, token or key. Notes are kept in git: write it again without it.',
     );
   }
   const inbox = knowledgePaths(workspaceDir).inbox;
