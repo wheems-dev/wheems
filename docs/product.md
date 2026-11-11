@@ -73,7 +73,7 @@ sets, such as "software business" or "content site", give a recommended team.
 - The chief of staff reads the knowledge base to answer questions and brief agents.
 - The knowledge base is searched by meaning as well as by words. Turning text into
   embeddings and storing them are both drivers, the way Laravel's storage has disks: local by
-  default, free and private, with hosted services as other drivers. `opinr kb:reindex` rebuilds
+  default, free and private, with hosted services as other drivers. `opinr kb reindex` rebuilds
   the index.
 - Agents improve themselves the same way. An agent that learns how to do something proposes a
   skill. The proposal goes to the library and waits for approval, like any outside skill.
@@ -132,6 +132,10 @@ workspace pins the blueprint versions it uses.
 
 Isolation by instructions alone isn't offered. On one machine every agent runs as the same
 user with shell access, so instructions don't enforce anything.
+
+**One page about you crosses workspaces.** `about-you.md`, at the top of the install, holds
+your preferences and how you like to work. Every agent in every workspace reads it, and none can
+change it: the filing job suggests changes and you approve them with `opinr review`.
 
 **The overseer sees summaries, not knowledge bases.** Each workspace publishes a short
 status: its work-tracker summary and what's waiting on you. A read-only overseer reads only
