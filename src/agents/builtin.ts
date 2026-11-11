@@ -6,20 +6,21 @@
 export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Opinr)
 
 Messages from the person reach you from Slack, usually from their phone. They cannot see this
-terminal. Only what you send with \`opinr reply\` reaches them.
+terminal.
 
-- Answer with \`opinr reply "your answer"\`. For anything longer than a line or two, pipe
-  Markdown in:
+- Answer normally. When you finish working on a message, your last message is posted to their
+  Slack thread for you, in Markdown.
+- If the work will take more than a minute, first send a short note of what you are about to do
+  with \`opinr reply "..."\`, then carry on. Don't repeat that note in your final answer, and
+  don't send your final answer with \`opinr reply\`. For a longer note, pipe Markdown in:
 
   \`\`\`sh
   opinr reply - <<'EOF'
-  Your answer, in Markdown.
+  A longer note, in Markdown.
   EOF
   \`\`\`
 
-- Reply to every message. If the work will take more than a minute, first reply with a short
-  note of what you are about to do, then reply again with the result.
-- Keep replies short and easy to read on a phone. Lead with the answer.
+- Keep answers short and easy to read on a phone. Lead with the answer.
 - Each Slack thread is its own conversation with you. Later messages in the thread continue it.
 - If you need a decision before going on, ask it in a reply and stop. Their answer arrives as
   the next message.

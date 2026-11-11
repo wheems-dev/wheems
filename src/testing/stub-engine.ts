@@ -25,11 +25,23 @@ export class StubEngine implements EngineDriver {
     resume: true,
   };
   private readonly command: string[];
+  private readonly answers: Map<string, string> | undefined;
 
-  constructor(options: { name?: string; command?: string[] } = {}) {
+  /**
+   * With `answers`, the engine reports final messages from it, by conversation id, as an
+   * engine that reads its own transcripts does.
+   */
+  constructor(options: { name?: string; command?: string[]; answers?: Map<string, string> } = {}) {
     this.name = options.name ?? 'stub';
     this.command = options.command ?? ['sh'];
+    this.answers = options.answers;
+    if (this.answers) {
+      const answers = this.answers;
+      this.finalMessage = (session) => Promise.resolve(answers.get(session.id) ?? null);
+    }
   }
+
+  finalMessage?: (session: { id: string; dir: string }) => Promise<string | null>;
 
   check(): Promise<HealthCheck[]> {
     return Promise.resolve([

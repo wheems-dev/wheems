@@ -1,3 +1,6 @@
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { HealthCheck } from '../../contracts/driver.js';
 import type {
   AgentDefinition,
@@ -13,6 +16,8 @@ import { extractVersion } from '../../util/version.js';
 export interface ClaudeCodeOptions {
   /** The `claude` executable. Defaults to `claude` on PATH. */
   binary?: string;
+  /** Claude Code's config folder, which holds session transcripts. Defaults to ~/.claude. */
+  configDir?: string;
 }
 
 const PERMISSION_ARGS: Record<PermissionLevel, string[]> = {
@@ -37,9 +42,45 @@ export class ClaudeCodeEngine implements EngineDriver {
     resume: true,
   };
   private readonly binary: string;
+  private readonly configDir: string;
 
   constructor(options: ClaudeCodeOptions = {}) {
     this.binary = options.binary ?? 'claude';
+    this.configDir =
+      options.configDir ?? process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude');
+  }
+
+  /**
+   * The last text Claude wrote after the latest prompt, from the session's transcript
+   * (`projects/<folder>/<session id>.jsonl` in Claude Code's config folder).
+   */
+  async finalMessage(session: { id: string; dir: string }): Promise<string | null> {
+    const file = await this.transcript(session);
+    if (file === null) return null;
+    let text: string;
+    try {
+      text = await readFile(file, 'utf8');
+    } catch {
+      return null;
+    }
+    return finalText(text);
+  }
+
+  private async transcript(session: { id: string; dir: string }): Promise<string | null> {
+    if (!/^[0-9a-f-]{36}$/.test(session.id)) return null;
+    const projects = join(this.configDir, 'projects');
+    const name = `${session.id}.jsonl`;
+    // Claude Code names the folder after the real path, with every other character a dash.
+    const real = await realpath(session.dir).catch(() => session.dir);
+    const expected = join(projects, real.replace(/[^A-Za-z0-9]/g, '-'), name);
+    if (await isFile(expected)) return expected;
+    // Otherwise look for it: session ids are unique.
+    const folders = await readdir(projects).catch(() => [] as string[]);
+    for (const folder of folders) {
+      const candidate = join(projects, folder, name);
+      if (await isFile(candidate)) return candidate;
+    }
+    return null;
   }
 
   async check(): Promise<HealthCheck[]> {
@@ -87,4 +128,47 @@ export class ClaudeCodeEngine implements EngineDriver {
       ],
     });
   }
+}
+
+async function isFile(path: string): Promise<boolean> {
+  return stat(path).then(
+    (s) => s.isFile(),
+    () => false,
+  );
+}
+
+interface TranscriptEntry {
+  type?: string;
+  isSidechain?: boolean;
+  message?: { content?: string | { type?: string; text?: string }[] };
+}
+
+/** The last text block after the last prompt the person (not a tool) sent. */
+export function finalText(jsonl: string): string | null {
+  const entries: TranscriptEntry[] = [];
+  for (const line of jsonl.split('\n')) {
+    if (line.trim() === '') continue;
+    try {
+      entries.push(JSON.parse(line) as TranscriptEntry);
+    } catch {
+      // A line being written as we read; skip it.
+    }
+  }
+  let last: string | null = null;
+  for (const entry of entries) {
+    if (entry.isSidechain === true) continue;
+    const content = entry.message?.content;
+    if (entry.type === 'user') {
+      const isPrompt =
+        typeof content === 'string' ||
+        (Array.isArray(content) && content.some((block) => block.type === 'text'));
+      if (isPrompt) last = null;
+    } else if (entry.type === 'assistant' && Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '')
+          last = block.text.trim();
+      }
+    }
+  }
+  return last;
 }

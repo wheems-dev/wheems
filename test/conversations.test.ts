@@ -22,9 +22,10 @@ describe('conversations', () => {
   let behaviour: (line: string) => Behaviour;
   let received: Map<string, string[]>;
   let logs: string[];
+  let answers: Map<string, string>;
 
   const make = (options: { maxLiveSessions?: number; startupSeconds?: number } = {}) => {
-    const engine = new StubEngine({ command: ['fake-agent'] });
+    const engine = new StubEngine({ command: ['fake-agent'], answers });
     manager = new ConversationManager({
       install: install.config!,
       bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
@@ -51,12 +52,14 @@ describe('conversations', () => {
     channel = new MemoryChannel();
     behaviour = () => 'reply';
     received = new Map();
+    answers = new Map();
     logs = [];
     runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
         behaviour: (line) => behaviour(line),
         reply: (conversation, text) => manager.reply(conversation, text),
         received,
+        answers,
       }),
     });
     make();
@@ -152,6 +155,33 @@ describe('conversations', () => {
     expect(channel.sent).toEqual([]);
     expect(await runtime.list()).toEqual([]);
     expect(logs.some((l) => l.includes('USTRANGER'))).toBe(true);
+  });
+
+  it("posts the agent's final message of each turn, read by its engine", async () => {
+    behaviour = () => 'answer';
+    const first = await dm('what time is it?');
+    await settle();
+    await dm('and tomorrow?', first);
+    await settle();
+    expect(posts()).toEqual([
+      { thread: first, text: 'answer: what time is it?' },
+      { thread: first, text: 'answer: and tomorrow?' },
+    ]);
+    expect(channel.sent[0]?.identity).toEqual({ name: 'Personal chief of staff' });
+  });
+
+  it('posts progress notes from opinr reply and then the final answer, without repeating a reply', async () => {
+    behaviour = () => 'progress-and-answer';
+    const first = await dm('do the thing');
+    await settle();
+    expect(posts()).toEqual([
+      { thread: first, text: 'On it.' },
+      { thread: first, text: 'answer: do the thing' },
+    ]);
+    behaviour = () => 'reply-and-answer-same';
+    await dm('again', first);
+    await settle();
+    expect(posts().slice(2)).toEqual([{ thread: first, text: 'echo: again' }]);
   });
 
   it('says so when the agent finishes without replying', async () => {

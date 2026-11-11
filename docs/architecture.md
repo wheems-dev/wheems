@@ -4,8 +4,11 @@ Opinr is a small TypeScript service that's always running, a command agents call
 folder of config, with Herdr core underneath.
 
 Messages from Slack or Telegram reach the service, which routes them to the right
-workspace's agent through Herdr. Agents reply, ask for approval or leave notes by running
-the CLI.
+workspace's agent through Herdr: one conversation, and one engine session, per chat thread. A
+thread's later messages go to the same session, and a session that has ended is resumed. The
+service posts each answer, read from the engine's own record of the conversation, and agents
+send progress notes, ask for approval or leave notes by running the CLI, which talks to the
+service over a private Unix socket.
 
 **Why TypeScript on Node.** Claude Code and Codex already need Node on every agent machine,
 so it adds no new runtime. Slack's main Bolt library and the main Claude Agent SDK are both

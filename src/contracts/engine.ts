@@ -19,6 +19,14 @@ export interface EngineDriver extends Driver<'engine'> {
 
   /** Turns an agent definition into a launch plan. Must be deterministic and side-effect free. */
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan>;
+
+  /**
+   * Optional: the agent's final message of its latest turn, read from the engine's own
+   * structured record of the conversation (never the screen), or null when there is none
+   * yet. With it, the service posts each answer for the agent; without it, agents answer
+   * only through `opinr reply`.
+   */
+  finalMessage?(session: { id: string; dir: string }): Promise<string | null>;
 }
 
 export interface EngineCapabilities {

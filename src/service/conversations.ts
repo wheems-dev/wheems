@@ -43,6 +43,9 @@ export interface ConversationManagerOptions {
 
 interface Watch {
   sessionName: string;
+  /** The engine's id for the conversation, and the folder its session runs in. */
+  conversation: { id: string; dir: string };
+  engine: EngineDriver;
   /** The turn the agent was on when the latest message went in. */
   fromTurn: number;
   /** When the first message of this turn went in. */
@@ -65,6 +68,7 @@ export class ConversationManager {
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
   private readonly lastReply = new Map<string, number>();
+  private readonly lastReplyText = new Map<string, string>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
 
@@ -121,8 +125,12 @@ export class ConversationManager {
     return next;
   }
 
-  /** Posts an agent's reply into its conversation's thread. */
+  /** Posts an agent's reply (`opinr reply`) into its conversation's thread. */
   async reply(key: string, text: string): Promise<void> {
+    await this.post(key, text);
+  }
+
+  private async post(key: string, text: string): Promise<void> {
     const conversation = await this.options.store.get(key);
     if (!conversation) throw new Error(`No conversation ${key}`);
     const channel = this.channel(conversation.connection);
@@ -137,6 +145,7 @@ export class ConversationManager {
       ...(identity && channel.capabilities.identities && { identity }),
     });
     this.lastReply.set(key, Date.now());
+    this.lastReplyText.set(key, text.trim());
     await this.options.store.touch(key, new Date());
     const watch = this.watches.get(key);
     if (watch) {
@@ -169,7 +178,14 @@ export class ConversationManager {
       try {
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
-        this.watchTurn(key, binding, sessionName, sent.turn, seen);
+        this.watchTurn(
+          key,
+          binding,
+          sessionName,
+          sent.turn,
+          seen,
+          this.conversationFor(key, binding),
+        );
       } catch (error) {
         if (!isDriverError(error, 'blocked')) throw error;
         await this.unmark(channel, seen);
@@ -197,9 +213,26 @@ export class ConversationManager {
       lastActiveAt: now.toISOString(),
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
-    this.watchTurn(key, binding, sessionName, 0, seen);
+    this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
     await this.trim(binding.workspace.id, sessionName);
+  }
+
+  private chiefOfStaff(binding: Binding) {
+    const config = binding.workspace.config;
+    if (!config)
+      throw new Error(`Workspace ${binding.workspace.id} has config problems; run opinr doctor`);
+    const agent = binding.workspace.agents.find((a) => a.definition.name === config.chief_of_staff);
+    if (!agent)
+      throw new Error(`Workspace ${binding.workspace.id} has no chief of staff agent file`);
+    return agent;
+  }
+
+  private conversationFor(key: string, binding: Binding): Pick<Watch, 'conversation' | 'engine'> {
+    return {
+      conversation: { id: uuidFor(key), dir: binding.workspace.dir },
+      engine: this.options.engine(this.chiefOfStaff(binding).definition.engine),
+    };
   }
 
   private async startSession(
@@ -210,10 +243,7 @@ export class ConversationManager {
     resume: boolean,
   ): Promise<SessionInfo> {
     const workspace = binding.workspace;
-    const config = workspace.config;
-    if (!config) throw new Error(`Workspace ${workspace.id} has config problems; run opinr doctor`);
-    const agent = workspace.agents.find((a) => a.definition.name === config.chief_of_staff);
-    if (!agent) throw new Error(`Workspace ${workspace.id} has no chief of staff agent file`);
+    const agent = this.chiefOfStaff(binding);
     const account = this.options.install.accounts[agent.definition.account];
     const engine = this.options.engine(agent.definition.engine);
     const plan = await engine.prepare(
@@ -259,6 +289,7 @@ export class ConversationManager {
     sessionName: string,
     fromTurn: number,
     seen: MessageRef,
+    target: Pick<Watch, 'conversation' | 'engine'>,
   ): void {
     const active = this.watches.get(key);
     if (active && active.sessionName === sessionName) {
@@ -267,7 +298,7 @@ export class ConversationManager {
       active.seen.push(seen);
       return;
     }
-    const watch: Watch = { sessionName, fromTurn, sentAt: Date.now(), seen: [seen] };
+    const watch: Watch = { sessionName, fromTurn, sentAt: Date.now(), seen: [seen], ...target };
     this.watches.set(key, watch);
     const run = this.follow(key, binding, watch)
       .catch((error: unknown) => {
@@ -295,6 +326,7 @@ export class ConversationManager {
       const session = await runtime.get(watch.sessionName);
       if (!session) return;
       if (session.state === 'finished') {
+        if (await this.postFinal(key, watch)) return done(null);
         return done(
           this.repliedSince(key, watch.sentAt) ? null : 'The session ended without replying.',
         );
@@ -304,6 +336,7 @@ export class ConversationManager {
         return done(`The agent hit an error. Its session is \`${session.id}\` in Herdr.`);
       }
       if (session.turn > watch.fromTurn && session.status !== 'working') {
+        if (await this.postFinal(key, watch)) return done(null);
         return done(
           this.repliedSince(key, watch.sentAt)
             ? null
@@ -327,6 +360,24 @@ export class ConversationManager {
       }
       await runtime.wait(session.id, { timeoutSeconds: 300 });
     }
+  }
+
+  /**
+   * Posts the agent's final message of the turn, when its engine can read it and it
+   * isn't what the agent already sent with `opinr reply`. Returns whether it posted.
+   */
+  private async postFinal(key: string, watch: Watch): Promise<boolean> {
+    if (!watch.engine.finalMessage) return false;
+    // The engine may still be writing its record when the turn ends; give it a moment.
+    let text: string | null = null;
+    for (let attempt = 0; attempt < 5 && text === null; attempt++) {
+      if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
+      text = await watch.engine.finalMessage(watch.conversation);
+    }
+    if (text === null || text.trim() === '' || text.trim() === this.lastReplyText.get(key))
+      return false;
+    await this.post(key, text);
+    return true;
   }
 
   /** Stops the least recently used idle sessions beyond the workspace's limit. */

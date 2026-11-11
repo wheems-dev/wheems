@@ -42,12 +42,20 @@ accounts: # what pays for models
   claude-subscription: { driver: claude }
   openrouter: { driver: openrouter, secret: openrouter-key }
 
-connections: # channels and integrations, connected once
-  slack: { driver: slack, secret: slack-tokens }
+connections: # channels and integrations, connected once, shared by every workspace
+  slack:
+    driver: slack
+    secret: slack # the entry in the secrets file (default: the connection's name)
+    allowed_users: [U012ABCDEF] # who may talk to agents; everyone else is ignored
   github: { driver: github, secret: github-token }
 ```
 
-`secret` names a credential in Opinr's secret store. Credentials never appear in config.
+`secret` names a credential in the secrets file, `~/.config/opinr/secrets.json` (mode 600; an
+encrypted store comes later). Credentials never appear in config. `opinr setup` writes the Slack
+tokens there and your Slack member id into `allowed_users`.
+
+One Slack app serves every workspace: workspaces bind its channels, they don't get apps of their
+own.
 
 ## workspaces/&lt;id&gt;/workspace.yaml
 
@@ -62,8 +70,10 @@ machine: server # where its agents run by default
 isolation: enforced # or hard
 skill_budget: 20 # doctor warns past this many skills
 
+identity: { name: Acme chief of staff, icon: ':office:' } # how its posts appear, where supported
+
 channels: # chat, approvals and updates are built in; add any others
-  chat: { connection: slack, channel: acme-chat }
+  chat: { connection: slack, channel: acme-chat } # or { connection: slack, direct: true }
   approvals: { connection: slack, channel: acme-approvals }
   updates: { connection: slack, channel: acme-updates }
   briefs: { connection: slack, channel: acme-briefs }
@@ -82,6 +92,9 @@ rules:
     approval: approvals
 ```
 
+`direct: true` means the app's direct messages. Only one workspace per connection can have them;
+every other workspace chats in a channel, by name or id, that the app has been invited to.
+
 A rule needs at least one of `deny`, `require` or `approval`; `approval` names a channel and goes
 with `action`.
 
@@ -98,6 +111,7 @@ model: gpt-5.5-codex # the engine's model id
 account: chatgpt-subscription # one of the workspace's accounts
 skills: [code-review] # from the workspace's skills.yaml
 integrations: [github] # from the workspace's integrations
+permissions: ask # ask (default), auto or skip
 ---
 
 # Reviewer
@@ -106,6 +120,14 @@ Review the pull request you are given. Report findings; do not change code.
 ```
 
 `name` defaults to the file name, and must match it if given.
+
+`permissions` says how much the agent may do without asking: `ask` uses the engine's normal
+prompts, `auto` lets the engine allow routine actions and ask for risky ones (Claude Code's auto
+mode), and `skip` never asks. Until approvals arrive, a prompt means someone has to answer it at
+the machine, so a chief of staff you talk to from your phone usually runs on `auto`.
+
+Every agent also gets Opinr's built-in instructions: its last message of each turn is posted to
+the chat thread for it, and `opinr reply "..."` sends a progress note during long work.
 
 ## workspaces/&lt;id&gt;/skills.yaml
 
