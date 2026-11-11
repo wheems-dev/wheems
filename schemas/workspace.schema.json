@@ -123,6 +123,23 @@
       "exclusiveMinimum": 0,
       "maximum": 9007199254740991
     },
+    "knowledge": {
+      "default": {
+        "note_after_idle": 30
+      },
+      "description": "How the workspace's knowledge loop runs.",
+      "type": "object",
+      "properties": {
+        "note_after_idle": {
+          "default": 30,
+          "description": "Minutes a conversation stays quiet, after new work, before Opinr asks its agent for a note. 0 turns this off.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
     "machine": {
       "description": "The machine agents run on by default.",
       "type": "string",

@@ -20,14 +20,14 @@ describe('the service', () => {
   let service: RunningService | undefined;
   let channelOptions: Record<string, unknown> | undefined;
 
-  /** Runs `opinr reply` as an agent would, inside a conversation. */
-  const cliReply = async (conversation: string, args: string[], stdin = '') => {
+  /** Runs `opinr reply` (or another command) as an agent would, inside a conversation. */
+  const cliReply = async (conversation: string, args: string[], stdin = '', command = 'reply') => {
     let out = '';
     let err = '';
     const previous = process.exitCode;
     process.exitCode = undefined;
     try {
-      const code = await run(['reply', ...args], {
+      const code = await run([command, ...args], {
         ...defaultIo(),
         out: (t) => (out += t),
         err: (t) => (err += t),
@@ -138,6 +138,32 @@ describe('the service', () => {
     const result = await cliReply(`personal:slack:D1:${first}`, ['-'], '# Report\n\nAll done.\n');
     expect(result).toMatchObject({ code: 0, out: 'Sent.\n' });
     expect(channel.sent.at(-1)?.text).toBe('# Report\n\nAll done.');
+  });
+
+  it("saves a note with opinr note to the conversation's workspace inbox", async () => {
+    const first = await channel.receive({
+      channel: 'D1',
+      text: 'hello',
+      userId: 'UME',
+      direct: true,
+    });
+    await waitFor(() => channel.sent.length === 1);
+    const result = await cliReply(
+      `personal:slack:D1:${first}`,
+      ['-'],
+      '# Said hello\n\nNothing more.\n',
+      'note',
+    );
+    expect(result.code).toBe(0);
+    const saved = /^Saved to (workspaces\/personal\/knowledge\/inbox\/.+-said-hello\.md)\.\n$/.exec(
+      result.out,
+    );
+    expect(saved).not.toBeNull();
+    expect(readFileSync(join(home, saved![1]!), 'utf8')).toContain(
+      '# Said hello\n\nNothing more.\n',
+    );
+    // Notes are never posted to the thread.
+    expect(channel.sent).toHaveLength(1);
   });
 
   it('refuses opinr reply outside a conversation, or for one it does not know', async () => {

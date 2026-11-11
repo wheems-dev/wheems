@@ -29,6 +29,10 @@ const conversationSchema = z.object({
    * stopped, and after a restart the service follows it until they are all answered.
    */
   pending: z.number().int().nonnegative().optional(),
+  /** When the agent last wrote a note, or was asked for one. Work after it has no note yet. */
+  notedAt: z.string().optional(),
+  /** Opinr asked for a note and its answer, which is never posted, may not be skipped yet. */
+  noting: z.boolean().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -104,6 +108,26 @@ export class ConversationStore {
     const conversation = this.conversations.get(key);
     if (!conversation) return;
     conversation.lastAnswerId = id;
+    await this.save();
+  }
+
+  /** A note was written, or asked for: the work up to now is covered. */
+  async setNoted(key: string, at: Date): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.notedAt = at.toISOString();
+    await this.save();
+  }
+
+  /** Marks a note turn in progress, or (with no id) over; with an id, also moves the answer position past it. */
+  async setNoting(key: string, noting: boolean, lastAnswerId?: string): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    if (noting) conversation.noting = true;
+    else delete conversation.noting;
+    if (lastAnswerId !== undefined) conversation.lastAnswerId = lastAnswerId;
     await this.save();
   }
 

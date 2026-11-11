@@ -13,7 +13,7 @@ import {
 import { paths, type Paths } from '../../home.js';
 import { readSecrets, writeSecret } from '../../secrets.js';
 import { runCommand } from '../../util/process.js';
-import { INSTALL_GITIGNORE, installYaml } from '../templates.js';
+import { ABOUT_YOU_MD, INSTALL_GITIGNORE, installYaml } from '../templates.js';
 import { initWorkspace } from './init.js';
 
 /** Things setup does that reach outside the install folder, replaceable in tests. */
@@ -130,13 +130,17 @@ export async function setup(options: SetupOptions): Promise<void> {
 
 /** Creates the install folder (a git folder) if there is none. Returns whether it did. */
 export async function ensureInstall(where: Paths): Promise<boolean> {
-  if (await exists(where.install)) return false;
-  await mkdir(where.home, { recursive: true });
-  await writeFile(where.install, installYaml());
-  await writeFile(join(where.home, '.gitignore'), INSTALL_GITIGNORE);
-  if (!(await exists(join(where.home, '.git'))))
-    await runCommand('git', ['init', '--quiet', where.home]);
-  return true;
+  const created = !(await exists(where.install));
+  if (created) {
+    await mkdir(where.home, { recursive: true });
+    await writeFile(where.install, installYaml());
+    await writeFile(join(where.home, '.gitignore'), INSTALL_GITIGNORE);
+    if (!(await exists(join(where.home, '.git'))))
+      await runCommand('git', ['init', '--quiet', where.home]);
+  }
+  // Installs from before the knowledge loop get the page about you too.
+  if (!(await exists(where.aboutYou))) await writeFile(where.aboutYou, ABOUT_YOU_MD);
+  return created;
 }
 
 async function channels(options: SetupOptions, where: Paths): Promise<boolean> {

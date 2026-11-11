@@ -11,6 +11,7 @@ import { slackManifest } from '../drivers/channel/slack/setup.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
 import { stat } from 'node:fs/promises';
 import { initWorkspace } from './commands/init.js';
+import { registerNote } from './commands/note.js';
 import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { setup } from './commands/setup.js';
@@ -224,6 +225,7 @@ export function createProgram(io: Io): Command {
 
   registerService(program, io);
   registerReply(program, io);
+  registerNote(program, io);
 
   return program;
 }

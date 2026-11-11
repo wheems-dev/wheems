@@ -2,7 +2,7 @@ import type { Driver, HealthCheck } from './driver.js';
 
 /**
  * The channel contract: sends and receives messages, buttons and threads.
- * Version one ships Slack (milestone 1) and Telegram (milestone 8).
+ * Version one ships Slack (milestone 1) and Telegram and email (milestone 9).
  *
  * A channel driver holds one connection, such as one Slack app. Channels inside
  * it are addressed by the driver's own channel id.

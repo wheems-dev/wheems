@@ -1,6 +1,6 @@
 /**
  * Runs the service under launchd on macOS, as a user agent that starts at login
- * and restarts if it stops. Linux (systemd) arrives with milestone 8.
+ * and restarts if it stops. Linux (systemd) arrives with milestone 9.
  */
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
@@ -122,7 +122,7 @@ export function parseLaunchctlPrint(text: string): LaunchdStatus {
 function ensureMac(): void {
   if (process.platform !== 'darwin') {
     throw new Error(
-      'The service runs under launchd on macOS for now; systemd on Linux comes in milestone 8.',
+      'The service runs under launchd on macOS for now; systemd on Linux comes in milestone 9.',
     );
   }
 }

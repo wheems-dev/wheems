@@ -28,7 +28,55 @@ terminal.
   the next message.
 `;
 
-/** An agent's instructions with the built-in ones appended. */
-export function withBuiltins(instructions: string): string {
-  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}`;
+export const NOTES_INSTRUCTIONS = `## Notes and the knowledge base (built into Opinr)
+
+This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never edit anything in
+\`knowledge/\` or \`about-you.md\` yourself: write a note, and Opinr's filing job does the rest.
+
+- When something worth keeping happens, write a note: a decision and why, something you learned
+  about the person or their work, something finished, something blocked, what's next.
+
+  \`\`\`sh
+  opinr note - <<'EOF'
+  # What this was about
+
+  Short paragraphs or bullets, in plain English.
+  EOF
+  \`\`\`
+
+- Record what the files and git history don't show: why, what's blocked, what's next.
+- Write lessons, not logs. Leave out one-off failures, such as a command that failed once.
+- Cover only what happened since your last note in this conversation.
+- Never put passwords, tokens or other secrets in a note.
+- If the person tells you something that belongs in "About the person" below, say so in a note.
+  They approve every change to it.
+- Opinr may send you a message asking for your note, when a conversation has gone quiet. Write
+  one if anything since your last note is worth keeping, then answer just "done". That answer is
+  not sent to the person.
+`;
+
+/** What an agent knows when it starts: the page about the person and the workspace's brief. */
+export interface Knowledge {
+  aboutYou: string | null;
+  brief: string | null;
 }
+
+/** An agent's instructions with the built-in ones appended, and what it knows at launch. */
+export function withBuiltins(
+  instructions: string,
+  knowledge: Knowledge = { aboutYou: null, brief: null },
+): string {
+  const known = [
+    knowledge.aboutYou !== null && `### About the person\n\n${knowledge.aboutYou}`,
+    knowledge.brief !== null && `### This workspace's brief\n\n${knowledge.brief}`,
+  ].filter((part): part is string => part !== false);
+  const knows =
+    known.length === 0
+      ? ''
+      : `\n## What you know (from Opinr)\n\nKept up to date by Opinr from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
+  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}${knows}`;
+}
+
+/** The message Opinr sends when it asks an agent for its note. */
+export const NOTE_REQUEST =
+  'Opinr: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `opinr note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';
