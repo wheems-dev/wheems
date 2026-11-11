@@ -122,7 +122,7 @@ export class CodexEngine implements EngineDriver {
   async findSession(session: {
     dir: string;
     startedAt: Date;
-    task: string;
+    tag: string;
   }): Promise<string | null> {
     const dir = await realpath(session.dir).catch(() => session.dir);
     const earliest = session.startedAt.getTime() - 5_000;
@@ -132,7 +132,7 @@ export class CodexEngine implements EngineDriver {
       const payload = meta.payload as { id?: string; cwd?: string; timestamp?: string } | undefined;
       if (payload?.cwd !== dir || typeof payload.id !== 'string') continue;
       if (Date.parse(payload.timestamp ?? '') < earliest) continue;
-      if (!(await hasUserText(file, session.task.trim()))) continue;
+      if (!(await hasUserText(file, session.tag))) continue;
       return payload.id;
     }
     return null;

@@ -64,7 +64,10 @@ export class StubEngine implements EngineDriver {
     if (options.ownIds === true) {
       const ownIds = new Map<string, string>();
       this.ownIds = ownIds;
-      this.findSession = (session) => Promise.resolve(ownIds.get(session.task) ?? null);
+      this.findSession = (session) => {
+        for (const [task, id] of ownIds) if (task.includes(session.tag)) return Promise.resolve(id);
+        return Promise.resolve(null);
+      };
     }
     if (this.recorded) {
       const recorded = this.recorded;
@@ -74,7 +77,7 @@ export class StubEngine implements EngineDriver {
   }
 
   answers?: (session: { id: string; dir: string }, after: string | null) => Promise<FinalMessage[]>;
-  findSession?: (session: { dir: string; startedAt: Date; task: string }) => Promise<string | null>;
+  findSession?: (session: { dir: string; startedAt: Date; tag: string }) => Promise<string | null>;
 
   check(): Promise<HealthCheck[]> {
     return Promise.resolve([

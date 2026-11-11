@@ -21,9 +21,8 @@ const conversationSchema = z.object({
   lastAnswerId: z.string().optional(),
   /** The engine's own id for the conversation, for engines that choose their own ids. */
   engineSessionId: z.string().optional(),
-  /** When the current engine session started, and its first message, to find its id. */
+  /** When the current engine session started, to find its id. */
   startedAt: z.string().optional(),
-  firstTask: z.string().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;

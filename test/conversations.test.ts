@@ -326,6 +326,75 @@ describe('conversations', () => {
     expect([...channel.reactions.values()].every((set) => set.size === 0)).toBe(true);
   });
 
+  it('keeps two conversations with the same first message on their own engine sessions', async () => {
+    behaviour = () => 'answer';
+    await manager.stop();
+    const engine = new StubEngine({ command: ['fake-agent'], answers, ownIds: true });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      sessionEnv: { OPINR_HOME: home },
+      pollMs: 5,
+      startupSeconds: 2,
+    });
+    const a = await dm('Hello');
+    const b = await dm('Hello');
+    await settle();
+    const stored = JSON.parse(
+      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+    ) as Record<string, { engineSessionId?: string }>;
+    const ids = [a, b].map(
+      (thread) => stored[conversationKey('personal', 'slack', 'D1', thread)]?.engineSessionId,
+    );
+    expect(new Set(ids).size).toBe(2);
+    expect(posts().filter((p) => p.thread === a)).toHaveLength(1);
+    expect(posts().filter((p) => p.thread === b)).toHaveLength(1);
+  });
+
+  it('never stops a session that is still working, even one that reports no status', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+        delayMs: 150,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+    });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime: quiet,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      sessionEnv: { OPINR_HOME: home },
+      pollMs: 5,
+      answerPollMs: 5,
+      startupSeconds: 2,
+      maxLiveSessions: 1,
+    });
+    await dm('first');
+    await dm('second');
+    await settle();
+    expect(
+      posts()
+        .map((p) => p.text)
+        .sort(),
+    ).toEqual(['answer: first', 'answer: second']);
+  });
+
   it('types the message into a resumed engine that takes none at launch', async () => {
     await manager.stop();
     const quiet = new MemoryRuntime({

@@ -33,12 +33,14 @@ export interface EngineDriver extends Driver<'engine'> {
 
   /**
    * Optional, for engines that choose their own session ids (Codex, opencode): finds the
-   * session this engine started in \`dir\` at \`startedAt\` with \`task\` as its first message,
-   * and returns its id, or null when it can't be found yet. The service keeps the id with
-   * the conversation, passes it back as \`session.engineId\` to resume, and uses it as the
-   * session id for \`answers\`. Engines that take Opinr's id (Claude Code) don't need it.
+   * session this engine started in \`dir\` at \`startedAt\` whose first message carries \`tag\`
+   * (see \`conversationTag\`), and returns its id, or null when it can't be found yet. The tag
+   * is unique to the conversation, so two conversations never claim the same session. The
+   * service keeps the id with the conversation, passes it back as \`session.engineId\` to
+   * resume, and uses it as the session id for \`answers\`. Engines that take Opinr's id
+   * (Claude Code) don't need it.
    */
-  findSession?(session: { dir: string; startedAt: Date; task: string }): Promise<string | null>;
+  findSession?(session: { dir: string; startedAt: Date; tag: string }): Promise<string | null>;
 }
 
 /** An agent's answer: its final message of a turn. */
@@ -138,4 +140,12 @@ export function answersAfter(all: FinalMessage[], after: string | null): FinalMe
   if (after === null) return all;
   const index = all.findIndex((answer) => answer.id === after);
   return index === -1 ? all.slice(-1) : all.slice(index + 1);
+}
+
+/**
+ * The tag the service adds to the first message of a conversation on an engine that
+ * chooses its own session ids, so \`findSession\` can tell its session from any other.
+ */
+export function conversationTag(conversationId: string): string {
+  return `<opinr conversation="${conversationId}"/>`;
 }

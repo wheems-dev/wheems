@@ -11,7 +11,12 @@ import {
   type MessageRef,
 } from '../contracts/channel.js';
 import { isDriverError } from '../contracts/driver.js';
-import type { EngineDriver, FinalMessage, LaunchPlan } from '../contracts/engine.js';
+import {
+  conversationTag,
+  type EngineDriver,
+  type FinalMessage,
+  type LaunchPlan,
+} from '../contracts/engine.js';
 import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 import type { ConversationStore } from './store.js';
 
@@ -245,7 +250,6 @@ export class ConversationManager {
       lastAnswerId: resume ? existing.lastAnswerId : '',
       ...(resume && { engineSessionId: engineId }),
       startedAt: now.toISOString(),
-      firstTask: event.text,
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
@@ -299,7 +303,16 @@ export class ConversationManager {
         workspace: { id: workspace.id, dir: workspace.dir },
         sessionDir: workspace.dir,
         account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
-        session: { id: uuidFor(key), resume, task: event.text, engineId },
+        session: {
+          id: uuidFor(key),
+          resume,
+          // An engine that picks its own ids finds this conversation's session by its tag.
+          task:
+            engine.findSession && !resume
+              ? `${event.text}\n\n${conversationTag(uuidFor(key))}`
+              : event.text,
+          engineId,
+        },
       },
     );
     await this.writePlanFiles(plan);
@@ -530,11 +543,11 @@ export class ConversationManager {
     if (!engine.findSession) return watch.conversation.id;
     const conversation = await this.options.store.get(key);
     if (conversation?.engineSessionId !== undefined) return conversation.engineSessionId;
-    if (conversation?.startedAt === undefined || conversation.firstTask === undefined) return null;
+    if (conversation?.startedAt === undefined) return null;
     const found = await engine.findSession({
       dir: watch.conversation.dir,
       startedAt: new Date(conversation.startedAt),
-      task: conversation.firstTask,
+      tag: conversationTag(watch.conversation.id),
     });
     if (found !== null) await this.options.store.setEngineSession(key, found);
     return found;
@@ -547,8 +560,19 @@ export class ConversationManager {
     const lastActive = new Map<string, string>();
     for (const [, c] of await this.options.store.all())
       lastActive.set(c.sessionName, c.lastActiveAt);
+    // Never stop a session whose turn is still being followed: an engine without status
+    // (opencode) can be busy while reporting none.
+    const followed = new Set(
+      [...this.watches.values()].filter((w) => !w.closed).map((w) => w.sessionName),
+    );
     const candidates = live
-      .filter((s) => s.name !== keep && s.status !== 'working' && s.status !== 'blocked')
+      .filter(
+        (s) =>
+          s.name !== keep &&
+          !followed.has(s.name ?? '') &&
+          s.status !== 'working' &&
+          s.status !== 'blocked',
+      )
       .sort((a, b) =>
         (lastActive.get(a.name ?? '') ?? '').localeCompare(lastActive.get(b.name ?? '') ?? ''),
       );

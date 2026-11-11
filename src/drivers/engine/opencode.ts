@@ -106,7 +106,7 @@ export class OpencodeEngine implements EngineDriver {
   async findSession(session: {
     dir: string;
     startedAt: Date;
-    task: string;
+    tag: string;
   }): Promise<string | null> {
     const dir = await realpath(session.dir).catch(() => session.dir);
     const listed = await this.run(['session', 'list', '--format', 'json'], session.dir);
@@ -127,7 +127,7 @@ export class OpencodeEngine implements EngineDriver {
       const exported = await this.export(candidate.id ?? '');
       if (
         exported?.messages?.some(
-          (m) => m.info?.role === 'user' && partsText(m).includes(session.task.trim()),
+          (m) => m.info?.role === 'user' && partsText(m).includes(session.tag),
         )
       ) {
         return candidate.id ?? null;
