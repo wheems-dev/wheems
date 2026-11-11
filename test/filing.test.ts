@@ -25,7 +25,7 @@ import {
 import { knowledgePaths, writeNote } from '../src/knowledge/notes.js';
 import { FilingQueue } from '../src/service/filing.js';
 import { TaskRunner } from '../src/service/runner.js';
-import { MemoryRuntime, StubEngine } from '../src/testing/index.js';
+import { MemoryRuntime, sleepProgram, StubEngine } from '../src/testing/index.js';
 import { fakeFiler } from './helpers/fake-filer.js';
 
 const git = (dir: string, ...args: string[]) =>
@@ -270,10 +270,13 @@ describe('the task runner', () => {
   });
 
   it('never replaces a session of another job that happens to share its name', async () => {
-    const runtime = new MemoryRuntime({ filer: fakeFiler({ answers, act: writesHello }) });
+    const runtime = new MemoryRuntime({
+      filer: fakeFiler({ answers, act: writesHello }),
+      other: sleepProgram,
+    });
     await runtime.start({
       name: 'filer-ws',
-      command: ['filer'],
+      command: ['other'],
       cwd: dir,
       env: {},
       labels: { opinr: 'filer', workspace: 'other' },
