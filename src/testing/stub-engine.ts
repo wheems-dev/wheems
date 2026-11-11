@@ -18,13 +18,14 @@ import {
 export class StubEngine implements EngineDriver {
   readonly kind = 'engine' as const;
   readonly name: string;
-  readonly capabilities: EngineCapabilities = {
+  capabilities: EngineCapabilities = {
     instructionsFile: 'AGENTS.md',
     skills: false,
     mcp: false,
     hooks: false,
     permissions: false,
     resume: true,
+    status: true,
   };
   private readonly command: string[];
   private readonly recorded: Map<string, FinalMessage[]> | undefined;
@@ -36,6 +37,7 @@ export class StubEngine implements EngineDriver {
   /** For engines that choose their own ids: the ids handed out, by first task. */
   private readonly ownIds: Map<string, string> | undefined;
   private nextOwnId = 1;
+  private readonly typeOnResume: boolean;
 
   /**
    * With `ownIds`, the engine behaves like Codex or opencode: it ignores Opinr's session id,
@@ -47,8 +49,15 @@ export class StubEngine implements EngineDriver {
       command?: string[];
       answers?: Map<string, FinalMessage[]>;
       ownIds?: boolean;
+      /** False for an engine that reports no status, like opencode. */
+      reportsStatus?: boolean;
+      /** True for an engine that takes no first message when resuming, like opencode. */
+      typeOnResume?: boolean;
     } = {},
   ) {
+    this.typeOnResume = options.typeOnResume === true;
+    if (options.reportsStatus === false)
+      this.capabilities = { ...this.capabilities, status: false };
     this.name = options.name ?? 'stub';
     this.command = options.command ?? ['sh'];
     this.recorded = options.answers;
@@ -92,8 +101,12 @@ export class StubEngine implements EngineDriver {
         STUB_SESSION: sessionId,
         STUB_RESUME: context.session.resume ? '1' : '0',
         STUB_PERMISSIONS: agent.permissions,
-        ...(context.session.task !== null && { STUB_TASK: context.session.task }),
+        ...(context.session.task !== null &&
+          !(this.typeOnResume && context.session.resume) && { STUB_TASK: context.session.task }),
       },
+      ...(this.typeOnResume &&
+        context.session.resume &&
+        context.session.task !== null && { typeAfterStart: context.session.task }),
       files: [{ path: this.capabilities.instructionsFile, content: `${agent.instructions}\n` }],
     });
   }

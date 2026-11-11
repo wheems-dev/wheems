@@ -286,6 +286,87 @@ describe('conversations', () => {
     expect(posts().at(-1)).toEqual({ thread: first, text: 'answer: second question' });
   });
 
+  it('follows an engine that reports no status by its answers', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+        delayMs: 30,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+    });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime: quiet,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      sessionEnv: { OPINR_HOME: home },
+      pollMs: 5,
+      answerPollMs: 5,
+      startupSeconds: 2,
+    });
+    const first = await dm('one');
+    await settle();
+    expect(posts()).toEqual([{ thread: first, text: 'answer: one' }]);
+    // Two messages while it works: each gets its own answer, in order.
+    await dm('two', first);
+    await dm('three', first);
+    await settle();
+    expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two', 'answer: three']);
+    expect([...channel.reactions.values()].every((set) => set.size === 0)).toBe(true);
+  });
+
+  it('types the message into a resumed engine that takes none at launch', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+      typeOnResume: true,
+    });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime: quiet,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      sessionEnv: { OPINR_HOME: home },
+      pollMs: 5,
+      answerPollMs: 5,
+      typeDelayMs: 20,
+      startupSeconds: 2,
+    });
+    const first = await dm('one');
+    await settle();
+    const [session] = await quiet.list({ labels: { opinr: 'conversation' } });
+    await quiet.stop(session!.id);
+    await dm('two', first);
+    await settle();
+    const [next] = await quiet.list({ labels: { opinr: 'conversation' } });
+    expect(next?.command).toEqual(['fake-agent', '--resume']);
+    expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+  });
+
   it('says so when the agent finishes without replying', async () => {
     behaviour = () => 'silent';
     const first = await dm('hello');

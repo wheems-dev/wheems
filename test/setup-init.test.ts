@@ -9,8 +9,6 @@ import { slackConnectFlow } from '../src/drivers/channel/slack/connect.js';
 import { MemoryChannel } from '../src/testing/index.js';
 import { CANCEL, scriptedUi } from './helpers/scripted-ui.js';
 import type { EngineSetup } from '../src/contracts/setup.js';
-import type { IntegrationStatus } from '../src/util/herdr.js';
-import { parseIntegrationStatus } from '../src/util/herdr.js';
 import { StubEngine } from '../src/testing/index.js';
 import { crossCheck } from '../src/config/check.js';
 import { loadInstall } from '../src/config/load.js';
@@ -23,14 +21,12 @@ describe('opinr setup', () => {
   let env: NodeJS.ProcessEnv;
   let calls: string[];
   let running: boolean;
-  /** The fake world: which engine CLIs exist, which are signed in, which have Herdr's integration. */
+  /** The fake world: which engine CLIs exist and which are signed in. */
   let installed: Set<string>;
   let signedIn: Set<string>;
-  let integrated: Set<string>;
   beforeEach(() => {
     installed = new Set(['claude-code']);
     signedIn = new Set(['claude-code']);
-    integrated = new Set(['claude']);
     root = mkdtempSync(join(tmpdir(), 'opinr-setup-'));
     home = join(root, 'opinr');
     env = { OPINR_SECRETS: join(root, 'config', 'secrets.json') };
@@ -61,7 +57,7 @@ describe('opinr setup', () => {
       .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }), {
         label: 'Claude Code',
         description: 'x',
-        engine: fakeEngine('claude-code', 'claude', ['claude'], 'claude-opus-5-5', {
+        engine: fakeEngine('claude-code', ['claude'], 'claude-opus-5-5', {
           name: 'claude-subscription',
           driver: 'claude',
         }),
@@ -69,14 +65,13 @@ describe('opinr setup', () => {
       .register('engine', 'codex', () => new StubEngine({ name: 'codex' }), {
         label: 'Codex',
         description: 'x',
-        engine: fakeEngine('codex', 'codex', ['codex', '--no-daemon'], 'gpt-6.1-sol', {
+        engine: fakeEngine('codex', ['codex', '--no-daemon'], 'gpt-6.1-sol', {
           name: 'chatgpt-subscription',
           driver: 'chatgpt',
         }),
       });
   const fakeEngine = (
     name: string,
-    integration: string,
     trust: string[],
     defaultModel: string,
     account: { name: string; driver: string },
@@ -86,7 +81,6 @@ describe('opinr setup', () => {
     signIn: [name, 'login'],
     signedIn: () => Promise.resolve(signedIn.has(name)),
     trust,
-    herdrIntegration: integration,
     defaultModel,
     account,
   });
@@ -95,19 +89,9 @@ describe('opinr setup', () => {
       calls.push(`run ${command.join(' ')}${cwd !== undefined ? ` in ${cwd}` : ''}`);
       const [program, ...args] = command;
       if (program === 'npm') installed.add(args.at(-1)?.replace(/-cli$/, '') ?? '');
-      if (program === 'herdr') integrated.add(args.at(-1) ?? '');
       if (args[0] === 'login') signedIn.add(program ?? '');
       return Promise.resolve(0);
     },
-    integrations: () =>
-      Promise.resolve(
-        new Map<string, IntegrationStatus>(
-          ['claude', 'codex', 'opencode'].map((n) => [
-            n,
-            integrated.has(n) ? 'current' : 'missing',
-          ]),
-        ),
-      ),
     installService: () => {
       calls.push('install service');
       running = true;
@@ -270,12 +254,11 @@ describe('opinr setup', () => {
     ]);
   });
 
-  it('installs an engine, its Herdr integration and signs in, then runs a workspace on it', async () => {
+  it('installs an engine and signs in, then runs a workspace on it', async () => {
     const ui = scriptedUi([
       'engines',
       'codex',
       true, // install it
-      true, // install Herdr's integration
       true, // sign in
       'channels',
       'slack',
@@ -296,7 +279,6 @@ describe('opinr setup', () => {
     expect(ui.remaining()).toBe(0);
     expect(calls.filter((c) => c.startsWith('run'))).toEqual([
       'run npm install -g codex-cli',
-      'run herdr integration install codex',
       'run codex login',
     ]);
     const which = ui.shown.find((s) => s.message === 'Which engine?');
@@ -315,23 +297,6 @@ describe('opinr setup', () => {
       account: 'chatgpt-subscription',
     });
     expect(crossCheck(install, { engines: ['claude-code', 'codex'] })).toEqual([]);
-  });
-
-  it('reads Herdr integration status', () => {
-    const statuses = parseIntegrationStatus(
-      [
-        'claude: current (v11) (/Users/me/.claude/hooks/herdr-agent-state.sh)',
-        'opencode: not installed (/Users/me/.config/opencode/plugins/herdr-agent-state.js)',
-        'letta (experimental): not installed (/Users/me/.letta/hooks/x.sh)',
-        'codex: outdated (v9, v10 available) (/Users/me/.codex/x.sh)',
-      ].join('\n'),
-    );
-    expect([...statuses]).toEqual([
-      ['claude', 'current'],
-      ['opencode', 'missing'],
-      ['letta', 'missing'],
-      ['codex', 'outdated'],
-    ]);
   });
 
   it('keeps a new workspace when only its trust step is cancelled', async () => {

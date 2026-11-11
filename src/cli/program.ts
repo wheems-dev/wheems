@@ -17,7 +17,6 @@ import { setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
-import { herdrIntegrations } from '../util/herdr.js';
 import { SetupCancelled } from '../contracts/setup.js';
 import { paths } from '../home.js';
 import { packageVersion } from './version.js';
@@ -122,7 +121,6 @@ export function createProgram(io: Io): Command {
               runInteractive(command[0] ?? '', command.slice(1), {
                 ...(cwd !== undefined && { cwd }),
               }),
-            integrations: herdrIntegrations,
             installService: () => installAndWait(where),
             serviceRunning: () => serviceAnswers(where),
             copy: async (text) =>

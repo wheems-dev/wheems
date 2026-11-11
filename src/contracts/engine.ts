@@ -61,6 +61,11 @@ export interface EngineCapabilities {
   permissions: boolean;
   /** Can carry on an earlier conversation by its session id. */
   resume: boolean;
+  /**
+   * Reports its status (working, done, blocked) to the runtime, so a turn can be followed
+   * by status. Without it, the service follows a turn by its answers (\`answers\`) instead.
+   */
+  status: boolean;
 }
 
 /** An agent as config defines it: front matter plus the Markdown body. */
@@ -115,6 +120,12 @@ export interface LaunchPlan {
   env: Record<string, string>;
   /** Files to write before starting, relative to `cwd`. Never outside it. */
   files: PlannedFile[];
+  /**
+   * Text to type into the program once it has started, for the cases where the engine
+   * can't take the first message on its command line (opencode ignores \`--prompt\` when
+   * resuming a session). The service types it once the program is ready.
+   */
+  typeAfterStart?: string;
 }
 
 export interface PlannedFile {

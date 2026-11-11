@@ -273,6 +273,13 @@ describe('opencode engine', () => {
       '--session',
       'ses_abc123',
     ]);
+    // opencode ignores --prompt when resuming, so the message is typed in after it starts.
+    const withTask = await engine.prepare(opencodeAgent, {
+      ...context,
+      session: { ...context.session, resume: true, engineId: 'ses_abc123', task: 'And now?' },
+    });
+    expect(withTask.command).not.toContain('--prompt');
+    expect(withTask.typeAfterStart).toBe('And now?');
   });
 
   const message = (

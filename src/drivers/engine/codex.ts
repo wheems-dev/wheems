@@ -46,6 +46,7 @@ export class CodexEngine implements EngineDriver {
     hooks: true,
     permissions: true,
     resume: true,
+    status: true,
   };
   private readonly binary: string;
   private readonly home: string;
@@ -282,7 +283,6 @@ export function codexSetup(binary = 'codex'): EngineSetup {
       (await runCommand(binary, ['login', 'status'], { timeoutMs: 15_000 })).code === 0,
     trust: [binary, '--no-daemon'],
     trusted: (dir) => codexTrusts(dir),
-    herdrIntegration: 'codex',
     defaultModel: 'gpt-6.1-sol',
     account: { name: 'chatgpt-subscription', driver: 'chatgpt' },
   };

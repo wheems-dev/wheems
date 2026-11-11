@@ -42,6 +42,11 @@ export interface ConversationManagerOptions {
    * start a turn on them.
    */
   followUpSeconds?: number;
+  /** For engines that report no status: how often to check for an answer, and for how long. */
+  answerPollMs?: number;
+  answerWaitSeconds?: number;
+  /** For engines that report no status: how long to let a program start before typing into it. */
+  typeDelayMs?: number;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -87,6 +92,9 @@ export class ConversationManager {
       startupSeconds: 90,
       pollMs: 1000,
       followUpSeconds: 15,
+      answerPollMs: 2000,
+      answerWaitSeconds: 3600,
+      typeDelayMs: 5000,
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -192,7 +200,9 @@ export class ConversationManager {
       try {
         // Text sent to an agent that is still starting can be lost, and would arrive ahead
         // of the task it was started with; wait until it reports in.
-        await this.untilReady(session.id);
+        const reportsStatus = this.options.engine(this.chiefOfStaff(binding).definition.engine)
+          .capabilities.status;
+        if (reportsStatus) await this.untilReady(session.id);
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
         this.watchTurn(
@@ -294,7 +304,7 @@ export class ConversationManager {
     );
     await this.writePlanFiles(plan);
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
-    return this.options.runtime.start({
+    const started = await this.options.runtime.start({
       name: sessionName,
       command: plan.command,
       cwd: plan.cwd,
@@ -306,6 +316,14 @@ export class ConversationManager {
       },
       labels: { opinr: 'conversation', workspace: workspace.id },
     });
+    const text = plan.typeAfterStart;
+    if (text !== undefined) {
+      // The engine can't take this message at launch; type it once the program is ready.
+      if (engine.capabilities.status) await this.untilReady(started.id);
+      else await sleep(this.options.typeDelayMs);
+      await this.options.runtime.send(started.id, text);
+    }
+    return started;
   }
 
   private async writePlanFiles(plan: LaunchPlan): Promise<void> {
@@ -377,6 +395,36 @@ export class ConversationManager {
       if (text !== null) await this.notice(key, binding, thread, text);
     };
 
+    if (!watch.engine.capabilities.status) {
+      // The engine reports no status, so follow the turn by its answers instead.
+      let giveUpAt = Date.now() + this.options.answerWaitSeconds * 1000;
+      while (!this.stopped) {
+        const session = await runtime.get(watch.sessionName);
+        if (!session) return done(null);
+        const posted = await this.postAnswers(key, watch, 1);
+        if (posted > 0) {
+          // Each answer is a turn; messages queued meanwhile wait for theirs.
+          await unmarkSeen();
+          watch.queued.splice(0, posted - 1);
+          if (watch.queued.length === 0) return done(null);
+          watch.seen = watch.queued.splice(0, 1);
+          watch.sentAt = Date.now();
+          giveUpAt = Date.now() + this.options.answerWaitSeconds * 1000;
+          continue;
+        }
+        if (session.state === 'finished') {
+          return done(
+            this.repliedSince(key, watch.sentAt) ? null : 'The session ended without replying.',
+          );
+        }
+        if (Date.now() > giveUpAt) {
+          return done(`There's no answer yet. Its session is \`${session.id}\` in Herdr.`);
+        }
+        await sleep(this.options.answerPollMs);
+      }
+      return;
+    }
+
     while (!this.stopped) {
       const session = await runtime.get(watch.sessionName);
       if (!session) return done(null);
@@ -439,15 +487,15 @@ export class ConversationManager {
    * Posts the agent's answers since the last one posted, when its engine can read them:
    * usually one, more when turns followed each other quickly. An answer the agent already
    * sent word for word with `opinr reply` during this turn is not posted again. Returns
-   * whether the turn has an answer in the thread.
+   * how many answers there were (0 for none yet).
    */
-  private async postAnswers(key: string, watch: Watch): Promise<boolean> {
+  private async postAnswers(key: string, watch: Watch, attempts = 5): Promise<number> {
     const engine = watch.engine;
-    if (!engine.answers) return false;
+    if (!engine.answers) return 0;
     const cursor = (await this.options.store.get(key))?.lastAnswerId;
     // The engine may still be writing its record when the turn ends; give it a moment.
     let fresh: FinalMessage[] = [];
-    for (let attempt = 0; attempt < 5 && fresh.length === 0; attempt++) {
+    for (let attempt = 0; attempt < attempts && fresh.length === 0; attempt++) {
       if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
       const id = await this.engineSessionId(key, engine, watch);
       if (id === null) continue;
@@ -459,7 +507,7 @@ export class ConversationManager {
       // the latest answer can be new.
       fresh = cursor === undefined ? found.slice(-1) : found;
     }
-    if (fresh.length === 0) return false;
+    if (fresh.length === 0) return 0;
     const reply = this.lastReply.get(key);
     for (const answer of fresh) {
       if (answer.text.trim() === '') continue;
@@ -467,7 +515,7 @@ export class ConversationManager {
       await this.post(key, answer.text);
     }
     await this.options.store.setLastAnswer(key, fresh[fresh.length - 1]?.id ?? '');
-    return true;
+    return fresh.length;
   }
 
   /**

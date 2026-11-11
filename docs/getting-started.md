@@ -7,8 +7,9 @@ You need:
 
 - Node.js 22.12 or later
 - Herdr core 0.1.20 or later (`hc`)
-- Claude Code, signed in
 - A Slack workspace where you can add apps
+
+Setup installs the agent CLIs for you: Claude Code, Codex or opencode.
 
 ## 1. Install
 
@@ -38,6 +39,12 @@ Setup creates `~/opinr` (a git folder for your config) if there is none, then as
 to set up. Pick from the menu with the arrow keys and Enter; Esc or Ctrl+C backs out of a step
 without saving it, and you can run `opinr setup` again any time.
 
+**Engines** installs and signs in the CLIs your agents run in: Claude Code (on a Claude
+subscription), Codex (on a ChatGPT subscription) and opencode (any model, through OpenRouter, a
+provider's own key, or its free models). For each, setup shows whether it's installed and signed
+in, shows the install command and asks before running it, then runs the engine's own sign-in on
+your terminal so you log in yourself.
+
 **Channels** connects a chat app. Choose Slack (Telegram is coming in a later version). One Slack
 app serves every workspace, so you do this once:
 
@@ -52,11 +59,11 @@ app serves every workspace, so you do this once:
 5. Give your Slack member ID (your profile, **⋯**, **Copy member ID**). Only people on this list
    can talk to your agents; everyone else is ignored.
 
-**Workspaces** creates a workspace with its chief of staff on Claude Code, such as `personal`.
+**Workspaces** creates a workspace with its chief of staff, such as `personal`, on the engine and
+model you choose.
 The first chats in the Slack app's direct messages; others chat in a channel you invite the app
-to. Claude Code asks once whether to trust a new folder, and nobody can answer that from Slack,
-so setup offers to open Claude Code there: choose **Yes, I trust this folder**, then press Ctrl+C
-twice to come back.
+to. Claude Code and Codex ask once whether to trust a new folder, and nobody can answer that from
+Slack, so setup offers to open the engine there: say yes, then press Ctrl+C twice to come back.
 
 **Service** runs Opinr in the background under launchd, now and at every login, with the Node.js
 you ran setup with. Afterwards, `opinr service status`, `opinr service logs` and
@@ -64,8 +71,8 @@ you ran setup with. Afterwards, `opinr service status`, `opinr service logs` and
 
 **Check everything** runs `opinr doctor`.
 
-Each part also has its own command for scripts: `opinr init <workspace>`, `opinr service install`
-and `opinr doctor`.
+Each part also has its own command for scripts: `opinr init <workspace> [--engine codex]
+[--model gpt-6.1-sol]`, `opinr service install` and `opinr doctor`.
 
 ## 3. Chat
 

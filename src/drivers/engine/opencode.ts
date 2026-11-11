@@ -44,6 +44,7 @@ export class OpencodeEngine implements EngineDriver {
     hooks: false,
     permissions: true,
     resume: true,
+    status: false,
   };
   private readonly binary: string;
   private readonly env: NodeJS.ProcessEnv | undefined;
@@ -85,12 +86,14 @@ export class OpencodeEngine implements EngineDriver {
       agent.model,
       ...(resuming ? ['--session', session.engineId ?? ''] : []),
       ...PERMISSION_ARGS[agent.permissions],
-      ...(session.task !== null ? ['--prompt', session.task] : []),
+      // opencode ignores --prompt when resuming, so the message is typed in once it starts.
+      ...(session.task !== null && !resuming ? ['--prompt', session.task] : []),
     ];
     return Promise.resolve({
       command,
       cwd: context.sessionDir,
       env: {},
+      ...(resuming && session.task !== null && { typeAfterStart: session.task }),
       files: [
         {
           path: this.capabilities.instructionsFile,
@@ -217,7 +220,6 @@ export function opencodeSetup(binary = 'opencode'): EngineSetup {
     // opencode's free models need no sign-in, so there is no single answer.
     signedIn: () => Promise.resolve(null),
     trust: null,
-    herdrIntegration: 'opencode',
     defaultModel: 'opencode/big-pickle',
     account: { name: 'opencode', driver: 'opencode' },
   };

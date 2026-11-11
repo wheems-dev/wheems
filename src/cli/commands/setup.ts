@@ -10,7 +10,6 @@ import {
   type EngineSetup,
   type SetupUi,
 } from '../../contracts/setup.js';
-import type { IntegrationStatus } from '../../util/herdr.js';
 import { paths, type Paths } from '../../home.js';
 import { readSecrets, writeSecret } from '../../secrets.js';
 import { runCommand } from '../../util/process.js';
@@ -21,8 +20,6 @@ import { initWorkspace } from './init.js';
 export interface SetupActions {
   /** Runs a command on the person's terminal, such as an installer or a sign-in, and returns its exit code. */
   run(command: string[], cwd?: string): Promise<number | null>;
-  /** The status of each Herdr integration, or null when the herdr command isn't there. */
-  integrations(): Promise<Map<string, IntegrationStatus> | null>;
   /** Installs the background service and says whether it answers. */
   installService(): Promise<boolean>;
   /** Whether the background service is answering. */
@@ -327,11 +324,10 @@ async function installedEngines(options: SetupOptions): Promise<InstalledEngine[
   return found;
 }
 
-/** Installs an engine's CLI, its Herdr status integration and signs in, asking before each. */
+/** Installs an engine's CLI and signs in, asking before each. */
 async function engines(options: SetupOptions): Promise<boolean> {
   const { ui, actions } = options;
   const catalog = options.registry.catalog('engine').filter((e) => e.engine !== undefined);
-  const integrations = await actions.integrations();
   const status = await ui.task(
     'Looking for Claude Code, Codex and opencode',
     () =>
@@ -340,8 +336,7 @@ async function engines(options: SetupOptions): Promise<boolean> {
           const setup = entry.engine as EngineSetup;
           const version = entry.available ? await setup.version() : null;
           const signedIn = version !== null ? await setup.signedIn() : null;
-          const integration = integrations?.get(setup.herdrIntegration) ?? 'unknown';
-          return { entry, setup, version, signedIn, integration };
+          return { entry, setup, version, signedIn };
         }),
       ),
     (found) =>
@@ -349,18 +344,14 @@ async function engines(options: SetupOptions): Promise<boolean> {
   );
   const choice = await ui.select({
     message: 'Which engine?',
-    choices: status.map(({ entry, version, signedIn, integration }): Choice<string> => ({
+    choices: status.map(({ entry, version, signedIn }): Choice<string> => ({
       value: entry.name,
       label: entry.label,
       hint: !entry.available
         ? 'coming in a later version'
         : version === null
           ? `not installed · ${entry.description}`
-          : [
-              version,
-              signedIn === true ? 'signed in' : signedIn === false ? 'not signed in' : null,
-              integration === 'current' ? null : 'Herdr status missing',
-            ]
+          : [version, signedIn === true ? 'signed in' : signedIn === false ? 'not signed in' : null]
               .filter((part) => part !== null)
               .join(' · '),
       ...(!entry.available && { disabled: true }),
@@ -381,27 +372,6 @@ async function engines(options: SetupOptions): Promise<boolean> {
       return false;
     }
     ui.success(`${entry.label} ${version} is installed`);
-  }
-
-  if (picked.integration !== 'current') {
-    if (integrations === null) {
-      ui.warn(
-        `Herdr's herdr command isn't on your PATH, so ${entry.label}'s status integration can't be checked. Opinr follows each turn by the status it reports.`,
-      );
-    } else if (
-      await ui.confirm(
-        `Install Herdr's status integration for ${entry.label}? Opinr needs it to know when a turn has finished.`,
-        true,
-      )
-    ) {
-      await actions.run(['herdr', 'integration', 'install', setup.herdrIntegration]);
-      const after = (await actions.integrations())?.get(setup.herdrIntegration);
-      if (after === 'current') ui.success(`${entry.label} reports its status to Herdr`);
-      else
-        ui.warn(
-          `The integration didn't install; try: herdr integration install ${setup.herdrIntegration}`,
-        );
-    }
   }
 
   const signedIn = picked.version === null ? await setup.signedIn() : picked.signedIn;

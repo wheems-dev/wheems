@@ -78,8 +78,6 @@ export interface EngineSetup {
   signIn: string[] | null;
   /** Whether it is signed in: true, false, or null when it can't tell or needn't. */
   signedIn(): Promise<boolean | null>;
-  /** The Herdr integration that makes it report its status, such as \`claude\`. */
-  herdrIntegration: string;
   /** The model a new agent on this engine starts with. */
   defaultModel: string;
   /**

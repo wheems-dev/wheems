@@ -44,6 +44,7 @@ export class ClaudeCodeEngine implements EngineDriver {
     hooks: true,
     permissions: true,
     resume: true,
+    status: true,
   };
   private readonly binary: string;
   private readonly configDir: string;
@@ -215,7 +216,6 @@ export function claudeCodeSetup(binary = 'claude'): EngineSetup {
     },
     trust: [binary],
     trusted: (dir) => claudeTrusts(dir),
-    herdrIntegration: 'claude',
     defaultModel: 'claude-opus-5-5',
     account: { name: 'claude-subscription', driver: 'claude' },
   };

@@ -7,7 +7,6 @@ import { paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { request } from '../service/control.js';
 import { serviceStatus } from '../service/launchd.js';
-import { herdrIntegrations, type IntegrationStatus } from '../util/herdr.js';
 export { trustedIn } from '../util/trust.js';
 import { crossCheck } from '../config/check.js';
 import { loadInstall, type Problem } from '../config/load.js';
@@ -32,8 +31,6 @@ export interface DoctorOptions {
   platform?: NodeJS.Platform;
   /** Whether an engine trusts a folder: true, false, or null when it can't tell. */
   trust?: (engine: string, dir: string) => Promise<boolean | null>;
-  /** The status of Herdr's integrations. */
-  integrations?: () => Promise<Map<string, IntegrationStatus> | null>;
   /** Whether the service is installed and answering. */
   service?: (home: string) => Promise<{ installed: boolean; answering: boolean }>;
 }
@@ -150,35 +147,6 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
         hint: 'Open the engine in that folder once and say yes, or run opinr setup.',
       });
     }
-  }
-
-  // Opinr follows each turn by the status the engine reports through Herdr's integration.
-  const used = [...engines]
-    .sort()
-    .filter((name) => catalog.some((e) => e.name === name && e.engine));
-  const integrations = used.length > 0 ? await (options.integrations ?? herdrIntegrations)() : null;
-  for (const name of used) {
-    const entry = catalog.find((e) => e.name === name);
-    const setup = entry?.engine;
-    if (!entry || !setup) continue;
-    const state = integrations?.get(setup.herdrIntegration);
-    checks.push(
-      state === 'current'
-        ? {
-            name: `${entry.label} status`,
-            status: 'pass',
-            message: "Herdr's integration is installed",
-          }
-        : {
-            name: `${entry.label} status`,
-            status: 'warn',
-            message:
-              integrations === null
-                ? "Can't check Herdr's integration: the herdr command isn't on PATH"
-                : `Herdr's integration is ${state === 'outdated' ? 'out of date' : 'not installed'}, so Opinr can't tell when a turn has finished`,
-            hint: `herdr integration install ${setup.herdrIntegration}`,
-          },
-    );
   }
 
   if (checks.length === 0)

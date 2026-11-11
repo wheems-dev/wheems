@@ -23,6 +23,8 @@ export interface FakeAgentOptions {
   answers?: Map<string, FinalMessage[]>;
   /** How long each turn takes, in milliseconds. Defaults to 5. */
   delayMs?: number;
+  /** False for an agent that reports no status, like opencode under Herdr core. */
+  reportsStatus?: boolean;
 }
 
 /**
@@ -35,9 +37,13 @@ export interface FakeAgentOptions {
 export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
   let answerCount = 0;
   return ({ env, sessionId }) => {
-    const queue: string[] = [];
-    let busy = false;
+    const silent = options.reportsStatus === false;
     type Io = Parameters<NonNullable<ReturnType<ProgramFactory>['start']>>[0];
+    const queue: string[] = [];
+    const report = (io: Io, status: Parameters<Io['status']>[0]) => {
+      if (!silent) io.status(status);
+    };
+    let busy = false;
     const handle = (line: string, io: Io) => {
       const behaviour = options.behaviour?.(line) ?? 'reply';
       if (behaviour === 'never-start') return;
@@ -47,11 +53,11 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
       }
       options.received?.set(sessionId, [...(options.received.get(sessionId) ?? []), line]);
       busy = true;
-      io.status('working');
+      report(io, 'working');
       setTimeout(() => {
         void (async () => {
           if (behaviour === 'block') {
-            io.status('blocked');
+            report(io, 'blocked');
             return;
           }
           if (behaviour === 'exit') {
@@ -76,7 +82,7 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
             answer(`echo: ${line}`);
           }
           busy = false;
-          io.status('done');
+          report(io, 'done');
           const next = queue.shift();
           if (next !== undefined) {
             setTimeout(() => {
@@ -89,7 +95,7 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
     return {
       start(io) {
         if (options.behaviour?.(env.STUB_TASK ?? '') === 'never-start') return;
-        io.status('idle');
+        report(io, 'idle');
         if (env.STUB_TASK !== undefined) handle(env.STUB_TASK, io);
       },
       input: handle,

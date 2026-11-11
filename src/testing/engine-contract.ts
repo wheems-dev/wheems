@@ -61,7 +61,7 @@ export function engineContract(label: string, options: EngineContractOptions): v
     it('declares its capabilities', () => {
       const caps = driver.capabilities;
       expect(caps.instructionsFile).toMatch(/^[^/\\]+$/);
-      for (const key of ['skills', 'mcp', 'hooks', 'permissions', 'resume'] as const) {
+      for (const key of ['skills', 'mcp', 'hooks', 'permissions', 'resume', 'status'] as const) {
         expect(typeof caps[key]).toBe('boolean');
       }
     });

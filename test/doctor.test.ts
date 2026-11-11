@@ -18,7 +18,6 @@ const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 const probes = {
   service: () => Promise.resolve({ installed: false, answering: false }),
   trust: () => Promise.resolve(true),
-  integrations: () => Promise.resolve(new Map([['claude', 'current' as const]])),
 };
 
 describe('doctor', () => {
@@ -148,7 +147,6 @@ describe('doctor', () => {
       quick: true,
       service: () => Promise.resolve({ installed: false, answering: false }),
       trust: () => Promise.resolve(false),
-      integrations: () => Promise.resolve(new Map()),
     });
     expect(statuses(before).Agents).toEqual(['pass claude-code engine', 'warn personal folder']);
     expect(statuses(before).Channels).toEqual(['warn slack allowed users', 'fail slack']);
@@ -166,7 +164,6 @@ describe('doctor', () => {
       quick: true,
       service: () => Promise.resolve({ installed: true, answering: true }),
       trust: () => Promise.resolve(true),
-      integrations: () => Promise.resolve(new Map([['claude', 'current' as const]])),
     });
     expect(statuses(after).Agents).toEqual(['pass claude-code engine', 'pass personal folder']);
     expect(statuses(after).Channels).toEqual([
