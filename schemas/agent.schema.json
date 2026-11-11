@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "Defaults to the file name.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "engine": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The CLI it runs in: `claude-code`, `codex`, `opencode` or a plugin's engine."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The engine's model id, such as `claude-opus-5-5`."
+    },
+    "account": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "The install account that pays, from the workspace's `accounts`."
+    },
+    "skills": {
+      "default": [],
+      "description": "Skills from the workspace's skills.yaml.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    },
+    "integrations": {
+      "default": [],
+      "description": "Integrations from the workspace's `integrations`.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      }
+    }
+  },
+  "required": [
+    "engine",
+    "model",
+    "account"
+  ],
+  "additionalProperties": false,
+  "$id": "https://opinr.dev/schemas/agent.schema.json",
+  "title": "Opinr agent front matter (agents/<name>.md)"
+}

@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../../schemas/install.schema.json
+# One install per person: machines, accounts and connections live here.
+herdr:
+  version: 0.1.20
+
+machines:
+  laptop:
+    local: true
+    reach: outbound
+  server:
+    herdr: server
+    always_on: true
+
+accounts:
+  claude-subscription:
+    driver: claude
+  chatgpt-subscription:
+    driver: chatgpt
+  openrouter:
+    driver: openrouter
+    secret: openrouter-key
+
+connections:
+  slack:
+    driver: slack
+    secret: slack-tokens
+  github:
+    driver: github
+    secret: github-token
