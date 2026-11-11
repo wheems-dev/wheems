@@ -149,7 +149,13 @@ describe('codex engine', () => {
       const lines = [
         {
           type: 'session_meta',
-          payload: { id, cwd, timestamp: startedAt.toISOString(), originator: 'codex-tui' },
+          payload: {
+            id,
+            cwd,
+            timestamp: startedAt.toISOString(),
+            originator: 'codex-tui',
+            base_instructions: 'x'.repeat(100_000),
+          },
         },
         {
           type: 'response_item',

@@ -222,15 +222,26 @@ export function codexAnswers(jsonl: string): FinalMessage[] {
   return answers;
 }
 
-/** The first line of a record file, read without loading the rest. */
+/**
+ * The first line of a record file, read without loading the rest. The first line holds
+ * the session's metadata and can be tens of kilobytes, so read until its end (up to 4 MB).
+ */
 async function firstRecord(file: string): Promise<CodexRecord | null> {
   const handle = await open(file, 'r').catch(() => null);
   if (!handle) return null;
   try {
-    const buffer = Buffer.alloc(16_384);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    const line = buffer.subarray(0, bytesRead).toString('utf8').split('\n')[0] ?? '';
-    return JSON.parse(line) as CodexRecord;
+    const chunks: Buffer[] = [];
+    for (let position = 0; position < 4 * 1024 * 1024;) {
+      const buffer = Buffer.alloc(64 * 1024);
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+      if (bytesRead === 0) break;
+      const chunk = buffer.subarray(0, bytesRead);
+      const newline = chunk.indexOf(10);
+      chunks.push(newline === -1 ? chunk : chunk.subarray(0, newline));
+      if (newline !== -1) break;
+      position += bytesRead;
+    }
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as CodexRecord;
   } catch {
     return null;
   } finally {
