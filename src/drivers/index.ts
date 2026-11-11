@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { DriverError } from '../contracts/driver.js';
 import { DriverRegistry } from '../contracts/registry.js';
+import { slackConnectFlow } from './channel/slack/connect.js';
 import { SlackChannel } from './channel/slack/slack-channel.js';
 import { SocketModeTransport } from './channel/slack/transport.js';
 import { ClaudeCodeEngine } from './engine/claude-code.js';
@@ -42,10 +43,23 @@ export function createDriverRegistry(): DriverRegistry {
       });
     })
     .register('engine', 'claude-code', () => new ClaudeCodeEngine())
-    .register('channel', 'slack', (options) => {
-      const tokens = parse('slack', slackOptions, options);
-      return new SlackChannel(
-        new SocketModeTransport({ botToken: tokens.bot_token, appToken: tokens.app_token }),
-      );
+    .register(
+      'channel',
+      'slack',
+      (options) => {
+        const tokens = parse('slack', slackOptions, options);
+        return new SlackChannel(
+          new SocketModeTransport({ botToken: tokens.bot_token, appToken: tokens.app_token }),
+        );
+      },
+      {
+        label: 'Slack',
+        description: 'chat with your agents in Slack',
+        connect: slackConnectFlow(),
+      },
+    )
+    .plan('channel', 'telegram', {
+      label: 'Telegram',
+      description: 'chat with your agents in Telegram',
     });
 }

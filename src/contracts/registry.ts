@@ -2,6 +2,7 @@ import type { ChannelDriver } from './channel.js';
 import { DriverError, type DriverKind } from './driver.js';
 import type { EngineDriver } from './engine.js';
 import type { RuntimeDriver } from './runtime.js';
+import type { ConnectFlow } from './setup.js';
 
 export interface DriverTypes {
   runtime: RuntimeDriver;
@@ -14,15 +15,38 @@ export type DriverFactory<K extends DriverKind> = (
   options: Record<string, unknown>,
 ) => DriverTypes[K];
 
+/** How a driver appears in `opinr setup`. */
+export interface DriverInfo {
+  /** Its name for people, such as `Slack`. */
+  label: string;
+  description: string;
+  /** Its interactive connect flow, for drivers that need credentials. */
+  connect?: ConnectFlow;
+}
+
+/** A driver as `opinr setup` lists it: one that works, or one that is coming later. */
+export interface CatalogEntry extends DriverInfo {
+  name: string;
+  available: boolean;
+}
+
 /**
  * Where drivers are registered by kind and name, as Laravel's managers do.
  * Built-in drivers register here; plugins will register through it too.
  */
 export class DriverRegistry {
   private readonly factories = new Map<string, DriverFactory<DriverKind>>();
+  private readonly info = new Map<string, DriverInfo>();
+  private readonly planned = new Map<string, DriverInfo>();
 
-  register<K extends DriverKind>(kind: K, name: string, factory: DriverFactory<K>): this {
+  register<K extends DriverKind>(
+    kind: K,
+    name: string,
+    factory: DriverFactory<K>,
+    info?: DriverInfo,
+  ): this {
     const key = `${kind}:${name}`;
+    if (info) this.info.set(key, info);
     if (this.factories.has(key)) {
       throw new DriverError(
         name,
@@ -32,6 +56,28 @@ export class DriverRegistry {
     }
     this.factories.set(key, factory);
     return this;
+  }
+
+  /** Lists a driver that is coming later, so setup can show it as such. */
+  plan(kind: DriverKind, name: string, info: DriverInfo): this {
+    this.planned.set(`${kind}:${name}`, info);
+    return this;
+  }
+
+  /** Every driver of a kind that has setup information, available ones first. */
+  catalog(kind: DriverKind): CatalogEntry[] {
+    const entries: CatalogEntry[] = [];
+    for (const name of this.names(kind)) {
+      const info = this.info.get(`${kind}:${name}`);
+      if (info) entries.push({ name, available: true, ...info });
+    }
+    const prefix = `${kind}:`;
+    for (const [key, info] of this.planned) {
+      const name = key.slice(prefix.length);
+      if (key.startsWith(prefix) && !this.has(kind, name))
+        entries.push({ name, available: false, ...info });
+    }
+    return entries;
   }
 
   has(kind: DriverKind, name: string): boolean {

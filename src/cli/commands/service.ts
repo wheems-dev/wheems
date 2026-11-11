@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import { NODE_MINIMUM_VERSION } from '../../doctor/doctor.js';
-import { defaultHome, paths } from '../../home.js';
+import { defaultHome, paths, type Paths } from '../../home.js';
 import { request } from '../../service/control.js';
 import {
   installService,
@@ -20,6 +20,38 @@ import { packageVersion } from '../version.js';
 /** The script that is running this CLI, resolved through npm links. */
 export function cliPath(): string {
   return realpathSync(process.argv[1] ?? '');
+}
+
+/** Installs the service under launchd with this Node.js and build, and waits for it to answer. */
+export async function installAndWait(where: Paths): Promise<boolean> {
+  if (!isAtLeast(process.versions.node, NODE_MINIMUM_VERSION)) {
+    throw new Error(
+      `The service needs Node.js ${NODE_MINIMUM_VERSION} or later, and this is ${process.versions.node}.`,
+    );
+  }
+  const cli = cliPath();
+  if (!cli.endsWith('.js')) {
+    throw new Error('Install the service from a build of Opinr (npm run build), not from source.');
+  }
+  await installService({
+    node: process.execPath,
+    cli,
+    home: where.home,
+    logFile: `${where.logs}/service.log`,
+  });
+  for (let i = 0; i < 20; i++) {
+    if (await serviceAnswers(where)) return true;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return false;
+}
+
+/** Whether the service answers on its control socket. */
+export async function serviceAnswers(where: Paths): Promise<boolean> {
+  return request(where.socket, { op: 'ping' }, 2000).then(
+    (answer) => answer.ok,
+    () => false,
+  );
 }
 
 export function registerService(program: Command, io: Io): void {
@@ -55,35 +87,11 @@ export function registerService(program: Command, io: Io): void {
     .description('Run the service under launchd, now and at every login')
     .option(homeOption, homeHelp)
     .action(async (options: { home?: string }) => {
-      if (!isAtLeast(process.versions.node, NODE_MINIMUM_VERSION)) {
-        throw new Error(
-          `The service needs Node.js ${NODE_MINIMUM_VERSION} or later, and this is ${process.versions.node}. Run this command with a newer node.`,
-        );
-      }
-      const cli = cliPath();
-      if (!cli.endsWith('.js'))
-        throw new Error(
-          'Install the service from a build of Opinr (npm run build), not from source.',
-        );
       const where = paths(home(options), io.env);
-      await installService({
-        node: process.execPath,
-        cli,
-        home: where.home,
-        logFile: `${where.logs}/service.log`,
-      });
-      io.out(`Installed ${plistPath()}\nNode.js: ${process.execPath}\nOpinr: ${cli}\n`);
-      for (let i = 0; i < 20; i++) {
-        try {
-          const answer = await request(where.socket, { op: 'ping' }, 2000);
-          if (answer.ok) {
-            io.out('The service is running.\n');
-            return;
-          }
-        } catch {
-          // Not up yet.
-        }
-        await new Promise((r) => setTimeout(r, 500));
+      io.out(`Installing ${plistPath()}\nNode.js: ${process.execPath}\nOpinr: ${cliPath()}\n`);
+      if (await installAndWait(where)) {
+        io.out('The service is running.\n');
+        return;
       }
       io.out(`The service has not answered yet. Check its log: opinr service logs\n`);
       process.exitCode = 1;

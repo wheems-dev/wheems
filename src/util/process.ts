@@ -3,7 +3,7 @@
  * Every hc call goes through src/drivers/runtime/herdr/hc.ts instead; a test checks
  * that no other module names hc.
  */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 
 export interface RunResult {
   /** The exit code, or null when the program could not be started or was killed. */
@@ -44,5 +44,25 @@ export function runCommand(
       },
     );
     if (options.input !== undefined) child.stdin?.end(options.input);
+  });
+}
+
+/** Runs a program on this terminal, for a person to use, and resolves with its exit code. */
+export function runInteractive(
+  command: string,
+  args: string[],
+  options: { cwd?: string } = {},
+): Promise<number | null> {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      stdio: 'inherit',
+      ...(options.cwd !== undefined && { cwd: options.cwd }),
+    });
+    child.on('error', () => {
+      resolve(null);
+    });
+    child.on('exit', (code) => {
+      resolve(code);
+    });
   });
 }

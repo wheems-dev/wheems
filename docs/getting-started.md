@@ -28,57 +28,46 @@ If your default `node` is older than 22.12, run Opinr with a newer one, such as 
 `brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node /path/to/opinr/dist/cli/main.js`.
 `opinr doctor` says which Node.js it is running on.
 
-## 2. Set up the install and Slack
+## 2. Run setup
 
 ```bash
 opinr setup
 ```
 
-This creates `~/opinr` (a git folder for your config) and connects Slack. One Slack app serves
-every workspace you make, so you only do this once:
+Setup creates `~/opinr` (a git folder for your config) if there is none, then asks what you want
+to set up. Pick from the menu with the arrow keys and Enter; Esc or Ctrl+C backs out of a step
+without saving it, and you can run `opinr setup` again any time.
 
-1. `opinr setup` writes a Slack app manifest and prints where it is (`opinr slack manifest` prints
-   it too). The app uses Socket Mode, so it needs no public address.
-2. At <https://api.slack.com/apps?new_app=1>, choose **From a manifest**, pick your Slack
-   workspace and paste the manifest.
-3. **Install to workspace**, then copy the **Bot User OAuth Token** (`xoxb-…`).
-4. Under **Basic Information → App-Level Tokens**, generate a token with the `connections:write`
+**Channels** connects a chat app. Choose Slack (Telegram is coming in a later version). One Slack
+app serves every workspace, so you do this once:
+
+1. Setup copies the app's manifest to your clipboard and offers to open
+   <https://api.slack.com/apps?new_app=1>. Choose **From a manifest**, pick your Slack workspace
+   and paste. The app uses Socket Mode, so it needs no public address.
+2. **Install to workspace**, then copy the **Bot User OAuth Token** (`xoxb-…`).
+3. Under **Basic Information → App-Level Tokens**, generate a token with the `connections:write`
    scope (`xapp-…`).
-5. Paste both tokens into `opinr setup` when it asks. They are hidden as you type, checked with
-   Slack, and saved to `~/.config/opinr/secrets.json`, readable only by you. They never pass
-   through an agent.
-6. Give your Slack member ID (your profile, **⋯**, **Copy member ID**). Only people on this list
+4. Paste both tokens when setup asks. They are masked as you type, checked with Slack, and saved
+   to `~/.config/opinr/secrets.json`, readable only by you. They never pass through an agent.
+5. Give your Slack member ID (your profile, **⋯**, **Copy member ID**). Only people on this list
    can talk to your agents; everyone else is ignored.
 
-## 3. Create a workspace
+**Workspaces** creates a workspace with its chief of staff on Claude Code, such as `personal`.
+The first chats in the Slack app's direct messages; others chat in a channel you invite the app
+to. Claude Code asks once whether to trust a new folder, and nobody can answer that from Slack,
+so setup offers to open Claude Code there: choose **Yes, I trust this folder**, then press Ctrl+C
+twice to come back.
 
-```bash
-opinr init personal
-```
+**Service** runs Opinr in the background under launchd, now and at every login, with the Node.js
+you ran setup with. Afterwards, `opinr service status`, `opinr service logs` and
+`opinr service restart` look after it; restart it after changing config.
 
-This creates `~/opinr/workspaces/personal` with a chief of staff on Claude Code. It chats in the
-Slack app's direct messages. A second workspace needs a channel instead:
-`opinr init acme --channel acme-chat`, then invite the app to `#acme-chat`.
+**Check everything** runs `opinr doctor`.
 
-Claude Code asks once whether to trust a new folder, and nobody can answer that from Slack, so
-answer it now:
+Each part also has its own command for scripts: `opinr init <workspace>`, `opinr service install`
+and `opinr doctor`.
 
-```bash
-cd ~/opinr/workspaces/personal
-claude          # choose "Yes, I trust this folder", then type /exit
-```
-
-## 4. Start the service
-
-```bash
-opinr service install
-```
-
-This runs the service under launchd, now and at every login, with the Node.js you ran the command
-with. `opinr service status`, `opinr service logs` and `opinr service restart` look after it;
-restart it after changing config.
-
-## 5. Chat
+## 3. Chat
 
 Open the app's **Messages** tab in Slack and say hello. Each message you send starts a
 conversation, and replies in its thread carry it on. Each conversation is its own Claude Code

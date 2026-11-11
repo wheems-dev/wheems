@@ -14,7 +14,11 @@ import { initWorkspace } from './commands/init.js';
 import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { setup } from './commands/setup.js';
-import { terminalPrompter, type Prompter } from './prompt.js';
+import { clackUi } from './clack-ui.js';
+import { installAndWait, serviceAnswers } from './commands/service.js';
+import { runCommand, runInteractive } from '../util/process.js';
+import { SetupCancelled } from '../contracts/setup.js';
+import { paths } from '../home.js';
 import { packageVersion } from './version.js';
 
 export { packageVersion };
@@ -25,15 +29,13 @@ export interface Io {
   env: NodeJS.ProcessEnv;
   color: boolean;
   registry: () => DriverRegistry;
-  prompter: () => Prompter;
   stdin: () => Promise<string>;
 }
 
 /** The parts of Io that tests rarely need to replace. */
-export function defaultIo(): Pick<Io, 'registry' | 'prompter' | 'stdin'> {
+export function defaultIo(): Pick<Io, 'registry' | 'stdin'> {
   return {
     registry: createDriverRegistry,
-    prompter: terminalPrompter,
     stdin: () => readStream(process.stdin),
   };
 }
@@ -97,19 +99,48 @@ export function createProgram(io: Io): Command {
 
   program
     .command('setup')
-    .description('Create the install, connect Slack and choose who may talk to agents')
+    .description('Set up Opinr: connect channels, create workspaces, run the service')
     .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
     .action(async (options: { home?: string }) => {
-      const prompter = io.prompter();
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        throw new Error('opinr setup asks questions, so it needs a terminal.');
+      }
+      const home = resolve(options.home ?? defaultHome(io.env));
+      const where = paths(home, io.env);
+      const registry = io.registry();
+      const ui = clackUi();
+      ui.intro(' Opinr setup ');
       try {
         await setup({
-          home: resolve(options.home ?? defaultHome(io.env)),
+          home,
           env: io.env,
-          prompter,
-          out: io.out,
+          ui,
+          registry,
+          actions: {
+            trustFolder: async (dir) => {
+              await runInteractive('claude', [], { cwd: dir });
+            },
+            installService: () => installAndWait(where),
+            serviceRunning: () => serviceAnswers(where),
+            copy: async (text) =>
+              process.platform === 'darwin' &&
+              (await runCommand('pbcopy', [], { input: text })).code === 0,
+            openUrl: async (url) =>
+              (await runCommand(process.platform === 'darwin' ? 'open' : 'xdg-open', [url]))
+                .code === 0,
+            doctor: async () => {
+              const report = await runDoctor({ home, registry, env: io.env, quick: true });
+              return { ok: report.ok, report: formatReport(report, true) };
+            },
+          },
         });
-      } finally {
-        prompter.close();
+        ui.outro('All set. Run opinr setup again any time to change things.');
+      } catch (error) {
+        if (error instanceof SetupCancelled) {
+          ui.cancel('Setup stopped. Everything you finished is saved.');
+          return;
+        }
+        throw error;
       }
     });
 
