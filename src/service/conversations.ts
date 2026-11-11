@@ -67,8 +67,11 @@ interface Watch {
   sentAt: number;
   /** Messages marked as seen until the agent replies. */
   seen: MessageRef[];
-  /** Messages that arrived while a turn was being followed. */
-  queued: MessageRef[];
+  /**
+   * Messages that arrived while a turn was being followed. After a restart, the messages
+   * still waiting are known only by their number, so they are held as nulls.
+   */
+  queued: (MessageRef | null)[];
   /** Set the moment the watch decides to finish; later messages start a new watch. */
   closed: boolean;
   /**
@@ -186,14 +189,15 @@ export class ConversationManager {
    */
   async recover(): Promise<void> {
     for (const [key, conversation] of await this.options.store.all()) {
-      if (conversation.busy !== true) continue;
+      const pending = conversation.pending ?? 0;
+      if (pending === 0) continue;
       const binding = this.options.bindings.find(
         (b) =>
           b.workspace.id === conversation.workspace && b.connection === conversation.connection,
       );
       const session = binding ? await this.options.runtime.get(conversation.sessionName) : null;
       if (!binding || session?.state !== 'live') {
-        await this.options.store.setBusy(key, false);
+        await this.options.store.setPending(key, 0);
         continue;
       }
       this.options.log(`Taking up ${key} again after a restart`);
@@ -208,6 +212,8 @@ export class ConversationManager {
         this.conversationFor(key, binding),
         true,
       );
+      // The others still waiting follow the first, as messages queued during its turn.
+      this.watches.get(key)?.queued.push(...new Array<null>(pending - 1).fill(null));
     }
   }
 
@@ -243,10 +249,16 @@ export class ConversationManager {
         // of the task it was started with; wait until it reports in.
         const reportsStatus = this.options.engine(this.chiefOfStaff(binding).definition.engine)
           .capabilities.status;
-        if (reportsStatus) await this.untilReady(session.id);
+        if (reportsStatus) {
+          await this.untilReady(session.id);
+        } else if (existing?.startedAt !== undefined) {
+          // No status to say it has started: give a new session its start-up time first.
+          const wait = Date.parse(existing.startedAt) + this.options.typeDelayMs - Date.now();
+          if (wait > 0) await sleep(wait);
+        }
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
-        await this.options.store.setBusy(key, true);
+        await this.options.store.addPending(key);
         this.watchTurn(
           key,
           binding,
@@ -301,7 +313,7 @@ export class ConversationManager {
       ...(resume && { engineSessionId: engineId }),
       startedAt: now.toISOString(),
       ...(launchTag !== undefined && { launchTag }),
-      busy: true,
+      pending: 1,
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
@@ -454,9 +466,11 @@ export class ConversationManager {
       // Close before any await, so a message arriving from here on is followed afresh.
       watch.closed = true;
       if (this.watches.get(key) === watch) this.watches.delete(key);
-      await this.options.store.setBusy(key, false);
+      await this.options.store.setPending(key, 0);
       await unmarkSeen();
-      for (const message of watch.queued.splice(0)) await this.unmark(channel, message);
+      for (const message of watch.queued.splice(0)) {
+        if (message) await this.unmark(channel, message);
+      }
       if (text !== null) await this.notice(key, binding, thread, text);
     };
 
@@ -472,7 +486,7 @@ export class ConversationManager {
           await unmarkSeen();
           watch.queued.splice(0, posted - 1);
           if (watch.queued.length === 0) return done(null);
-          watch.seen = watch.queued.splice(0, 1);
+          watch.seen = watch.queued.splice(0, 1).filter((m) => m !== null);
           watch.sentAt = Date.now();
           giveUpAt = Date.now() + this.options.answerWaitSeconds * 1000;
           continue;
@@ -522,7 +536,7 @@ export class ConversationManager {
         // Messages arrived during that turn. The agent takes queued messages a turn at a
         // time (or several in one), so follow the next turn for the oldest of them, and keep
         // the rest queued for the turns after.
-        watch.seen = watch.queued.splice(0, 1);
+        watch.seen = watch.queued.splice(0, 1).filter((m) => m !== null);
         watch.fromTurn = session.turn;
         watch.sentAt = Date.now();
         startBy = Date.now() + this.options.followUpSeconds * 1000;
@@ -617,7 +631,7 @@ export class ConversationManager {
     const busy = new Set<string>();
     for (const [, c] of await this.options.store.all()) {
       lastActive.set(c.sessionName, c.lastActiveAt);
-      if (c.busy === true) busy.add(c.sessionName);
+      if ((c.pending ?? 0) > 0) busy.add(c.sessionName);
     }
     // Never stop a session whose turn is still being followed: an engine without status
     // (opencode) can be busy while reporting none.

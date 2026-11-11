@@ -443,6 +443,54 @@ describe('conversations', () => {
     expect(posts().find((p) => p.text === 'answer: first')?.thread).toBe(first);
   });
 
+  it('after a restart, follows until every waiting message has its answer', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+        delayMs: 150,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+    });
+    const make2 = () =>
+      new ConversationManager({
+        install: install.config!,
+        bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+        channels: new Map([['slack', channel]]),
+        runtime: quiet,
+        engine: () => engine,
+        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+        sessionEnv: { OPINR_HOME: home },
+        pollMs: 5,
+        answerPollMs: 5,
+        typeDelayMs: 30,
+        startupSeconds: 2,
+        maxLiveSessions: 1,
+      });
+    manager = make2();
+    const first = await dm('one');
+    await dm('two', first);
+    // The service restarts with both messages still waiting.
+    await new Promise((r) => setTimeout(r, 40));
+    await manager.stop();
+    manager = make2();
+    await manager.recover();
+    await settle();
+    expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+    const stored = JSON.parse(
+      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+    ) as Record<string, { pending?: number }>;
+    expect(stored[conversationKey('personal', 'slack', 'D1', first)]?.pending).toBe(0);
+  });
+
   it('types the message into a resumed engine that takes none at launch', async () => {
     await manager.stop();
     const quiet = new MemoryRuntime({

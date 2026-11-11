@@ -24,8 +24,11 @@ const conversationSchema = z.object({
   /** When the current engine session started, and the tag on its first message, to find its id. */
   startedAt: z.string().optional(),
   launchTag: z.string().optional(),
-  /** True while a message waits for its answer, so a busy session is never stopped. */
-  busy: z.boolean().optional(),
+  /**
+   * How many messages are waiting for their answers. While any are, the session is never
+   * stopped, and after a restart the service follows it until they are all answered.
+   */
+  pending: z.number().int().nonnegative().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -66,11 +69,20 @@ export class ConversationStore {
     await this.save();
   }
 
-  async setBusy(key: string, busy: boolean): Promise<void> {
+  /** One more message waits for its answer. */
+  async addPending(key: string): Promise<void> {
     await this.load();
     const conversation = this.conversations.get(key);
-    if (!conversation || conversation.busy === busy) return;
-    conversation.busy = busy;
+    if (!conversation) return;
+    conversation.pending = (conversation.pending ?? 0) + 1;
+    await this.save();
+  }
+
+  async setPending(key: string, pending: number): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation || (conversation.pending ?? 0) === pending) return;
+    conversation.pending = pending;
     await this.save();
   }
 
