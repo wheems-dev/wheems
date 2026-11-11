@@ -160,6 +160,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   }
   const listening = server;
   log(`Opinr ${options.version} is running from ${options.home}`);
+  await manager.recover();
 
   return {
     async stop() {

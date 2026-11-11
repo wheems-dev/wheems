@@ -33,9 +33,10 @@ export interface EngineDriver extends Driver<'engine'> {
 
   /**
    * Optional, for engines that choose their own session ids (Codex, opencode): finds the
-   * session this engine started in \`dir\` at \`startedAt\` whose first message carries \`tag\`
-   * (see \`conversationTag\`), and returns its id, or null when it can't be found yet. The tag
-   * is unique to the conversation, so two conversations never claim the same session. The
+   * session this engine started in \`dir\` at \`startedAt\` whose first message ends with
+   * \`tag\` (see \`conversationTag\`), and returns its id, or null when it can't be found yet or
+   * more than one session matches. The tag is unique to each launch, so two conversations
+   * never claim the same session. The
    * service keeps the id with the conversation, passes it back as \`session.engineId\` to
    * resume, and uses it as the session id for \`answers\`. Engines that take Opinr's id
    * (Claude Code) don't need it.
@@ -143,9 +144,11 @@ export function answersAfter(all: FinalMessage[], after: string | null): FinalMe
 }
 
 /**
- * The tag the service adds to the first message of a conversation on an engine that
- * chooses its own session ids, so \`findSession\` can tell its session from any other.
+ * The tag the service adds to the end of the first message of a conversation on an engine
+ * that chooses its own session ids, so \`findSession\` can tell its session from any other.
+ * \`launch\` is random for each launch, so nobody can write a tag that matches another
+ * conversation's session.
  */
-export function conversationTag(conversationId: string): string {
-  return `<opinr conversation="${conversationId}"/>`;
+export function conversationTag(conversationId: string, launch: string): string {
+  return `<opinr conversation="${conversationId}" launch="${launch}"/>`;
 }

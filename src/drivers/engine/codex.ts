@@ -126,16 +126,17 @@ export class CodexEngine implements EngineDriver {
   }): Promise<string | null> {
     const dir = await realpath(session.dir).catch(() => session.dir);
     const earliest = session.startedAt.getTime() - 5_000;
+    const matches: string[] = [];
     for (const file of await this.recentRecords(session.startedAt)) {
       const meta = await firstRecord(file);
       if (meta?.type !== 'session_meta') continue;
       const payload = meta.payload as { id?: string; cwd?: string; timestamp?: string } | undefined;
       if (payload?.cwd !== dir || typeof payload.id !== 'string') continue;
       if (Date.parse(payload.timestamp ?? '') < earliest) continue;
-      if (!(await hasUserText(file, session.tag))) continue;
-      return payload.id;
+      if (await hasUserMessageEndingWith(file, session.tag)) matches.push(payload.id);
     }
-    return null;
+    // Only an unambiguous match will do.
+    return matches.length === 1 ? (matches[0] ?? null) : null;
   }
 
   async answers(
@@ -250,8 +251,8 @@ async function firstRecord(file: string): Promise<CodexRecord | null> {
   }
 }
 
-/** Whether any message from the user in a record contains the text. */
-async function hasUserText(file: string, wanted: string): Promise<boolean> {
+/** Whether a message from the user in a record ends with the text, as Opinr's tag does. */
+async function hasUserMessageEndingWith(file: string, wanted: string): Promise<boolean> {
   const text = await readFile(file, 'utf8').catch(() => '');
   for (const line of text.split('\n')) {
     if (!line.includes('"user"')) continue;
@@ -261,7 +262,11 @@ async function hasUserText(file: string, wanted: string): Promise<boolean> {
       if (record.type !== 'response_item' || payload?.type !== 'message' || payload.role !== 'user')
         continue;
       const content = payload.content as { type?: string; text?: string }[] | undefined;
-      if (content?.some((block) => typeof block.text === 'string' && block.text.includes(wanted)))
+      if (
+        content?.some(
+          (block) => typeof block.text === 'string' && block.text.trimEnd().endsWith(wanted),
+        )
+      )
         return true;
     } catch {
       // Keep looking.

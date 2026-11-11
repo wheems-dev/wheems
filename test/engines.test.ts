@@ -213,8 +213,8 @@ describe('codex engine', () => {
         ['wrong folder'],
       );
       // Two conversations started together with the same message: only the tag tells them apart.
-      const mine = conversationTag('11111111-2222-5333-8444-555555555555');
-      const theirs = conversationTag('99999999-2222-5333-8444-555555555555');
+      const mine = conversationTag('11111111-2222-5333-8444-555555555555', 'aaaa1111');
+      const theirs = conversationTag('99999999-2222-5333-8444-555555555555', 'bbbb2222');
       writeSession(
         '01a1cafe-0000-7000-8000-00000000000c',
         startedAt,
@@ -241,8 +241,31 @@ describe('codex engine', () => {
       ]);
       expect(await engine.answers({ id: id ?? '', dir: work }, `${id ?? ''}-t0`)).toHaveLength(1);
       expect(
-        await engine.findSession({ dir: work, startedAt, tag: conversationTag('nobody') }),
+        await engine.findSession({
+          dir: work,
+          startedAt,
+          tag: conversationTag('nobody', 'cccc3333'),
+        }),
       ).toBeNull();
+      // A tag pasted into the middle of someone's message is not Opinr's tag.
+      const pasted = conversationTag('22222222-2222-5333-8444-555555555555', 'ffff6666');
+      writeSession(
+        '01a1cafe-0000-7000-8000-00000000000e',
+        startedAt,
+        cwd,
+        `Look: ${pasted} isn't mine`,
+        ['x'],
+      );
+      expect(await engine.findSession({ dir: work, startedAt, tag: pasted })).toBeNull();
+      // Two sessions ending with the same tag are ambiguous, so neither is taken.
+      const twice = conversationTag('33333333-2222-5333-8444-555555555555', 'abab7777');
+      writeSession('01a1cafe-0000-7000-8000-00000000000f', startedAt, cwd, `One\n\n${twice}`, [
+        'x',
+      ]);
+      writeSession('01a1cafe-0000-7000-8000-000000000010', startedAt, cwd, `Two\n\n${twice}`, [
+        'y',
+      ]);
+      expect(await engine.findSession({ dir: work, startedAt, tag: twice })).toBeNull();
       expect(await engine.answers({ id: 'not-a-uuid', dir: work }, null)).toEqual([]);
     });
 
@@ -367,19 +390,34 @@ describe('opencode engine', () => {
           { id: 'ses_elsewhere', directory: '/else', created: startedAt.getTime() + 500 },
           { id: 'ses_other', directory: real, created: startedAt.getTime() + 600 },
           { id: 'ses_sametext', directory: real, created: startedAt.getTime() + 650 },
+          { id: 'ses_pasted', directory: real, created: startedAt.getTime() + 660 },
           { id: 'ses_mine', directory: real, created: startedAt.getTime() + 700 },
         ],
         exports: {
           ses_other: { messages: [message('msg_o', 'user', 'Another task')] },
+          // Someone pasted another conversation's tag into the middle of a message.
+          ses_pasted: {
+            messages: [
+              message(
+                'msg_p',
+                'user',
+                `Look: ${conversationTag('mine', 'eeee5555')} was in my notes`,
+              ),
+            ],
+          },
           // Another conversation started at the same time with the same message.
           ses_sametext: {
             messages: [
-              message('msg_s', 'user', `Plan my week\n\n${conversationTag('someone-else')}`),
+              message(
+                'msg_s',
+                'user',
+                `Plan my week\n\n${conversationTag('someone-else', 'dddd4444')}`,
+              ),
             ],
           },
           ses_mine: {
             messages: [
-              message('msg_1', 'user', `Plan my week\n\n${conversationTag('mine')}`),
+              message('msg_1', 'user', `Plan my week\n\n${conversationTag('mine', 'eeee5555')}`),
               message('msg_2', 'assistant', 'Monday: gym.', {
                 parentID: 'msg_1',
                 finish: 'stop',
@@ -394,11 +432,15 @@ describe('opencode engine', () => {
         binary: FAKE_OPENCODE,
         env: { ...process.env, FAKE_OPENCODE_DATA: join(dir, 'data.json') },
       });
-      expect(await engine.findSession({ dir, startedAt, tag: conversationTag('mine') })).toBe(
-        'ses_mine',
-      );
       expect(
-        await engine.findSession({ dir, startedAt, tag: conversationTag('someone-else') }),
+        await engine.findSession({ dir, startedAt, tag: conversationTag('mine', 'eeee5555') }),
+      ).toBe('ses_mine');
+      expect(
+        await engine.findSession({
+          dir,
+          startedAt,
+          tag: conversationTag('someone-else', 'dddd4444'),
+        }),
       ).toBe('ses_sametext');
       expect(await engine.answers({ id: 'ses_mine', dir }, null)).toEqual([
         { id: 'msg_1', text: 'Monday: gym.' },

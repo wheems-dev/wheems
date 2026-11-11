@@ -123,17 +123,19 @@ export class OpencodeEngine implements EngineDriver {
         (s) => typeof s.id === 'string' && s.directory === dir && (s.created ?? 0) >= earliest,
       )
       .sort((a, b) => (a.created ?? 0) - (b.created ?? 0));
+    const matches: string[] = [];
     for (const candidate of candidates) {
       const exported = await this.export(candidate.id ?? '');
       if (
         exported?.messages?.some(
-          (m) => m.info?.role === 'user' && partsText(m).includes(session.tag),
+          (m) => m.info?.role === 'user' && partsText(m).trimEnd().endsWith(session.tag),
         )
       ) {
-        return candidate.id ?? null;
+        matches.push(candidate.id ?? '');
       }
     }
-    return null;
+    // Only an unambiguous match will do.
+    return matches.length === 1 ? (matches[0] ?? null) : null;
   }
 
   async answers(

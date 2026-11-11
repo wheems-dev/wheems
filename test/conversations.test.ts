@@ -395,6 +395,54 @@ describe('conversations', () => {
     ).toEqual(['answer: first', 'answer: second']);
   });
 
+  it('takes up a turn in progress after a restart, and still never stops its session', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+        delayMs: 300,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+    });
+    const make2 = () =>
+      new ConversationManager({
+        install: install.config!,
+        bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+        channels: new Map([['slack', channel]]),
+        runtime: quiet,
+        engine: () => engine,
+        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+        sessionEnv: { OPINR_HOME: home },
+        pollMs: 5,
+        answerPollMs: 5,
+        startupSeconds: 2,
+        maxLiveSessions: 1,
+      });
+    manager = make2();
+    const first = await dm('first');
+    // The service restarts while the agent is still working on the first message.
+    await new Promise((r) => setTimeout(r, 50));
+    await manager.stop();
+    manager = make2();
+    await manager.recover();
+    await dm('second');
+    await settle();
+    expect(
+      posts()
+        .map((p) => p.text)
+        .sort(),
+    ).toEqual(['answer: first', 'answer: second']);
+    expect(posts().find((p) => p.text === 'answer: first')?.thread).toBe(first);
+  });
+
   it('types the message into a resumed engine that takes none at launch', async () => {
     await manager.stop();
     const quiet = new MemoryRuntime({

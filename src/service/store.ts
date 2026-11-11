@@ -21,8 +21,11 @@ const conversationSchema = z.object({
   lastAnswerId: z.string().optional(),
   /** The engine's own id for the conversation, for engines that choose their own ids. */
   engineSessionId: z.string().optional(),
-  /** When the current engine session started, to find its id. */
+  /** When the current engine session started, and the tag on its first message, to find its id. */
   startedAt: z.string().optional(),
+  launchTag: z.string().optional(),
+  /** True while a message waits for its answer, so a busy session is never stopped. */
+  busy: z.boolean().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -60,6 +63,14 @@ export class ConversationStore {
     const conversation = this.conversations.get(key);
     if (!conversation) return;
     conversation.engineSessionId = id;
+    await this.save();
+  }
+
+  async setBusy(key: string, busy: boolean): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation || conversation.busy === busy) return;
+    conversation.busy = busy;
     await this.save();
   }
 

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { withBuiltins } from '../agents/builtin.js';
@@ -71,6 +71,11 @@ interface Watch {
   queued: MessageRef[];
   /** Set the moment the watch decides to finish; later messages start a new watch. */
   closed: boolean;
+  /**
+   * Taken up again after the service restarted: its answer may already have been posted,
+   * so it never says the agent finished without replying.
+   */
+  recovered: boolean;
 }
 
 /**
@@ -175,6 +180,37 @@ export class ConversationManager {
     }
   }
 
+  /**
+   * Takes up following the turns that were in progress when the service last stopped, so
+   * their answers still reach their threads. Call it once the channels are connected.
+   */
+  async recover(): Promise<void> {
+    for (const [key, conversation] of await this.options.store.all()) {
+      if (conversation.busy !== true) continue;
+      const binding = this.options.bindings.find(
+        (b) =>
+          b.workspace.id === conversation.workspace && b.connection === conversation.connection,
+      );
+      const session = binding ? await this.options.runtime.get(conversation.sessionName) : null;
+      if (!binding || session?.state !== 'live') {
+        await this.options.store.setBusy(key, false);
+        continue;
+      }
+      this.options.log(`Taking up ${key} again after a restart`);
+      // Its turn may have ended while the service was away. Answers are posted from the last
+      // one posted, so none is posted twice and none is missed.
+      this.watchTurn(
+        key,
+        binding,
+        conversation.sessionName,
+        Math.max(0, session.turn - 1),
+        null,
+        this.conversationFor(key, binding),
+        true,
+      );
+    }
+  }
+
   /** Resolves once no turn is being followed. */
   async whenIdle(): Promise<void> {
     while (this.watchers.size > 0) await Promise.allSettled([...this.watchers]);
@@ -210,6 +246,7 @@ export class ConversationManager {
         if (reportsStatus) await this.untilReady(session.id);
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
+        await this.options.store.setBusy(key, true);
         this.watchTurn(
           key,
           binding,
@@ -236,7 +273,20 @@ export class ConversationManager {
         `Conversation ${key}: the engine's session id was never found, so it starts afresh`,
       );
     }
-    const started = await this.startSession(key, binding, event, sessionName, resume, engineId);
+    // An engine that picks its own ids finds this launch's session by a tag on the first message.
+    const launchTag =
+      engine.findSession && !resume
+        ? conversationTag(uuidFor(key), randomBytes(8).toString('hex'))
+        : undefined;
+    const started = await this.startSession(
+      key,
+      binding,
+      event,
+      sessionName,
+      resume,
+      engineId,
+      launchTag,
+    );
     await this.options.store.set(key, {
       workspace: binding.workspace.id,
       connection: binding.connection,
@@ -250,6 +300,8 @@ export class ConversationManager {
       lastAnswerId: resume ? existing.lastAnswerId : '',
       ...(resume && { engineSessionId: engineId }),
       startedAt: now.toISOString(),
+      ...(launchTag !== undefined && { launchTag }),
+      busy: true,
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
@@ -292,6 +344,7 @@ export class ConversationManager {
     sessionName: string,
     resume: boolean,
     engineId: string | null,
+    launchTag: string | undefined,
   ): Promise<SessionInfo> {
     const workspace = binding.workspace;
     const agent = this.chiefOfStaff(binding);
@@ -306,11 +359,7 @@ export class ConversationManager {
         session: {
           id: uuidFor(key),
           resume,
-          // An engine that picks its own ids finds this conversation's session by its tag.
-          task:
-            engine.findSession && !resume
-              ? `${event.text}\n\n${conversationTag(uuidFor(key))}`
-              : event.text,
+          task: launchTag !== undefined ? `${event.text}\n\n${launchTag}` : event.text,
           engineId,
         },
       },
@@ -356,23 +405,25 @@ export class ConversationManager {
     binding: Binding,
     sessionName: string,
     fromTurn: number,
-    seen: MessageRef,
+    seen: MessageRef | null,
     target: Pick<Watch, 'conversation' | 'engine'>,
+    recovered = false,
   ): void {
     const active = this.watches.get(key);
     if (active && active.sessionName === sessionName && !active.closed) {
       // A turn is already being followed. The agent takes this message during that turn or
       // in the next one, so it is followed into the next turn too.
-      active.queued.push(seen);
+      if (seen) active.queued.push(seen);
       return;
     }
     const watch: Watch = {
       sessionName,
       fromTurn,
       sentAt: Date.now(),
-      seen: [seen],
+      seen: seen ? [seen] : [],
       queued: [],
       closed: false,
+      recovered,
       ...target,
     };
     this.watches.set(key, watch);
@@ -403,6 +454,7 @@ export class ConversationManager {
       // Close before any await, so a message arriving from here on is followed afresh.
       watch.closed = true;
       if (this.watches.get(key) === watch) this.watches.delete(key);
+      await this.options.store.setBusy(key, false);
       await unmarkSeen();
       for (const message of watch.queued.splice(0)) await this.unmark(channel, message);
       if (text !== null) await this.notice(key, binding, thread, text);
@@ -427,7 +479,9 @@ export class ConversationManager {
         }
         if (session.state === 'finished') {
           return done(
-            this.repliedSince(key, watch.sentAt) ? null : 'The session ended without replying.',
+            this.repliedSince(key, watch.sentAt) || watch.recovered
+              ? null
+              : 'The session ended without replying.',
           );
         }
         if (Date.now() > giveUpAt) {
@@ -444,7 +498,9 @@ export class ConversationManager {
       if (session.state === 'finished') {
         if (await this.postAnswers(key, watch)) return done(null);
         return done(
-          this.repliedSince(key, watch.sentAt) ? null : 'The session ended without replying.',
+          this.repliedSince(key, watch.sentAt) || watch.recovered
+            ? null
+            : 'The session ended without replying.',
         );
       }
       if (session.status === 'blocked') return done(blockedText(session));
@@ -453,7 +509,7 @@ export class ConversationManager {
       }
       if (session.turn > watch.fromTurn && session.status !== 'working') {
         const answered = await this.postAnswers(key, watch);
-        if (!answered && !this.repliedSince(key, watch.sentAt)) {
+        if (!answered && !this.repliedSince(key, watch.sentAt) && !watch.recovered) {
           await this.notice(
             key,
             binding,
@@ -543,11 +599,11 @@ export class ConversationManager {
     if (!engine.findSession) return watch.conversation.id;
     const conversation = await this.options.store.get(key);
     if (conversation?.engineSessionId !== undefined) return conversation.engineSessionId;
-    if (conversation?.startedAt === undefined) return null;
+    if (conversation?.startedAt === undefined || conversation.launchTag === undefined) return null;
     const found = await engine.findSession({
       dir: watch.conversation.dir,
       startedAt: new Date(conversation.startedAt),
-      tag: conversationTag(watch.conversation.id),
+      tag: conversation.launchTag,
     });
     if (found !== null) await this.options.store.setEngineSession(key, found);
     return found;
@@ -558,8 +614,11 @@ export class ConversationManager {
     const live = await this.options.runtime.list({ labels: { opinr: 'conversation', workspace } });
     if (live.length <= this.options.maxLiveSessions) return;
     const lastActive = new Map<string, string>();
-    for (const [, c] of await this.options.store.all())
+    const busy = new Set<string>();
+    for (const [, c] of await this.options.store.all()) {
       lastActive.set(c.sessionName, c.lastActiveAt);
+      if (c.busy === true) busy.add(c.sessionName);
+    }
     // Never stop a session whose turn is still being followed: an engine without status
     // (opencode) can be busy while reporting none.
     const followed = new Set(
@@ -570,6 +629,7 @@ export class ConversationManager {
         (s) =>
           s.name !== keep &&
           !followed.has(s.name ?? '') &&
+          !busy.has(s.name ?? '') &&
           s.status !== 'working' &&
           s.status !== 'blocked',
       )

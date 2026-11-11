@@ -46,7 +46,7 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
     let busy = false;
     const handle = (raw: string, io: Io) => {
       // Like a real agent, it ignores the conversation tag Opinr may add to the first message.
-      const line = raw.replace(/\s*<opinr conversation="[^"]*"\/>\s*$/, '');
+      const line = raw.replace(/\s*<opinr [^>]*\/>\s*$/, '');
       const behaviour = options.behaviour?.(line) ?? 'reply';
       if (behaviour === 'never-start') return;
       if (busy) {
