@@ -83,9 +83,10 @@ describe('conversations', () => {
     });
     return id;
   };
+  /** Waits until every turn has ended and the manager has said what it will say. */
   const settle = async () => {
-    // Let simulated agents finish and watchers notice.
-    for (let i = 0; i < 40; i++) await new Promise((r) => setTimeout(r, 5));
+    await new Promise((r) => setTimeout(r, 5));
+    await manager.whenIdle();
   };
   const posts = () => channel.sent.map((m) => ({ thread: m.threadId, text: m.text }));
 
@@ -209,8 +210,7 @@ describe('conversations', () => {
     make({ startupSeconds: 0.2 });
     behaviour = () => 'never-start';
     await dm('hello');
-    // Waits check in at whole seconds, so allow one check-in past the deadline.
-    await new Promise((r) => setTimeout(r, 1500));
+    await settle();
     expect(posts().at(-1)?.text).toMatch(/hasn't started on this yet.*hc attach/);
   });
 

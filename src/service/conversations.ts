@@ -153,6 +153,11 @@ export class ConversationManager {
     }
   }
 
+  /** Resolves once no turn is being followed. */
+  async whenIdle(): Promise<void> {
+    while (this.watchers.size > 0) await Promise.allSettled([...this.watchers]);
+  }
+
   /** Stops watching sessions. Sessions themselves keep running. */
   async stop(): Promise<void> {
     this.stopped = true;
