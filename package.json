@@ -1,5 +1,5 @@
 {
-  "name": "opinr",
+  "name": "@opinr/hq",
   "version": "0.0.0",
   "private": true,
   "description": "An opinionated framework for running teams of AI agents, on Herdr core",
@@ -65,5 +65,8 @@
     "vitest": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
