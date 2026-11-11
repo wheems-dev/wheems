@@ -35,19 +35,24 @@ export interface WorkspaceTemplate {
   channel: string | null;
 }
 
+/** A YAML scalar for text a person typed, such as `Acme: UK` or `#work-chat`. */
+function yamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
 export function workspaceYaml(template: WorkspaceTemplate): string {
   const chat =
     template.channel === null
       ? '{ connection: slack, direct: true }'
-      : `{ connection: slack, channel: ${template.channel} }`;
-  return `name: ${template.name}
+      : `{ connection: slack, channel: ${yamlString(template.channel)} }`;
+  return `name: ${yamlString(template.name)}
 accounts: [claude-subscription]
 
 channels:
   chat: ${chat}
 
 identity:
-  name: ${template.name} chief of staff
+  name: ${yamlString(`${template.name} chief of staff`)}
 `;
 }
 
@@ -57,7 +62,7 @@ skills: {}
 
 export function chiefOfStaffMd(template: WorkspaceTemplate): string {
   return `---
-description: The one entry point for ${template.name}, aware of everything going on in it.
+description: ${yamlString(`The one entry point for ${template.name}, aware of everything going on in it.`)}
 engine: claude-code
 model: claude-opus-5-5
 account: claude-subscription

@@ -46,11 +46,14 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
       );
     }
   }
+  const channel = options.channel?.replace(/^#/, '').trim();
+  if (channel === '') throw new Error('Give --channel a channel name or id');
+  const name = options.name?.trim();
+  if (name === '') throw new Error('Give --name a display name');
   const template = {
     id: options.id,
-    name:
-      options.name ?? options.id.charAt(0).toUpperCase() + options.id.slice(1).replaceAll('-', ' '),
-    channel: options.channel ?? null,
+    name: name ?? options.id.charAt(0).toUpperCase() + options.id.slice(1).replaceAll('-', ' '),
+    channel: channel ?? null,
   };
   await mkdir(join(dir, 'agents'), { recursive: true });
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));

@@ -155,6 +155,46 @@ describe('the service', () => {
   });
 });
 
+describe('the service when a channel cannot connect', () => {
+  it('stops what it started and does not answer on its socket', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'os-'));
+    const env = { ...process.env, OPINR_HOME: home, OPINR_SECRETS: join(home, 'secrets.json') };
+    try {
+      writeFileSync(join(home, 'install.yaml'), installYaml());
+      await initWorkspace({ home, id: 'personal' });
+      const channel = new MemoryChannel();
+      let stopped = 0;
+      channel.start = () => Promise.reject(new Error('Slack refused the app-level token'));
+      const stop = channel.stop.bind(channel);
+      channel.stop = () => {
+        stopped++;
+        return stop();
+      };
+      const registry = new DriverRegistry()
+        .register('runtime', 'herdr', () => new MemoryRuntime())
+        .register('engine', 'claude-code', () => new StubEngine())
+        .register('channel', 'slack', () => channel);
+      await expect(
+        runService({
+          home,
+          registry,
+          node: 'node',
+          cli: 'x.js',
+          version: '0',
+          env,
+          log: () => undefined,
+        }),
+      ).rejects.toThrow(/app-level token/);
+      await expect(request(paths(home, env).socket, { op: 'ping' }, 1000)).rejects.toThrow(
+        /not running/,
+      );
+      expect(stopped).toBe(0);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('the service without a valid install', () => {
   it('refuses to start, saying what is wrong', async () => {
     const home = mkdtempSync(join(tmpdir(), 'os-'));

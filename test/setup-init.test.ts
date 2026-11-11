@@ -130,6 +130,22 @@ describe('opinr init', () => {
     });
   });
 
+  it('writes valid config for names and channels with YAML characters in them', async () => {
+    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'acme', name: 'Acme: UK # ltd', channel: '#work-chat' });
+    const install = await loadInstall(home);
+    expect(install.problems).toEqual([]);
+    const acme = install.workspaces.find((w) => w.id === 'acme');
+    expect(acme?.config).toMatchObject({
+      name: 'Acme: UK # ltd',
+      channels: { chat: { connection: 'slack', channel: 'work-chat' } },
+      identity: { name: 'Acme: UK # ltd chief of staff' },
+    });
+    expect(acme?.agents[0]?.definition.description).toBe(
+      'The one entry point for Acme: UK # ltd, aware of everything going on in it.',
+    );
+  });
+
   it('refuses bad names, existing workspaces and a missing install', async () => {
     await expect(initWorkspace({ home, id: 'Bad Name' })).rejects.toThrow(/not a workspace name/);
     await initWorkspace({ home, id: 'personal' });
@@ -143,7 +159,7 @@ describe('opinr init', () => {
     await initWorkspace({ home, id: 'personal' });
     await initWorkspace({ home, id: 'work', channel: 'work-chat' });
     const file = join(home, 'workspaces', 'work', 'workspace.yaml');
-    writeFileSync(file, readFileSync(file, 'utf8').replace('channel: work-chat', 'direct: true'));
+    writeFileSync(file, readFileSync(file, 'utf8').replace('channel: "work-chat"', 'direct: true'));
     const errors = crossCheck(await loadInstall(home)).filter((p) => p.level === 'error');
     expect(errors.map((e) => e.message)).toEqual([
       'Channel "chat" uses direct messages on "slack", which workspace "personal" already has',

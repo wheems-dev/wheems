@@ -7,6 +7,7 @@ import type {
   EngineCapabilities,
   EngineContext,
   EngineDriver,
+  FinalMessage,
   LaunchPlan,
   PermissionLevel,
 } from '../../contracts/engine.js';
@@ -54,7 +55,7 @@ export class ClaudeCodeEngine implements EngineDriver {
    * The last text Claude wrote after the latest prompt, from the session's transcript
    * (`projects/<folder>/<session id>.jsonl` in Claude Code's config folder).
    */
-  async finalMessage(session: { id: string; dir: string }): Promise<string | null> {
+  async finalMessage(session: { id: string; dir: string }): Promise<FinalMessage | null> {
     const file = await this.transcript(session);
     if (file === null) return null;
     let text: string;
@@ -139,12 +140,13 @@ async function isFile(path: string): Promise<boolean> {
 
 interface TranscriptEntry {
   type?: string;
+  uuid?: string;
   isSidechain?: boolean;
   message?: { content?: string | { type?: string; text?: string }[] };
 }
 
-/** The last text block after the last prompt the person (not a tool) sent. */
-export function finalText(jsonl: string): string | null {
+/** The last text block after the last prompt the person (not a tool) sent, with its entry's id. */
+export function finalText(jsonl: string): FinalMessage | null {
   const entries: TranscriptEntry[] = [];
   for (const line of jsonl.split('\n')) {
     if (line.trim() === '') continue;
@@ -154,8 +156,10 @@ export function finalText(jsonl: string): string | null {
       // A line being written as we read; skip it.
     }
   }
-  let last: string | null = null;
+  let last: FinalMessage | null = null;
+  let line = 0;
   for (const entry of entries) {
+    line++;
     if (entry.isSidechain === true) continue;
     const content = entry.message?.content;
     if (entry.type === 'user') {
@@ -166,7 +170,7 @@ export function finalText(jsonl: string): string | null {
     } else if (entry.type === 'assistant' && Array.isArray(content)) {
       for (const block of content) {
         if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '')
-          last = block.text.trim();
+          last = { id: entry.uuid ?? `line-${String(line)}`, text: block.text.trim() };
       }
     }
   }

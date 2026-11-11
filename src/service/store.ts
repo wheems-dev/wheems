@@ -22,7 +22,8 @@ export type Conversation = z.infer<typeof conversationSchema>;
 export class ConversationStore {
   private readonly file: string;
   private conversations = new Map<string, Conversation>();
-  private loaded = false;
+  /** One load, shared by every caller, so no read can replace a newer write. */
+  private loading: Promise<void> | undefined;
   private writing: Promise<void> = Promise.resolve();
 
   constructor(file: string) {
@@ -53,8 +54,12 @@ export class ConversationStore {
     await this.save();
   }
 
-  private async load(): Promise<void> {
-    if (this.loaded) return;
+  private load(): Promise<void> {
+    this.loading ??= this.read();
+    return this.loading;
+  }
+
+  private async read(): Promise<void> {
     try {
       const raw = JSON.parse(await readFile(this.file, 'utf8')) as unknown;
       const parsed = z.record(z.string(), conversationSchema).parse(raw);
@@ -62,7 +67,6 @@ export class ConversationStore {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
-    this.loaded = true;
   }
 
   /** Writes are queued, and each writes a temporary file then renames it into place. */

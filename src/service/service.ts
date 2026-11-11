@@ -130,29 +130,41 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
   });
 
-  const server: Server = await listen(
-    where.socket,
-    async (request: ControlRequest): Promise<ControlResponse> => {
-      switch (request.op) {
-        case 'ping':
-          return { ok: true, version: options.version };
-        case 'reply':
-          await manager.reply(request.conversation, request.text);
-          return { ok: true };
-      }
-    },
-  );
-
-  for (const [connection, channel] of channels) {
-    await channel.start((event) => manager.handle(connection, event));
-    log(`Connected ${connection}`);
+  // Connect every channel first, then open the control socket: a service that answers
+  // ping is one that is connected. If anything fails, undo what started, so the process
+  // exits and launchd restarts it.
+  const started: ChannelDriver[] = [];
+  let server: Server | undefined;
+  try {
+    for (const [connection, channel] of channels) {
+      await channel.start((event) => manager.handle(connection, event));
+      started.push(channel);
+      log(`Connected ${connection}`);
+    }
+    server = await listen(
+      where.socket,
+      async (request: ControlRequest): Promise<ControlResponse> => {
+        switch (request.op) {
+          case 'ping':
+            return { ok: true, version: options.version };
+          case 'reply':
+            await manager.reply(request.conversation, request.text);
+            return { ok: true };
+        }
+      },
+    );
+  } catch (error) {
+    for (const channel of started) await channel.stop().catch(() => undefined);
+    await manager.stop();
+    throw error;
   }
+  const listening = server;
   log(`Opinr ${options.version} is running from ${options.home}`);
 
   return {
     async stop() {
       await new Promise<void>((resolve) =>
-        server.close(() => {
+        listening.close(() => {
           resolve();
         }),
       );

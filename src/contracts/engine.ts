@@ -26,7 +26,14 @@ export interface EngineDriver extends Driver<'engine'> {
    * yet. With it, the service posts each answer for the agent; without it, agents answer
    * only through `opinr reply`.
    */
-  finalMessage?(session: { id: string; dir: string }): Promise<string | null>;
+  finalMessage?(session: { id: string; dir: string }): Promise<FinalMessage | null>;
+}
+
+/** An agent's final message of a turn. */
+export interface FinalMessage {
+  /** Identifies this message in the engine's record, so it is never posted twice. */
+  id: string;
+  text: string;
 }
 
 export interface EngineCapabilities {

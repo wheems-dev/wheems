@@ -107,6 +107,7 @@ describe('claude-code transcripts', () => {
       message: { content: [{ type: 'text', text: 'A subagent talking' }] },
     }),
     line({
+      uuid: 'a2',
       type: 'assistant',
       message: { content: [{ type: 'text', text: '  The second answer.  ' }] },
     }),
@@ -114,7 +115,7 @@ describe('claude-code transcripts', () => {
   ].join('\n');
 
   it('takes the last text after the latest prompt, skipping tool results, thinking and subagents', () => {
-    expect(finalText(transcript)).toBe('The second answer.');
+    expect(finalText(transcript)).toEqual({ id: 'a2', text: 'The second answer.' });
     expect(
       finalText(`${transcript}\n${line({ type: 'user', message: { content: 'Third' } })}`),
     ).toBeNull();
@@ -136,9 +137,14 @@ describe('claude-code transcripts', () => {
       mkdirSync(folder, { recursive: true });
       writeFileSync(join(folder, `${id}.jsonl`), transcript);
       const engine = new ClaudeCodeEngine({ configDir: join(root, 'claude') });
-      expect(await engine.finalMessage({ id, dir })).toBe('The second answer.');
+      expect(await engine.finalMessage({ id, dir })).toEqual({
+        id: 'a2',
+        text: 'The second answer.',
+      });
       // A session elsewhere is still found by its id.
-      expect(await engine.finalMessage({ id, dir: '/somewhere/else' })).toBe('The second answer.');
+      expect((await engine.finalMessage({ id, dir: '/somewhere/else' }))?.text).toBe(
+        'The second answer.',
+      );
       expect(
         await engine.finalMessage({ id: '99999999-2222-5333-8444-555555555555', dir }),
       ).toBeNull();

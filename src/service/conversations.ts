@@ -11,7 +11,7 @@ import {
   type MessageRef,
 } from '../contracts/channel.js';
 import { isDriverError } from '../contracts/driver.js';
-import type { EngineDriver, LaunchPlan } from '../contracts/engine.js';
+import type { EngineDriver, FinalMessage, LaunchPlan } from '../contracts/engine.js';
 import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 import type { ConversationStore } from './store.js';
 
@@ -37,6 +37,11 @@ export interface ConversationManagerOptions {
   startupSeconds?: number;
   /** Milliseconds between checks while a session has not started its turn. */
   pollMs?: number;
+  /**
+   * Seconds to wait, after a turn ends with messages queued during it, for the agent to
+   * start a turn on them.
+   */
+  followUpSeconds?: number;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -52,6 +57,8 @@ interface Watch {
   sentAt: number;
   /** Messages marked as seen until the agent replies. */
   seen: MessageRef[];
+  /** Messages that arrived while a turn was being followed. */
+  queued: MessageRef[];
 }
 
 /**
@@ -67,8 +74,10 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
-  private readonly lastReply = new Map<string, number>();
-  private readonly lastReplyText = new Map<string, string>();
+  /** The latest `opinr reply` in each conversation. */
+  private readonly lastReply = new Map<string, { at: number; text: string }>();
+  /** The id of the latest final message posted in each conversation. */
+  private readonly lastFinal = new Map<string, string>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
 
@@ -77,6 +86,7 @@ export class ConversationManager {
       maxLiveSessions: 4,
       startupSeconds: 90,
       pollMs: 1000,
+      followUpSeconds: 15,
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -128,6 +138,7 @@ export class ConversationManager {
   /** Posts an agent's reply (`opinr reply`) into its conversation's thread. */
   async reply(key: string, text: string): Promise<void> {
     await this.post(key, text);
+    this.lastReply.set(key, { at: Date.now(), text: text.trim() });
   }
 
   private async post(key: string, text: string): Promise<void> {
@@ -144,8 +155,6 @@ export class ConversationManager {
       text,
       ...(identity && channel.capabilities.identities && { identity }),
     });
-    this.lastReply.set(key, Date.now());
-    this.lastReplyText.set(key, text.trim());
     await this.options.store.touch(key, new Date());
     const watch = this.watches.get(key);
     if (watch) {
@@ -298,12 +307,19 @@ export class ConversationManager {
   ): void {
     const active = this.watches.get(key);
     if (active && active.sessionName === sessionName) {
-      // A turn is already being followed. This message joins it: the agent picks it up
-      // during or after that turn, and any reply clears it.
-      active.seen.push(seen);
+      // A turn is already being followed. The agent takes this message during that turn or
+      // in the next one, so it is followed into the next turn too.
+      active.queued.push(seen);
       return;
     }
-    const watch: Watch = { sessionName, fromTurn, sentAt: Date.now(), seen: [seen], ...target };
+    const watch: Watch = {
+      sessionName,
+      fromTurn,
+      sentAt: Date.now(),
+      seen: [seen],
+      queued: [],
+      ...target,
+    };
     this.watches.set(key, watch);
     const run = this.follow(key, binding, watch)
       .catch((error: unknown) => {
@@ -321,15 +337,22 @@ export class ConversationManager {
     const channel = this.channel(binding.connection);
     const conversation = await this.options.store.get(key);
     const thread = conversation?.thread ?? '';
-    const startBy = Date.now() + this.options.startupSeconds * 1000;
-    const done = async (text: string | null) => {
+    /** Until when to wait for the agent to start a turn. */
+    let startBy = Date.now() + this.options.startupSeconds * 1000;
+    /** True after a turn ended with messages still queued: a new turn may or may not follow. */
+    let followingUp = false;
+    const unmarkSeen = async () => {
       for (const message of watch.seen.splice(0)) await this.unmark(channel, message);
+    };
+    const done = async (text: string | null) => {
+      await unmarkSeen();
+      for (const message of watch.queued.splice(0)) await this.unmark(channel, message);
       if (text !== null) await this.notice(key, binding, thread, text);
     };
 
     while (!this.stopped) {
       const session = await runtime.get(watch.sessionName);
-      if (!session) return;
+      if (!session) return done(null);
       if (session.state === 'finished') {
         if (await this.postFinal(key, watch)) return done(null);
         return done(
@@ -341,17 +364,32 @@ export class ConversationManager {
         return done(`The agent hit an error. Its session is \`${session.id}\` in Herdr.`);
       }
       if (session.turn > watch.fromTurn && session.status !== 'working') {
-        if (await this.postFinal(key, watch)) return done(null);
-        return done(
-          this.repliedSince(key, watch.sentAt)
-            ? null
-            : `The agent finished without replying here. Its session is \`${session.id}\` in Herdr.`,
-        );
+        const answered = await this.postFinal(key, watch);
+        if (!answered && !this.repliedSince(key, watch.sentAt)) {
+          await this.notice(
+            key,
+            binding,
+            thread,
+            `The agent finished without replying here. Its session is \`${session.id}\` in Herdr.`,
+          );
+        }
+        await unmarkSeen();
+        if (watch.queued.length === 0) return done(null);
+        // Messages arrived during that turn. Follow the turn that answers them, if one starts.
+        watch.seen = watch.queued.splice(0);
+        watch.fromTurn = session.turn;
+        watch.sentAt = Date.now();
+        startBy = Date.now() + this.options.followUpSeconds * 1000;
+        followingUp = true;
+        continue;
       }
       if (session.status !== 'working') {
         // Not started on the message yet: still booting, idle before its first turn, or
         // showing a question such as whether to trust its folder.
         if (Date.now() > startBy) {
+          // After a follow-up wait, no new turn means the agent took the queued messages
+          // into the turn that just ended, and answered them there.
+          if (followingUp) return done(null);
           return done(
             `The agent hasn't started on this yet. It may be waiting for an answer at the Mac: \`hc attach ${session.id}\`.`,
           );
@@ -363,25 +401,31 @@ export class ConversationManager {
         }
         continue;
       }
+      followingUp = false;
       await runtime.wait(session.id, { timeoutSeconds: 300 });
     }
   }
 
   /**
-   * Posts the agent's final message of the turn, when its engine can read it and it
-   * isn't what the agent already sent with `opinr reply`. Returns whether it posted.
+   * Posts the agent's final message of the turn, when its engine can read it. A message
+   * already posted (the same transcript entry) is not posted again, nor is one the agent
+   * already sent word for word with `opinr reply` during this turn. Returns whether the
+   * turn has an answer in the thread.
    */
   private async postFinal(key: string, watch: Watch): Promise<boolean> {
     if (!watch.engine.finalMessage) return false;
     // The engine may still be writing its record when the turn ends; give it a moment.
-    let text: string | null = null;
-    for (let attempt = 0; attempt < 5 && text === null; attempt++) {
+    let final: FinalMessage | null = null;
+    for (let attempt = 0; attempt < 5 && final === null; attempt++) {
       if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
-      text = await watch.engine.finalMessage(watch.conversation);
+      final = await watch.engine.finalMessage(watch.conversation);
     }
-    if (text === null || text.trim() === '' || text.trim() === this.lastReplyText.get(key))
-      return false;
-    await this.post(key, text);
+    if (final === null || final.text.trim() === '') return false;
+    if (this.lastFinal.get(key) === final.id) return false;
+    this.lastFinal.set(key, final.id);
+    const reply = this.lastReply.get(key);
+    if (reply && reply.at >= watch.sentAt && reply.text === final.text.trim()) return true;
+    await this.post(key, final.text);
     return true;
   }
 
@@ -407,7 +451,7 @@ export class ConversationManager {
   }
 
   private repliedSince(key: string, since: number): boolean {
-    return (this.lastReply.get(key) ?? 0) >= since;
+    return (this.lastReply.get(key)?.at ?? 0) >= since;
   }
 
   private async notice(key: string, binding: Binding, thread: string, text: string): Promise<void> {

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall, type LoadedInstall } from '../src/config/load.js';
 import { ConversationManager, conversationKey, uuidFor } from '../src/service/conversations.js';
 import { ConversationStore } from '../src/service/store.js';
+import type { FinalMessage } from '../src/contracts/engine.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
 import { fakeAgent, type Behaviour } from './helpers/fake-agent.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
@@ -22,7 +23,7 @@ describe('conversations', () => {
   let behaviour: (line: string) => Behaviour;
   let received: Map<string, string[]>;
   let logs: string[];
-  let answers: Map<string, string>;
+  let answers: Map<string, FinalMessage>;
 
   const make = (options: { maxLiveSessions?: number; startupSeconds?: number } = {}) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
@@ -36,6 +37,7 @@ describe('conversations', () => {
       sessionEnv: { OPINR_HOME: home },
       pollMs: 5,
       startupSeconds: options.startupSeconds ?? 2,
+      followUpSeconds: 0.5,
       log: (m) => logs.push(m),
       ...(options.maxLiveSessions !== undefined && { maxLiveSessions: options.maxLiveSessions }),
     });
@@ -183,6 +185,41 @@ describe('conversations', () => {
     await dm('again', first);
     await settle();
     expect(posts().slice(2)).toEqual([{ thread: first, text: 'echo: again' }]);
+  });
+
+  it('posts the same answer to two different questions', async () => {
+    behaviour = () => 'same-answer';
+    const first = await dm('Is it Friday?');
+    await settle();
+    await dm('Is the build green?', first);
+    await settle();
+    expect(posts()).toEqual([
+      { thread: first, text: 'Yes.' },
+      { thread: first, text: 'Yes.' },
+    ]);
+  });
+
+  it('answers a message sent while the agent was busy, in the turn after', async () => {
+    behaviour = () => 'answer';
+    await manager.stop();
+    runtime = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: (line) => behaviour(line),
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        delayMs: 60,
+      }),
+    });
+    make();
+    const first = await dm('one');
+    await new Promise((r) => setTimeout(r, 20));
+    await dm('two', first);
+    await settle();
+    expect(posts()).toEqual([
+      { thread: first, text: 'answer: one' },
+      { thread: first, text: 'answer: two' },
+    ]);
+    expect([...channel.reactions.values()].every((set) => set.size === 0)).toBe(true);
   });
 
   it('says so when the agent finishes without replying', async () => {
