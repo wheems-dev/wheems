@@ -6,7 +6,8 @@ export interface CrossCheckOptions {
   engines?: string[];
 }
 
-const BUILT_IN_CHANNELS = ['chat', 'approvals', 'updates'] as const;
+/** Built-in channels that something uses already. `approvals` and `updates` arrive with milestone 3. */
+const BUILT_IN_CHANNELS = ['chat'] as const;
 
 /**
  * Checks what one file cannot check alone: that names point at things that exist

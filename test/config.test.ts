@@ -330,8 +330,6 @@ describe('links between files', () => {
     expect(messages).toEqual([
       'error workspaces/acme/workspace.yaml: Account "missing-account" is not in install.yaml',
       'error workspaces/acme/workspace.yaml: Channel "chat" uses connection "discord", which is not in install.yaml',
-      'warning workspaces/acme/workspace.yaml: No "approvals" channel yet; every workspace gets one',
-      'warning workspaces/acme/workspace.yaml: No "updates" channel yet; every workspace gets one',
       'error workspaces/acme/workspace.yaml: Integration "linear" is not a connection in install.yaml',
       'error workspaces/acme/workspace.yaml: Machine "nowhere" is not in install.yaml',
       'error workspaces/acme/workspace.yaml: The chief of staff "boss" has no file in agents/',

@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { access, readFile, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { LoadedInstall } from '../config/load.js';
 import { paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
@@ -179,10 +179,18 @@ async function channelChecks(
         hint: 'Run opinr setup, or add Slack member ids to allowed_users in install.yaml.',
       });
     }
-    try {
-      const driver = options.registry.create('channel', settings.driver, {
-        ...secrets[settings.secret ?? connection],
+    const secret = secrets[settings.secret ?? connection];
+    if (secret === undefined) {
+      checks.push({
+        name: connection,
+        status: 'fail',
+        message: 'Not connected yet: no credentials saved for it',
+        hint: 'Run opinr setup to connect it.',
       });
+      continue;
+    }
+    try {
+      const driver = options.registry.create('channel', settings.driver, { ...secret });
       checks.push(
         ...(await driver.check()).map((c) => ({ ...c, name: `${connection}: ${c.name}` })),
       );
@@ -221,17 +229,30 @@ async function probeService(home: string): Promise<{ installed: boolean; answeri
 
 /** Reads, never writes, Claude Code's record of trusted folders. */
 async function claudeTrusts(dir: string): Promise<boolean | null> {
+  let projects: Record<string, { hasTrustDialogAccepted?: boolean }>;
   try {
     const config = JSON.parse(await readFile(join(homedir(), '.claude.json'), 'utf8')) as {
       projects?: Record<string, { hasTrustDialogAccepted?: boolean }>;
     };
-    const real = await realpath(dir);
-    return (
-      config.projects?.[real]?.hasTrustDialogAccepted === true ||
-      config.projects?.[dir]?.hasTrustDialogAccepted === true
-    );
+    projects = config.projects ?? {};
   } catch {
     return null;
+  }
+  const real = await realpath(dir).catch(() => dir);
+  return trustedIn(projects, real) || trustedIn(projects, dir);
+}
+
+/**
+ * Whether Claude Code trusts a folder: it records trust for the folder it was asked about,
+ * or for the git repository around it, and either covers everything inside.
+ */
+export function trustedIn(
+  projects: Record<string, { hasTrustDialogAccepted?: boolean }>,
+  dir: string,
+): boolean {
+  for (let folder = dir; ; folder = dirname(folder)) {
+    if (projects[folder]?.hasTrustDialogAccepted === true) return true;
+    if (dirname(folder) === folder) return false;
   }
 }
 

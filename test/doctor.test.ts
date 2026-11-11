@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DriverRegistry } from '../src/contracts/registry.js';
-import { defaultHome, runDoctor, type DoctorReport } from '../src/doctor/doctor.js';
+import { defaultHome, runDoctor, trustedIn, type DoctorReport } from '../src/doctor/doctor.js';
 import { HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
 import { formatReport } from '../src/cli/program.js';
 import { fakeHc, type FakeHc } from './helpers/hc.js';
@@ -150,6 +150,9 @@ describe('doctor', () => {
     });
     expect(statuses(before).Agents).toEqual(['pass claude-code engine', 'warn personal folder']);
     expect(statuses(before).Channels).toEqual(['warn slack allowed users', 'fail slack']);
+    expect(before.sections.find((x) => x.title === 'Channels')?.checks[1]?.message).toBe(
+      'Not connected yet: no credentials saved for it',
+    );
     expect(statuses(before).Service).toEqual(['warn service']);
     expect(before.ok).toBe(false);
 
@@ -169,6 +172,17 @@ describe('doctor', () => {
     ]);
     expect(statuses(after).Service).toEqual(['pass service']);
     expect(after.ok).toBe(true);
+  });
+
+  it('counts a folder as trusted when Claude Code trusted it or a folder around it', () => {
+    const projects = {
+      '/Users/me/opinr': { hasTrustDialogAccepted: true },
+      '/Users/me/other': { hasTrustDialogAccepted: false },
+    };
+    expect(trustedIn(projects, '/Users/me/opinr/workspaces/personal')).toBe(true);
+    expect(trustedIn(projects, '/Users/me/opinr')).toBe(true);
+    expect(trustedIn(projects, '/Users/me/other/x')).toBe(false);
+    expect(trustedIn(projects, '/Users/me')).toBe(false);
   });
 
   it('uses OPINR_HOME, then ~/opinr', () => {
