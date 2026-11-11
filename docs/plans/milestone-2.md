@@ -97,7 +97,7 @@ the Ollama model. `opinr doctor` checks the index and the embeddings driver.
 
 ## Pull requests
 
-Each one is reviewed by Vasquez and merged by Mike before the next starts.
+Each one is reviewed and merged before the next starts.
 
 1. **Notes**
    - `opinr note`, the inbox and the knowledge folder layout.
