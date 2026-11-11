@@ -1,12 +1,13 @@
 import { join } from 'node:path';
 import type { HealthCheck } from '../contracts/driver.js';
-import type {
-  FinalMessage,
-  AgentDefinition,
-  EngineCapabilities,
-  EngineContext,
-  EngineDriver,
-  LaunchPlan,
+import {
+  answersAfter,
+  type FinalMessage,
+  type AgentDefinition,
+  type EngineCapabilities,
+  type EngineContext,
+  type EngineDriver,
+  type LaunchPlan,
 } from '../contracts/engine.js';
 
 /**
@@ -40,11 +41,8 @@ export class StubEngine implements EngineDriver {
     this.recorded = options.answers;
     if (this.recorded) {
       const recorded = this.recorded;
-      this.answers = (session, after) => {
-        const all = recorded.get(session.id) ?? [];
-        const index = after === null ? -1 : all.findIndex((a) => a.id === after);
-        return Promise.resolve(all.slice(index + 1));
-      };
+      this.answers = (session, after) =>
+        Promise.resolve(answersAfter(recorded.get(session.id) ?? [], after));
     }
   }
 

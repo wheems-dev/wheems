@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentDefinition, EngineContext } from '../src/contracts/engine.js';
+import { answersAfter } from '../src/contracts/engine.js';
 import { ClaudeCodeEngine, turnAnswers } from '../src/drivers/engine/claude-code.js';
 import { engineContract } from '../src/testing/index.js';
 import { realHcAvailable } from './helpers/hc.js';
@@ -82,52 +83,66 @@ describe('claude-code engine', () => {
 
 describe('claude-code transcripts', () => {
   const line = (entry: object) => JSON.stringify(entry);
-  const transcript = [
-    line({ type: 'custom-title', customTitle: 'x' }),
-    line({ type: 'user', message: { content: 'First question' } }),
-    line({
-      uuid: 'a1',
-      type: 'assistant',
-      message: { content: [{ type: 'text', text: 'First answer' }] },
-    }),
-    line({ type: 'user', message: { content: [{ type: 'text', text: 'Second question' }] } }),
-    line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'hmm' }] } }),
-    line({
-      type: 'assistant',
-      message: {
-        content: [
-          { type: 'text', text: 'Let me check.' },
-          { type: 'tool_use', id: 't1' },
-        ],
-      },
-    }),
-    line({
-      type: 'user',
-      message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] },
-    }),
-    line({
-      type: 'assistant',
-      isSidechain: true,
-      message: { content: [{ type: 'text', text: 'A subagent talking' }] },
-    }),
-    line({
-      uuid: 'a2',
-      type: 'assistant',
-      message: { content: [{ type: 'text', text: '  The second answer.  ' }] },
-    }),
-    '{"half a line',
-  ].join('\n');
+  const prompt = (uuid: string, text: string) =>
+    line({ uuid, type: 'user', message: { content: text } });
+  const said = (uuid: string, ...blocks: object[]) =>
+    line({ uuid, type: 'assistant', message: { content: blocks } });
+  const text = (value: string) => ({ type: 'text', text: value });
+  const turnEnds = line({ type: 'system', subtype: 'turn_duration', durationMs: 1000 });
+  const join_ = (...lines: string[]) => lines.join('\n');
 
-  it("takes each prompt's last text, skipping tool results, thinking and subagents", () => {
-    expect(turnAnswers(transcript)).toEqual([
-      { id: 'a1', text: 'First answer' },
-      { id: 'a2', text: 'The second answer.' },
+  const twoTurns = join_(
+    line({ type: 'custom-title', customTitle: 'x' }),
+    prompt('p1', 'First question'),
+    said('a1', text('First answer')),
+    turnEnds,
+    prompt('p2', 'Second question'),
+    said('t1', { type: 'thinking', thinking: 'hmm' }),
+    said('t2', text('Let me check.'), { type: 'tool_use', id: 'tool1' }),
+    line({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tool1' }] } }),
+    line({ type: 'assistant', isSidechain: true, message: { content: [text('A subagent')] } }),
+    said('a2', text('  The second answer.  ')),
+    turnEnds,
+    '{"half a line',
+  );
+
+  it("takes each finished turn's last text, named by its first prompt", () => {
+    expect(turnAnswers(twoTurns)).toEqual([
+      { id: 'p1', text: 'First answer' },
+      { id: 'p2', text: 'The second answer.' },
     ]);
-    // A prompt still being worked on has no answer yet.
-    expect(
-      turnAnswers(`${transcript}\n${line({ type: 'user', message: { content: 'Third' } })}`),
-    ).toHaveLength(2);
     expect(turnAnswers('')).toEqual([]);
+  });
+
+  it('gives a turn still running no answer, even when it has written text', () => {
+    const running = join_(
+      twoTurns,
+      prompt('p3', 'Third question'),
+      said('t3', text('Let me check.'), { type: 'tool_use', id: 'tool2' }),
+    );
+    expect(turnAnswers(running).map((a) => a.id)).toEqual(['p1', 'p2']);
+    // A message that reaches Claude mid-turn joins the turn, which keeps its first prompt's id.
+    const finished = join_(
+      running,
+      prompt('p4', 'And one more thing'),
+      said('a3', text('Both done.')),
+      turnEnds,
+    );
+    expect(turnAnswers(finished).at(-1)).toEqual({ id: 'p3', text: 'Both done.' });
+  });
+
+  it('keeps the position of an answer as the transcript grows, and never replays history', () => {
+    const later = join_(
+      twoTurns,
+      prompt('p3', 'Third'),
+      said('a3', text('Third answer')),
+      turnEnds,
+    );
+    expect(answersAfter(turnAnswers(later), 'p2')).toEqual([{ id: 'p3', text: 'Third answer' }]);
+    expect(answersAfter(turnAnswers(later), 'p3')).toEqual([]);
+    expect(answersAfter(turnAnswers(later), null)).toHaveLength(3);
+    // An id that is not there (a transcript replaced, say) gives only the latest answer.
+    expect(answersAfter(turnAnswers(later), 'gone')).toEqual([{ id: 'p3', text: 'Third answer' }]);
   });
 
   it("finds the session's transcript in Claude Code's config folder", async () => {
@@ -143,15 +158,15 @@ describe('claude-code transcripts', () => {
         realpathSync(dir).replace(/[^A-Za-z0-9]/g, '-'),
       );
       mkdirSync(folder, { recursive: true });
-      writeFileSync(join(folder, `${id}.jsonl`), transcript);
+      writeFileSync(join(folder, `${id}.jsonl`), twoTurns);
       const engine = new ClaudeCodeEngine({ configDir: join(root, 'claude') });
-      expect((await engine.answers({ id, dir }, null)).map((a) => a.id)).toEqual(['a1', 'a2']);
-      expect(await engine.answers({ id, dir }, 'a1')).toEqual([
-        { id: 'a2', text: 'The second answer.' },
+      expect((await engine.answers({ id, dir }, null)).map((a) => a.id)).toEqual(['p1', 'p2']);
+      expect(await engine.answers({ id, dir }, 'p1')).toEqual([
+        { id: 'p2', text: 'The second answer.' },
       ]);
-      expect(await engine.answers({ id, dir }, 'a2')).toEqual([]);
+      expect(await engine.answers({ id, dir }, 'p2')).toEqual([]);
       // A session elsewhere is still found by its id.
-      expect(await engine.answers({ id, dir: '/somewhere/else' }, 'a1')).toHaveLength(1);
+      expect(await engine.answers({ id, dir: '/somewhere/else' }, 'p1')).toHaveLength(1);
       expect(
         await engine.answers({ id: '99999999-2222-5333-8444-555555555555', dir }, null),
       ).toEqual([]);

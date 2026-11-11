@@ -2,14 +2,15 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { HealthCheck } from '../../contracts/driver.js';
-import type {
-  AgentDefinition,
-  EngineCapabilities,
-  EngineContext,
-  EngineDriver,
-  FinalMessage,
-  LaunchPlan,
-  PermissionLevel,
+import {
+  answersAfter,
+  type AgentDefinition,
+  type EngineCapabilities,
+  type EngineContext,
+  type EngineDriver,
+  type FinalMessage,
+  type LaunchPlan,
+  type PermissionLevel,
 } from '../../contracts/engine.js';
 import { runCommand } from '../../util/process.js';
 import { extractVersion } from '../../util/version.js';
@@ -67,10 +68,7 @@ export class ClaudeCodeEngine implements EngineDriver {
     } catch {
       return [];
     }
-    const all = turnAnswers(text);
-    if (after === null) return all;
-    const index = all.findIndex((answer) => answer.id === after);
-    return index === -1 ? all : all.slice(index + 1);
+    return answersAfter(turnAnswers(text), after);
   }
 
   private async transcript(session: { id: string; dir: string }): Promise<string | null> {
@@ -146,48 +144,51 @@ async function isFile(path: string): Promise<boolean> {
 
 interface TranscriptEntry {
   type?: string;
+  subtype?: string;
   uuid?: string;
   isSidechain?: boolean;
   message?: { content?: string | { type?: string; text?: string }[] };
 }
 
 /**
- * The answer to each prompt the person (not a tool) sent: the last text block before the
- * next prompt, with its transcript entry's id. A prompt still being worked on has none.
+ * The answer to each finished turn. Claude Code ends every turn with a \`system\` entry of
+ * subtype \`turn_duration\`; the answer is the last text Claude wrote in the turn. Its id is
+ * the id of the turn's first prompt, which stays the same however the answer is written,
+ * and prompts that reached Claude during the turn belong to it. A turn still running has
+ * no answer yet.
  */
 export function turnAnswers(jsonl: string): FinalMessage[] {
-  const entries: TranscriptEntry[] = [];
-  for (const line of jsonl.split('\n')) {
-    if (line.trim() === '') continue;
-    try {
-      entries.push(JSON.parse(line) as TranscriptEntry);
-    } catch {
-      // A line being written as we read; skip it.
-    }
-  }
   const answers: FinalMessage[] = [];
-  let current: FinalMessage | null = null;
+  let promptId: string | null = null;
+  let text: string | null = null;
   let line = 0;
-  for (const entry of entries) {
+  for (const raw of jsonl.split('\n')) {
     line++;
+    if (raw.trim() === '') continue;
+    let entry: TranscriptEntry;
+    try {
+      entry = JSON.parse(raw) as TranscriptEntry;
+    } catch {
+      continue; // A line being written as we read.
+    }
     if (entry.isSidechain === true) continue;
     const content = entry.message?.content;
     if (entry.type === 'user') {
       const isPrompt =
         typeof content === 'string' ||
         (Array.isArray(content) && content.some((block) => block.type === 'text'));
-      if (isPrompt) {
-        if (current) answers.push(current);
-        current = null;
-      }
+      if (isPrompt) promptId ??= entry.uuid ?? `line-${String(line)}`;
     } else if (entry.type === 'assistant' && Array.isArray(content)) {
       for (const block of content) {
         if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') {
-          current = { id: entry.uuid ?? `line-${String(line)}`, text: block.text.trim() };
+          text = block.text.trim();
         }
       }
+    } else if (entry.type === 'system' && entry.subtype === 'turn_duration') {
+      if (promptId !== null && text !== null) answers.push({ id: promptId, text });
+      promptId = null;
+      text = null;
     }
   }
-  if (current) answers.push(current);
   return answers;
 }

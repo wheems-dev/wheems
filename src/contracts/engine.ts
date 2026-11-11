@@ -21,11 +21,13 @@ export interface EngineDriver extends Driver<'engine'> {
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan>;
 
   /**
-   * Optional: the agent's answers, one per turn (the last thing it wrote before the next
-   * message reached it), read from the engine's own structured record of the conversation,
-   * never the screen. Only those after the answer with id `after` are returned; all of
-   * them when `after` is null. With it, the service posts each answer for the agent;
-   * without it, agents answer only through `opinr reply`.
+   * Optional: the agent's answers, one per finished turn (the last thing it wrote in the
+   * turn), read from the engine's own structured record of the conversation, never the
+   * screen. A turn still running has no answer. Each answer's id must stay the same once
+   * the turn has finished. Returns the answers after the one with id \`after\`: all of them
+   * when \`after\` is null, and only the latest when no answer has that id, so history is
+   * never posted again. Use \`answersAfter\` for this. With it, the service posts each answer
+   * for the agent; without it, agents answer only through \`opinr reply\`.
    */
   answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
 }
@@ -104,4 +106,11 @@ export interface LaunchPlan {
 export interface PlannedFile {
   path: string;
   content: string;
+}
+
+/** The answers after the one with id \`after\`, as \`EngineDriver.answers\` returns them. */
+export function answersAfter(all: FinalMessage[], after: string | null): FinalMessage[] {
+  if (after === null) return all;
+  const index = all.findIndex((answer) => answer.id === after);
+  return index === -1 ? all.slice(-1) : all.slice(index + 1);
 }
