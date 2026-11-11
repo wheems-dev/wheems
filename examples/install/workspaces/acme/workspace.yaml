@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../../../../schemas/workspace.schema.json
+name: Acme
+description: A small software business.
+accounts: [claude-subscription, chatgpt-subscription, openrouter]
+machine: server
+
+channels:
+  chat: { connection: slack, channel: acme-chat }
+  approvals: { connection: slack, channel: acme-approvals }
+  updates: { connection: slack, channel: acme-updates }
+  briefs: { connection: slack, channel: acme-briefs }
+
+integrations:
+  github: { access: full }
+
+rules:
+  - name: release-hold
+    project: storefront
+    deny: { push: [main, develop], deploy: [production] }
+  - name: review-before-merge
+    require: { review: reviewer, before: merge }
+  - name: deploys-need-approval
+    action: deploy
+    approval: approvals

@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "Defaults to the file name.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "trigger": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schedule": {
+              "type": "string",
+              "pattern": "^\\S+(\\s+\\S+){4}$",
+              "description": "Runs on a time"
+            }
+          },
+          "required": [
+            "schedule"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "object",
+              "properties": {
+                "channel": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9][a-z0-9-]*$"
+                },
+                "contains": {
+                  "description": "Only messages containing this text.",
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "channel"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "message"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "A glob, relative to the workspace folder, such as `wiki/inbox/*.md`."
+                }
+              },
+              "required": [
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "file"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "steps": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "Run an agent with a task."
+              },
+              "task": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "agent",
+              "task"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "ask": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "channel": {
+                    "default": "approvals",
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  }
+                },
+                "required": [
+                  "question"
+                ],
+                "additionalProperties": false,
+                "description": "Ask for approval and wait. Stops the workflow on a no."
+              }
+            },
+            "required": [
+              "ask"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "post": {
+                "type": "object",
+                "properties": {
+                  "channel": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9][a-z0-9-]*$"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "channel"
+                ],
+                "additionalProperties": false,
+                "description": "Post to a channel. Without `text`, posts the previous step's result."
+              }
+            },
+            "required": [
+              "post"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "trigger",
+    "steps"
+  ],
+  "additionalProperties": false,
+  "$id": "https://opinr.dev/schemas/workflow.schema.json",
+  "title": "Opinr workflow (workflows/<name>.yaml)"
+}

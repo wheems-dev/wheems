@@ -1,0 +1,7 @@
+# yaml-language-server: $schema=../../../../schemas/workflow.schema.json
+description: A summary of yesterday and what is waiting, every weekday morning.
+trigger: { schedule: '0 7 * * 1-5' }
+steps:
+  - agent: chief-of-staff
+    task: Summarise yesterday's notes, open work and anything waiting on me.
+  - post: { channel: briefs }

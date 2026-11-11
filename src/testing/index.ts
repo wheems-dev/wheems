@@ -1,0 +1,25 @@
+/**
+ * Contract test suites and in-memory drivers, published as `opinr/testing`.
+ * The suites use Vitest; a driver package runs one in its own test file:
+ *
+ *   import { runtimeContract } from 'opinr/testing';
+ *   runtimeContract('my-runtime', { create: () => new MyRuntime() });
+ */
+export {
+  runtimeContract,
+  expectDriverError,
+  expectHealthCheck,
+  type RuntimeContractOptions,
+} from './runtime-contract.js';
+export { engineContract, type EngineContractOptions } from './engine-contract.js';
+export { channelContract, type ChannelContractOptions } from './channel-contract.js';
+export {
+  MemoryRuntime,
+  echoLineProgram,
+  sleepProgram,
+  type Program,
+  type ProgramFactory,
+  type ProgramIo,
+} from './memory-runtime.js';
+export { MemoryChannel } from './memory-channel.js';
+export { StubEngine } from './stub-engine.js';

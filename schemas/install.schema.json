@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "herdr": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "The minimum Herdr core version this install runs on"
+        },
+        "binary": {
+          "description": "Path to hc, when it is not on PATH",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "machines": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "local": {
+            "description": "True for the machine the install lives on",
+            "type": "boolean"
+          },
+          "herdr": {
+            "description": "The machine's name in `hc machine ls`",
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "always_on": {
+            "default": false,
+            "description": "Agents run on always-on machines by default",
+            "type": "boolean"
+          },
+          "reach": {
+            "default": "inbound",
+            "description": "`inbound`: the hub can reach it. `outbound`: it connects out to the hub and collects its work, like a laptop.",
+            "type": "string",
+            "enum": [
+              "inbound",
+              "outbound"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "accounts": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The account driver, such as `claude`, `chatgpt` or `openrouter`."
+          },
+          "secret": {
+            "description": "The name of the credential in the secret store, when the account needs one.",
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "driver"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "connections": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The channel or integration driver, such as `slack`, `telegram` or `github`."
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "driver"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$id": "https://opinr.dev/schemas/install.schema.json",
+  "title": "Opinr install.yaml"
+}

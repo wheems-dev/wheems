@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name. The folder name is the workspace's id."
+    },
+    "description": {
+      "type": "string"
+    },
+    "chief_of_staff": {
+      "default": "chief-of-staff",
+      "description": "The agent file (in agents/) that is the workspace's chief of staff.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "accounts": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "description": "Install accounts this workspace may use. Each agent picks from these."
+    },
+    "channels": {
+      "default": {},
+      "description": "Named channels. `chat`, `approvals` and `updates` are the built-in ones; workflows may post to others, such as `briefs`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "connection": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The install connection that carries it, such as `slack`."
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The channel's id or name in that service."
+          }
+        },
+        "required": [
+          "connection",
+          "channel"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "integrations": {
+      "default": {},
+      "description": "Install connections this workspace may use, with the access it gets.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "maxLength": 64,
+        "pattern": "^[a-z0-9][a-z0-9-]*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "access": {
+            "default": "read",
+            "type": "string",
+            "enum": [
+              "read",
+              "full"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "isolation": {
+      "default": "enforced",
+      "description": "`enforced`: its own folder, Claude Code config, permission rules, secrets and account. `hard`: a separate machine, VM or user account.",
+      "type": "string",
+      "enum": [
+        "enforced",
+        "hard"
+      ]
+    },
+    "skill_budget": {
+      "default": 20,
+      "description": "Doctor warns when the workspace or one agent goes past this many skills.",
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "machine": {
+      "description": "The machine agents run on by default.",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "rules": {
+      "default": [],
+      "description": "Rules written once and enforced at every layer that can enforce them.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string"
+          },
+          "project": {
+            "description": "Limit the rule to one project.",
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "deny": {
+            "description": "Actions it refuses, each with the targets it refuses them for (branches, servers).",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "additionalProperties": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "require": {
+            "description": "Something that must happen first, such as a review before a merge.",
+            "type": "object",
+            "properties": {
+              "review": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "before": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              }
+            },
+            "required": [
+              "review",
+              "before"
+            ],
+            "additionalProperties": false
+          },
+          "action": {
+            "description": "The action this rule is about, for `approval`.",
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "approval": {
+            "description": "The channel that must approve `action` first.",
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "name",
+    "accounts"
+  ],
+  "additionalProperties": false,
+  "$id": "https://opinr.dev/schemas/workspace.schema.json",
+  "title": "Opinr workspace.yaml"
+}
