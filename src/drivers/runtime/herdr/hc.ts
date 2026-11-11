@@ -99,6 +99,8 @@ export interface HcRunOptions {
 }
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
+/** hc's own default for waits. */
+const DEFAULT_WAIT_SECONDS = 180;
 
 export class Hc {
   private readonly binary: string;
@@ -156,15 +158,15 @@ export class Hc {
   ): Promise<HcSendResult> {
     const args = ['send'];
     if (options.ifStatus !== undefined) args.push('--if', options.ifStatus);
-    if (options.wait === true) args.push('--wait');
-    if (options.timeoutSeconds !== undefined)
+    // A waiting send gets the same explicit timeout as hc and as the subprocess deadline,
+    // so a long agent turn is never cut off here before hc gives up.
+    const waitTimeout =
+      options.wait === true ? (options.timeoutSeconds ?? DEFAULT_WAIT_SECONDS) : undefined;
+    if (waitTimeout !== undefined) args.push('--wait', '--timeout', String(waitTimeout));
+    else if (options.timeoutSeconds !== undefined)
       args.push('--timeout', String(options.timeoutSeconds));
     args.push('--', terminal, text);
-    return this.json(
-      args,
-      hcSendResult,
-      options.wait === true ? options.timeoutSeconds : undefined,
-    );
+    return this.json(args, hcSendResult, waitTimeout);
   }
 
   async read(terminal: string, options: { lines?: number } = {}): Promise<HcReadResult> {
@@ -178,7 +180,7 @@ export class Hc {
     terminal: string,
     options: { timeoutSeconds?: number; output?: string } = {},
   ): Promise<HcWaitResult> {
-    const timeout = options.timeoutSeconds ?? 180;
+    const timeout = options.timeoutSeconds ?? DEFAULT_WAIT_SECONDS;
     const args = ['wait', '--timeout', String(timeout)];
     if (options.output !== undefined) args.push('--output', options.output);
     args.push('--', terminal);

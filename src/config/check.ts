@@ -41,7 +41,8 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
       }
     }
     for (const name of BUILT_IN_CHANNELS) {
-      if (!(name in config.channels)) warn(`No "${name}" channel yet; every workspace gets one`);
+      if (!Object.hasOwn(config.channels, name))
+        warn(`No "${name}" channel yet; every workspace gets one`);
     }
     for (const name of Object.keys(config.integrations)) {
       if (!connections.has(name))
@@ -61,7 +62,7 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
           `Rule "${rule.name}" requires a review by "${rule.require.review}", which has no file in agents/`,
         );
       }
-      if (rule.approval !== undefined && !(rule.approval in config.channels)) {
+      if (rule.approval !== undefined && !Object.hasOwn(config.channels, rule.approval)) {
         error(
           `Rule "${rule.name}" asks for approval in "${rule.approval}", which is not one of its channels`,
         );
@@ -92,7 +93,7 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
         );
       }
       for (const integration of definition.integrations) {
-        if (!(integration in config.integrations)) {
+        if (!Object.hasOwn(config.integrations, integration)) {
           error(
             `Integration "${integration}" is not one of the workspace's integrations`,
             agent.file,
@@ -106,7 +107,7 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
 
     for (const workflow of workspace.workflows) {
       const { trigger, steps } = workflow.config;
-      if ('message' in trigger && !(trigger.message.channel in config.channels)) {
+      if ('message' in trigger && !Object.hasOwn(config.channels, trigger.message.channel)) {
         error(
           `Trigger channel "${trigger.message.channel}" is not one of the workspace's channels`,
           workflow.file,
@@ -118,7 +119,7 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
         }
         const channel =
           'post' in step ? step.post.channel : 'ask' in step ? step.ask.channel : undefined;
-        if (channel !== undefined && !(channel in config.channels)) {
+        if (channel !== undefined && !Object.hasOwn(config.channels, channel)) {
           error(`Channel "${channel}" is not one of the workspace's channels`, workflow.file);
         }
       }

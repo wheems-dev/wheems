@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -343,6 +343,48 @@ describe('links between files', () => {
       'error workspaces/acme/workflows/broken.yaml: Step agent "ghost" has no file in agents/',
       'error workspaces/acme/workflows/broken.yaml: Channel "briefs" is not one of the workspace\'s channels',
       'error workspaces/acme/workflows/morning-brief.yaml: Channel "briefs" is not one of the workspace\'s channels',
+    ]);
+  });
+
+  it('does not take inherited object properties for granted integrations or channels', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'opinr-config-'));
+    cpSync(EXAMPLE, dir, { recursive: true });
+    const personal = join(dir, 'workspaces/personal');
+    writeFileSync(
+      join(personal, 'workspace.yaml'),
+      [
+        'name: Personal',
+        'accounts: [claude-subscription]',
+        'channels:',
+        '  chat: { connection: slack, channel: c }',
+        '  approvals: { connection: slack, channel: a }',
+        '  updates: { connection: slack, channel: u }',
+        'rules:',
+        '  - name: r',
+        '    action: deploy',
+        '    approval: constructor',
+      ].join('\n'),
+    );
+    writeFileSync(
+      join(personal, 'agents/chief-of-staff.md'),
+      '---\nengine: claude-code\nmodel: m\naccount: claude-subscription\nintegrations: [constructor]\n---\n',
+    );
+    mkdirSync(join(personal, 'workflows'));
+    writeFileSync(
+      join(personal, 'workflows/w.yaml'),
+      'trigger: { message: { channel: tostring } }\nsteps:\n  - post: { channel: constructor }\n  - ask: { question: Ok?, channel: hasownproperty }\n',
+    );
+    const install = await loadInstall(dir);
+    expect(install.problems).toEqual([]);
+    const messages = crossCheck(install)
+      .filter((p) => p.file.startsWith('workspaces/personal'))
+      .map((p) => p.message);
+    expect(messages).toEqual([
+      'Rule "r" asks for approval in "constructor", which is not one of its channels',
+      'Integration "constructor" is not one of the workspace\'s integrations',
+      'Trigger channel "tostring" is not one of the workspace\'s channels',
+      'Channel "constructor" is not one of the workspace\'s channels',
+      'Channel "hasownproperty" is not one of the workspace\'s channels',
     ]);
   });
 

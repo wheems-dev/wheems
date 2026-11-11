@@ -92,6 +92,24 @@ describe('hc adapter', () => {
     ]);
   });
 
+  it('gives a waiting send the same explicit timeout as hc, 180 seconds by default', async () => {
+    const fake = make();
+    const log = join(fake.dir, 'log.jsonl');
+    const hc = new Hc({ binary: fake.binary, env: { ...fake.env, FAKE_HC_LOG: log } });
+    const t = await hc.run(['sh', '-c', 'sleep 9']);
+    await hc.send(t.address, 'one', { wait: true });
+    await hc.send(t.address, 'two', { wait: true, timeoutSeconds: 600 });
+    const calls = readFileSync(log, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as string[])
+      .filter((args) => args[0] === 'send');
+    expect(calls).toEqual([
+      ['send', '--json', '--wait', '--timeout', '180', '--', t.address, 'one'],
+      ['send', '--json', '--wait', '--timeout', '600', '--', t.address, 'two'],
+    ]);
+  });
+
   it("turns hc's JSON errors into HcError with kind, message, hint and exit code", async () => {
     const fake = make();
     const error = await new Hc({ binary: fake.binary, env: fake.env })
