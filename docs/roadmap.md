@@ -14,15 +14,19 @@ Telegram, across a laptop and an always-on server, with no hand-built setup.
 - Driver contracts with contract tests for every driver type, and the built-in drivers listed in
   [drivers.md](drivers.md)
 - Engine drivers for Claude Code, Codex and opencode, with OpenRouter as an account
-- Channel drivers for Slack and Telegram, with chat, approvals and updates channels
+- Channel drivers for Slack, Telegram and email, with chat, approvals and updates channels
 - Integrations: connect and grant, the secret store, and GitHub as the first integration
 - Approvals with buttons, answered back to the waiting agent
 - One session per chat thread, so conversations carry on
 - The broker, as a CLI and an MCP server: rules written once and enforced through GitHub, the
   broker and git hooks, with granted integrations reached through it
 - Skill scoping, version pinning and the skill budget warning
+- Search over the knowledge base, with local embeddings and vector store drivers
+- Skills proposed by agents, approved into the library
 - Workflows with three triggers (a time, a channel message, a file landing) and three steps (run
-  an agent, ask for approval, post to a channel)
+  an agent, ask for approval, post to a channel), steps that depend on others and run in
+  parallel, recorded runs, and evals
+- The database driver (SQLite, Postgres) and blueprints, with the CRM blueprint first
 - Creating workflows, adding skills and building plugins by asking the chief of staff, with the
   framework skill and `make:` commands
 - Plugins installed from npm, with manifests
@@ -34,30 +38,36 @@ Telegram, across a laptop and an always-on server, with no hand-built setup.
 - A Teams channel
 - A web interface: a set-up screen first, then approval history
 - Hard isolation through separate machines or user accounts
-- Workflow branches, loops and parallel steps
+- Workflow branches and loops
+- Voice: phone calls with an agent
+- Hosted embeddings and vector stores, such as Pinecone
+- More blueprints, up to a set of about five
+- Several people per workspace, with roles, for businesses
 - Runtimes other than Herdr
 
 ## Milestones
 
-Milestone 0 is done. Milestone 1 is built and being tried out day to day.
+Milestone 0 is done. Milestone 1 is built and waiting for its test from Slack. The Codex and
+opencode engines from milestone 5 were built early.
 
 Each milestone ends with something used every day, and what's learned from using it shapes the
 next.
 
-| #   | Milestone                        | What it builds                                                                                                                                            | Done when                                                                                                 |
-| --- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| 0   | Skeleton                         | Repository, TypeScript project, CLI, config formats, driver contracts for runtime, engine and channel, the Herdr driver                                   | `opinr doctor` passes on a Mac, and CI is green on macOS and Linux                                        |
-| 1   | Talk to one chief of staff       | `init`, a personal workspace, its chief of staff on Claude Code in Herdr, the Slack channel driver with one session per thread, the service under launchd | You chat with it from Slack on your phone, and a conversation carries on across replies                   |
-| 2   | The knowledge loop               | Notes at session end, the inbox, the filing job, the knowledge base, built-in skills for posting and writing notes                                        | A day's work reaches the knowledge base without anyone doing anything                                     |
-| 3   | Approvals and updates            | The approvals and updates channels, buttons, the `ask` command, the first version of the broker                                                           | An agent waits for a tap on your phone before acting                                                      |
-| 4   | A second workspace, kept apart   | A second workspace with projects, a Claude Code config folder per workspace, permission rules, the skill library with scoping and pinning                 | Both workspaces run side by side and neither can read the other                                           |
-| 5   | A team of agents on more engines | Agent templates (developer and reviewer), the Codex and opencode engines, and accounts, including OpenRouter                                              | A Claude Code developer's work is reviewed by a Codex reviewer inside Opinr                               |
-| 6   | Workflows                        | Triggers and steps, a morning-brief workflow, and creating workflows by asking                                                                            | The morning brief runs as a workflow, and a second one was created just by asking                         |
-| 7   | Integrations and guardrails      | `connect` and `grant`, the secret store, GitHub, integrations through the broker, rules applied as GitHub rulesets and git hooks                          | A release hold is one rule in config, enforced on GitHub for every engine                                 |
-| 8   | Always on, more channels         | Running on an always-on server, `setup` installing Herdr core, laptops connecting out to collect work, Telegram                                           | Agents answer while the laptop is asleep, and a fresh machine is set up with two commands                 |
-| 9   | Plugins and release              | The framework skill, `make:` commands, npm plugins with manifests, published contract tests, docs, the open-source release                                | A chief of staff builds a working plugin on request, and a stranger can install Opinr from the docs alone |
+| #   | Milestone                      | What it builds                                                                                                                                                                                                                                            | Done when                                                                                                                            |
+| --- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 0   | Skeleton                       | Repository, TypeScript project, CLI, config formats, driver contracts for runtime, engine and channel, the Herdr driver                                                                                                                                   | `opinr doctor` passes on a Mac, and CI is green on macOS and Linux                                                                   |
+| 1   | Talk to one chief of staff     | `init`, a personal workspace, its chief of staff on Claude Code in Herdr, the Slack channel driver with one session per thread, the service under launchd                                                                                                 | You chat with it from Slack on your phone, and a conversation carries on across replies                                              |
+| 2   | The knowledge loop             | Research into how other agent tools remember and learn, then notes at session end, the inbox, the filing job, the knowledge base, search with local embeddings and `kb:reindex`, built-in skills for posting and writing notes, skills proposed by agents | A day's work reaches the knowledge base without anyone doing anything, and the chief of staff finds it by meaning                    |
+| 3   | Approvals and updates          | The approvals and updates channels, buttons, the `ask` command, the first version of the broker                                                                                                                                                           | An agent waits for a tap on your phone before acting                                                                                 |
+| 4   | A second workspace, kept apart | A second workspace with projects, a Claude Code config folder per workspace, permission rules, the skill library with scoping and pinning                                                                                                                 | Both workspaces run side by side and neither can read the other                                                                      |
+| 5   | A team of agents               | Agent templates (developer and reviewer), and accounts, including OpenRouter                                                                                                                                                                              | A Claude Code developer's work is reviewed by a Codex reviewer inside Opinr                                                          |
+| 6   | Workflows and evals            | Triggers and steps, steps that depend on others, checked step outputs, recorded runs, evals, a morning-brief workflow, and creating workflows by asking                                                                                                   | The morning brief runs as a workflow, a second one was created just by asking, and an eval catches a change that breaks one          |
+| 7   | Data and blueprints            | The database driver, the blueprint format, the CRM blueprint, `blueprint add` and `make:blueprint`, adapting a blueprint by asking                                                                                                                        | The CRM is installed and given a new field just by asking, and agents keep it up to date                                             |
+| 8   | Integrations and guardrails    | `connect` and `grant`, the secret store, GitHub, integrations through the broker, rules applied as GitHub rulesets and git hooks                                                                                                                          | A release hold is one rule in config, enforced on GitHub for every engine                                                            |
+| 9   | Always on, more channels       | Running on an always-on server, `setup` installing Herdr core, laptops connecting out to collect work, Telegram, email                                                                                                                                    | Agents answer while the laptop is asleep, an agent answers email at its own address, and a fresh machine is set up with two commands |
+| 10  | Plugins and release            | The framework skill, `make:` commands, npm plugins with manifests, published contract tests, docs, the open-source release                                                                                                                                | A chief of staff builds a working plugin on request, and a stranger can install Opinr from the docs alone                            |
 
-Until milestone 8 the service runs on the laptop, so it only answers while the laptop is awake.
+Until milestone 9 the service runs on the laptop, so it only answers while the laptop is awake.
 
 ## Open questions and risks
 

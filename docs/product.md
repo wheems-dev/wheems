@@ -20,6 +20,11 @@ a clear place for everything, the way Laravel does for web apps.
 People who already use Claude Code or Codex and want agents working for them across several
 areas at once: developers first, then small businesses.
 
+Version one is built for one person's daily use and released as open source. The longer aim is
+for businesses to adopt it as their way of working with agents. That brings several people per
+workspace with their own roles, an audit trail, cost tracking and provider API keys, so the
+contracts are designed to allow them later.
+
 |                 | Typical agent harnesses                  | Opinr                                                                                   |
 | --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
 | The agent       | Their own agent loop calling a model     | Claude Code, Codex and opencode, unchanged, each in its own terminal                    |
@@ -66,6 +71,12 @@ sets, such as "software business" or "content site", give a recommended team.
 - A built-in filing job turns each note into knowledge-base pages and work-tracker entries,
   and keeps the note as the source. Users never see it as an agent.
 - The chief of staff reads the knowledge base to answer questions and brief agents.
+- The knowledge base is searched by meaning as well as by words. Turning text into
+  embeddings and storing them are both drivers, the way Laravel's storage has disks: local by
+  default, free and private, with hosted services as other drivers. `opinr kb:reindex` rebuilds
+  the index.
+- Agents improve themselves the same way. An agent that learns how to do something proposes a
+  skill. The proposal goes to the library and waits for approval, like any outside skill.
 
 **Skills are scoped**
 
@@ -93,6 +104,24 @@ steps:
     task: Summarise yesterday's notes, open work and anything waiting on me.
   - post: { channel: briefs }
 ```
+
+Steps can name the steps they need, so independent steps run in parallel and the file reads as
+a graph, as in GitHub Actions. The order never varies; only the work inside a step that runs an
+agent does. To keep that work in check:
+
+- a step can declare the shape of its output, and a result of the wrong shape fails the step;
+- every run records each step's input and output, so it can be inspected and replayed;
+- **evals** run a workflow or an agent against a set of example inputs with checks (`opinr
+eval`). Where a check needs judgement, the judge comes from a different provider.
+
+**Blueprints: headless apps an agent can adapt.** A blueprint is a small app with no screens,
+such as a CRM: tables in the workspace's database, tools that let agents use them, and skills
+that explain the data. `opinr blueprint add crm` installs one into a workspace. The database is
+a driver, SQLite by default and Postgres for larger installs. Opinr ships a handful of
+blueprints, the CRM first. A blueprint is defined in code with a documented shape, so the chief
+of staff can adapt one (add a field, a table or a tool) or build a new one with
+`opinr make:blueprint`, and the change is applied once you approve it. Like skills, each
+workspace pins the blueprint versions it uses.
 
 **Isolation, stated per workspace**
 

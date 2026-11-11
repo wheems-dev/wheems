@@ -8,13 +8,22 @@ the core.
 | ------------ | ----------------------------------------------------------- | ------------------------------------ | ------------------------------------------ |
 | Runtime      | Starts, sends to, reads and waits on agent sessions         | Herdr core                           | Plain sessions without Herdr               |
 | Engine       | Runs an agent in a given CLI                                | Claude Code, Codex, opencode         | Gemini CLI, others                         |
-| Channel      | Sends and receives messages, buttons and threads            | Slack, Telegram                      | Teams, Discord, email                      |
+| Channel      | Sends and receives messages, buttons and threads            | Slack, Telegram, email               | Teams, Discord                             |
 | Integration  | Connects an outside service: MCP, CLI, skills, connect flow | GitHub                               | Google, Linear, Stripe, Notion, X          |
 | Account      | Pays for models                                             | Claude, ChatGPT, OpenRouter          | Direct provider API keys                   |
 | Trigger      | Starts a workflow                                           | Time, channel message, file landing  | Webhook, email received                    |
 | Step         | Does one thing in a workflow                                | Run an agent, ask for approval, post | Wait for an event, call an integration     |
 | Isolation    | Separates workspaces                                        | Separate settings                    | Container, separate user, separate machine |
 | Secret store | Holds credentials                                           | An encrypted file                    | macOS Keychain, 1Password                  |
+| Embeddings   | Turns text into vectors for searching by meaning            | A model run locally                  | OpenAI, Voyage and other hosted services   |
+| Vector store | Keeps vectors and finds the nearest                         | SQLite                               | Postgres with pgvector, Pinecone           |
+| Database     | Holds blueprint data                                        | SQLite, Postgres                     | MySQL                                      |
+| Voice        | Holds a phone call with an agent                            | None                                 | Phone and voice providers                  |
+
+Email is a channel like any other, with a driver per mail provider (such as AgentMail, Resend,
+or IMAP and SMTP), so an agent can have its own address. A phone call is live and an agent
+takes minutes to answer, so voice needs its own contract: a fast voice model holds the call and
+hands work to the agent.
 
 Milestone 0 defines the **runtime**, **engine** and **channel** contracts and ships the Herdr
 runtime driver. The other contracts arrive with the milestones that need them.
