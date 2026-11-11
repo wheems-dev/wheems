@@ -166,7 +166,7 @@ export class FilingQueue {
       account: { name: accountName, driver: account?.driver ?? 'unknown' },
       dir: folder,
       task: filingTask(noteName),
-      name: `filer-${workspace.id.slice(0, 20)}-${createHash('sha1').update(workspace.id).digest('hex').slice(0, 8)}`,
+      name: filerSessionName(workspace.id),
       labels: { opinr: 'filer', workspace: workspace.id },
       env: { ...this.options.sessionEnv, OPINR_WORKSPACE: workspace.id },
       timeoutSeconds: this.options.timeoutSeconds,
@@ -220,6 +220,15 @@ export class FilingQueue {
     this.options.log(`Filed ${noteName} in ${workspace.id}: ${result.answer.trim()}`);
     return 'filed';
   }
+}
+
+/**
+ * The filer's session name: within the runtime's 32 characters, and unique to the workspace
+ * even when two workspace names start the same way.
+ */
+export function filerSessionName(workspace: string): string {
+  const hash = createHash('sha1').update(workspace).digest('hex').slice(0, 8);
+  return `filer-${workspace.slice(0, 16)}-${hash}`;
 }
 
 function describe(error: unknown): string {

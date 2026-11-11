@@ -23,7 +23,8 @@ import {
   reviewFiling,
 } from '../src/knowledge/filing.js';
 import { knowledgePaths, writeNote } from '../src/knowledge/notes.js';
-import { FilingQueue } from '../src/service/filing.js';
+import { filerSessionName, FilingQueue } from '../src/service/filing.js';
+import { SESSION_NAME_PATTERN } from '../src/contracts/runtime.js';
 import { TaskRunner } from '../src/service/runner.js';
 import { MemoryRuntime, sleepProgram, StubEngine } from '../src/testing/index.js';
 import { fakeFiler } from './helpers/fake-filer.js';
@@ -425,6 +426,14 @@ describe('the filing queue', () => {
     expect(readFileSync(real, 'utf8')).toContain('Edited by hand: the mooring is booked.');
     expect(readFileSync(real, 'utf8')).toContain('The boat is Halcyon.');
     expect(logs.some((l) => l.includes('changed while the filer worked'))).toBe(true);
+  });
+
+  it('names filer sessions within the runtime limit, apart even for names that start alike', () => {
+    const a = filerSessionName('abcdefghijklmnopqrstuvwxyz-one');
+    const b = filerSessionName('abcdefghijklmnopqrstuvwxyz-two');
+    expect(SESSION_NAME_PATTERN.test(a)).toBe(true);
+    expect(SESSION_NAME_PATTERN.test(b)).toBe(true);
+    expect(a).not.toBe(b);
   });
 
   it('leaves a note it could not file in the inbox, and stops trying after three tries', async () => {
