@@ -597,7 +597,7 @@ export class ConversationManager {
       if (reply && reply.at >= watch.sentAt && reply.text === answer.text.trim()) continue;
       await this.post(key, answer.text);
     }
-    await this.options.store.setLastAnswer(key, fresh[fresh.length - 1]?.id ?? '');
+    await this.options.store.answered(key, fresh[fresh.length - 1]?.id ?? '', fresh.length);
     return fresh.length;
   }
 

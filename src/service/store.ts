@@ -69,6 +69,19 @@ export class ConversationStore {
     await this.save();
   }
 
+  /**
+   * Answers were posted: moves the answer position on and takes them off the waiting count,
+   * in one write, so a restart never sees one without the other.
+   */
+  async answered(key: string, lastAnswerId: string, count: number): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.lastAnswerId = lastAnswerId;
+    conversation.pending = Math.max(0, (conversation.pending ?? 0) - count);
+    await this.save();
+  }
+
   /** One more message waits for its answer. */
   async addPending(key: string): Promise<void> {
     await this.load();

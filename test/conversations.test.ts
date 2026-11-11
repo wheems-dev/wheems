@@ -491,6 +491,53 @@ describe('conversations', () => {
     expect(stored[conversationKey('personal', 'slack', 'D1', first)]?.pending).toBe(0);
   });
 
+  it('after a restart between answers, waits only for the answers still owed', async () => {
+    await manager.stop();
+    const quiet = new MemoryRuntime({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+        delayMs: 120,
+      }),
+    });
+    const engine = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ownIds: true,
+      reportsStatus: false,
+    });
+    const make2 = () =>
+      new ConversationManager({
+        install: install.config!,
+        bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+        channels: new Map([['slack', channel]]),
+        runtime: quiet,
+        engine: () => engine,
+        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+        sessionEnv: { OPINR_HOME: home },
+        pollMs: 5,
+        answerPollMs: 5,
+        typeDelayMs: 10,
+        answerWaitSeconds: 1,
+        startupSeconds: 2,
+      });
+    manager = make2();
+    const first = await dm('one');
+    await dm('two', first);
+    // Wait for the first answer, then restart before the second.
+    for (let i = 0; i < 100 && posts().length === 0; i++)
+      await new Promise((r) => setTimeout(r, 5));
+    expect(posts().map((p) => p.text)).toEqual(['answer: one']);
+    await manager.stop();
+    manager = make2();
+    await manager.recover();
+    await settle();
+    // Only the second answer was owed: no false "no answer yet" after it.
+    expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+  });
+
   it('types the message into a resumed engine that takes none at launch', async () => {
     await manager.stop();
     const quiet = new MemoryRuntime({
