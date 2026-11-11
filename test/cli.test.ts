@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { packageVersion, run } from '../src/cli/program.js';
+import { defaultIo, packageVersion, run } from '../src/cli/program.js';
 
 const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 
@@ -14,6 +14,7 @@ async function cli(...args: string[]): Promise<{ code: number; out: string; err:
       err: (text) => (err += text),
       env: {},
       color: false,
+      ...defaultIo(),
     });
     return { code, out, err };
   } finally {

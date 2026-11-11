@@ -12,6 +12,11 @@ export interface RuntimeContractOptions {
    * Defaults to a POSIX shell one-liner.
    */
   echoCommand?: string[];
+  /**
+   * A program that reads one line, then prints `got:<value of CONTRACT_VALUE>` and exits 0.
+   * Defaults to a POSIX shell one-liner.
+   */
+  envCommand?: string[];
   /** A program that runs until it is stopped. Defaults to `sleep 600`. */
   longCommand?: string[];
   /** Working directory for test sessions. */
@@ -28,6 +33,7 @@ export interface RuntimeContractOptions {
 export function runtimeContract(label: string, options: RuntimeContractOptions): void {
   const echo = options.echoCommand ?? ['sh', '-c', 'read line; echo "got:$line"'];
   const long = options.longCommand ?? ['sleep', '600'];
+  const envCommand = options.envCommand ?? ['sh', '-c', 'read line; echo "got:$CONTRACT_VALUE"'];
   const timeout = options.timeoutSeconds ?? 15;
   const prefix = `ct${Math.random().toString(36).slice(2, 8)}`;
   let counter = 0;
@@ -40,12 +46,14 @@ export function runtimeContract(label: string, options: RuntimeContractOptions):
     const start = async (
       command: string[],
       labels?: Record<string, string>,
+      env?: Record<string, string>,
     ): Promise<SessionInfo> => {
       const session = await driver.start({
         name: nextName(),
         command,
         ...(options.cwd !== undefined && { cwd: options.cwd }),
         ...(labels !== undefined && { labels }),
+        ...(env !== undefined && { env }),
       });
       started.push(session.id);
       return session;
@@ -120,6 +128,14 @@ export function runtimeContract(label: string, options: RuntimeContractOptions):
       await driver.send(session.id, '--help');
       await driver.wait(session.id, { timeoutSeconds: timeout });
       expect((await driver.read(session.id)).text).toContain('got:--help');
+    });
+
+    it('passes environment variables to the program', async () => {
+      const session = await start(envCommand, undefined, { CONTRACT_VALUE: 'from env 42' });
+      await driver.send(session.id, 'go');
+      const waited = await driver.wait(session.id, { timeoutSeconds: timeout });
+      expect(waited.exitCode).toBe(0);
+      expect((await driver.read(session.id)).text).toContain('got:from env 42');
     });
 
     it('checks in when a wait times out, leaving the session running', async () => {

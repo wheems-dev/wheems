@@ -144,6 +144,7 @@ export function parseAgent(file: string, text: string, problems: Problem[]): Loa
       account: config.account,
       skills: config.skills,
       integrations: config.integrations,
+      permissions: config.permissions,
       instructions: text.slice(match[0].length).trim(),
     },
   };

@@ -6,7 +6,8 @@ export interface CrossCheckOptions {
   engines?: string[];
 }
 
-const BUILT_IN_CHANNELS = ['chat', 'approvals', 'updates'] as const;
+/** Built-in channels that something uses already. `approvals` and `updates` arrive with milestone 3. */
+const BUILT_IN_CHANNELS = ['chat'] as const;
 
 /**
  * Checks what one file cannot check alone: that names point at things that exist
@@ -20,6 +21,8 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
   const accounts = new Set(Object.keys(installConfig.accounts));
   const connections = new Set(Object.keys(installConfig.connections));
   const machines = new Set(Object.keys(installConfig.machines));
+  /** Which workspace has each connection's direct messages. */
+  const directClaims = new Map<string, string>();
 
   for (const workspace of install.workspaces) {
     const config = workspace.config;
@@ -34,6 +37,16 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
       if (!accounts.has(account)) error(`Account "${account}" is not in install.yaml`);
     }
     for (const [name, binding] of Object.entries(config.channels)) {
+      if ('direct' in binding) {
+        const claimed = directClaims.get(binding.connection);
+        if (claimed !== undefined && claimed !== workspace.id) {
+          error(
+            `Channel "${name}" uses direct messages on "${binding.connection}", which workspace "${claimed}" already has`,
+          );
+        } else {
+          directClaims.set(binding.connection, workspace.id);
+        }
+      }
       if (!connections.has(binding.connection)) {
         error(
           `Channel "${name}" uses connection "${binding.connection}", which is not in install.yaml`,

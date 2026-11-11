@@ -24,7 +24,7 @@ export default tseslint.config(
             {
               group: ['node:child_process', 'child_process'],
               message:
-                'Only src/drivers/runtime/herdr/hc.ts may start processes: every hc call goes through it.',
+                'Only src/drivers/runtime/herdr/hc.ts (every hc call) and src/util/process.ts (everything else) may start processes.',
             },
           ],
         },
@@ -32,7 +32,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/drivers/runtime/herdr/hc.ts', 'test/**/*.ts'],
+    files: ['src/drivers/runtime/herdr/hc.ts', 'src/util/process.ts', 'test/**/*.ts'],
     rules: { 'no-restricted-imports': 'off' },
   },
   {

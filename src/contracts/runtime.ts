@@ -56,6 +56,8 @@ export interface StartOptions {
   cwd?: string;
   /** Labels to find the session by later, such as `workspace=acme`. */
   labels?: Record<string, string>;
+  /** Extra environment variables for the program. */
+  env?: Record<string, string>;
   /** Run it on another machine the runtime knows about. */
   machine?: string;
 }

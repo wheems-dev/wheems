@@ -51,8 +51,10 @@ switch (command) {
       exit_code: null,
       labels: Object.fromEntries((options.label ?? []).map((l) => l.split('=', 2))),
       screen: [],
-      long: positional.join(' ').includes('sleep'),
+      long: positional.join(' ').includes('sleep') || positional.join(' ').includes('fake-agent'),
     };
+    // A fake agent reports statuses like Claude Code: idle at start, done after each message.
+    if (positional.join(' ').includes('fake-agent')) t.status = 'idle';
     state.terminals.push(t);
     save();
     out(view(t));
@@ -62,18 +64,34 @@ switch (command) {
     const t = find(positional[0]);
     const text = positional[1] ?? '';
     if (t.state === 'finished') fail('finished', `${t.address} has finished`, 11);
+    // Like hc: the result reports the turn and status when the text went in.
+    const before = { turn: t.turn, status: t.status };
     t.screen.push(text);
+    if (t.status !== null) {
+      t.turn += 1;
+      t.status = 'done';
+    }
     if (!t.long) {
-      // Echo programs print `<prefix>$line`; the prefix comes from an `echo "<prefix>$line"` in the command.
-      const prefix = /echo "([^"$]*)\$line"/.exec(t.argv.join(' '))?.[1] ?? 'got:';
-      t.screen.push(`${prefix}${text}`);
+      // Echo programs run `echo "<prefix>$<var>"`: $line is what was typed, anything else
+      // comes from the VAR=value assignments of an /usr/bin/env prefix.
+      const echo = /echo "([^"$]*)\$([A-Za-z_]+)"/.exec(t.argv.join(' '));
+      const prefix = echo?.[1] ?? 'got:';
+      const variable = echo?.[2] ?? 'line';
+      const assignments =
+        t.argv[0] === '/usr/bin/env'
+          ? t.argv.filter((a) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(a))
+          : [];
+      const env = Object.fromEntries(
+        assignments.map((a) => [a.slice(0, a.indexOf('=')), a.slice(a.indexOf('=') + 1)]),
+      );
+      t.screen.push(`${prefix}${variable === 'line' ? text : (env[variable] ?? '')}`);
       t.state = 'finished';
       t.exit_code = 0;
     }
     save();
     out({
-      turn: t.turn,
-      status: t.status,
+      turn: before.turn,
+      status: before.status,
       started: null,
       ...(options.wait ? { wait: waitResult(t) } : {}),
     });
@@ -97,7 +115,11 @@ switch (command) {
     const terminals = (options.all ? state.terminals : live()).filter((t) =>
       Object.entries(labels).every(([k, v]) => t.labels[k] === v),
     );
-    out({ terminals: terminals.map(view), hidden_finished: 0, machines: [] });
+    out({
+      terminals: terminals.map((t) => view(t, { statusWord: true })),
+      hidden_finished: 0,
+      machines: [],
+    });
     break;
   }
   case 'kill': {
@@ -133,6 +155,18 @@ function find(address) {
 }
 
 function waitResult(t) {
+  if (t.state === 'live' && t.status !== null && t.status !== 'working') {
+    return {
+      terminal: t.address,
+      ended: true,
+      reason: 'status',
+      status: t.status,
+      exit_code: null,
+      signal: null,
+      turn: t.turn,
+      children: [],
+    };
+  }
   if (t.state === 'finished') {
     return {
       terminal: t.address,
@@ -157,8 +191,10 @@ function waitResult(t) {
   };
 }
 
-function view(t) {
+// Like real hc: `get`, `run` and `kill` report the status record, `ls` reports the word.
+function view(t, { statusWord = false } = {}) {
   const { screen: _screen, long: _long, ...rest } = t;
+  if (rest.status != null && !statusWord) rest.status = { app: 'fake', state: rest.status };
   return rest;
 }
 

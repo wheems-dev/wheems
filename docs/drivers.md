@@ -31,14 +31,14 @@ driver.
 
 A session is one long-lived terminal program, usually an agent CLI.
 
-| Method                                           | What it does                                                                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `start({ name, command, cwd, labels, machine })` | Starts a program in a new session and returns at once.                                                        |
-| `send(session, text, { wait, ifStatus })`        | Types text and presses Enter. `blocked` when a person is needed first.                                        |
-| `read(session, { lines })`                       | The screen, plus history above it when asked.                                                                 |
-| `wait(session, { timeoutSeconds, output })`      | Until it stops working or exits, or prints `output`. A timeout is a check-in (`ended: false`), not a failure. |
-| `get(session)` / `list({ labels })`              | One session by id or name (`null` when there is none), or live sessions.                                      |
-| `stop(session)` / `remove(session)`              | Ends its program; removes a finished session.                                                                 |
+| Method                                                | What it does                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `start({ name, command, cwd, env, labels, machine })` | Starts a program in a new session and returns at once.                                                        |
+| `send(session, text, { wait, ifStatus })`             | Types text and presses Enter. `blocked` when a person is needed first.                                        |
+| `read(session, { lines })`                            | The screen, plus history above it when asked.                                                                 |
+| `wait(session, { timeoutSeconds, output })`           | Until it stops working or exits, or prints `output`. A timeout is a check-in (`ended: false`), not a failure. |
+| `get(session)` / `list({ labels })`                   | One session by id or name (`null` when there is none), or live sessions.                                      |
+| `stop(session)` / `remove(session)`                   | Ends its program; removes a finished session.                                                                 |
 
 ### Engine ([`engine.ts`](../src/contracts/engine.ts))
 
@@ -46,16 +46,28 @@ An engine driver turns one agent definition into a **launch plan**: the command 
 with a model, the environment, and the files to write (its instructions file, and later its
 skills, permissions and MCP config). It never touches the disk or starts a process itself; the
 framework writes the files and starts the command through the runtime driver. It declares its
-`capabilities` (`instructionsFile`, `skills`, `mcp`, `hooks`, `permissions`), so doctor can say
-what won't work.
+`capabilities` (`instructionsFile`, `skills`, `mcp`, `hooks`, `permissions`, `resume`), so doctor
+can say what won't work.
+
+Each launch is for one conversation: the context carries its `session` (a stable UUID, whether
+to `resume` it, and the first `task`), and the agent carries its `permissions` level. An engine
+can also offer `answers(session, after)`, the agent's answer to each turn after a given one, read from
+the engine's own structured record (for Claude Code, its session transcript), never the screen.
+With it, the service posts each answer for the agent.
 
 ### Channel ([`channel.ts`](../src/contracts/channel.ts))
 
 A channel driver holds one connection, such as one Slack app. `start(handler)` delivers inbound
 messages and button presses; `send()` posts, optionally in a thread and with buttons; `stop()`
-disconnects. Drivers declare whether they support `threads` and `buttons`; a driver without
-buttons refuses them with `unsupported` rather than dropping them silently. To keep a
-conversation together, reply in `replyThread(event)`.
+disconnects; `react()` marks a message, such as 👀 while an agent works on it. Inbound messages
+say whether they are `direct` messages. Drivers declare whether they support `threads`,
+`buttons`, `reactions` and `identities` (posting under a per-workspace name and icon); a driver
+without buttons or reactions refuses them with `unsupported` rather than dropping them silently,
+and one without identities ignores them. To keep a conversation together, reply in
+`replyThread(event)`.
+
+Milestone 1 ships the Slack driver (Socket Mode, so no public address) and the Claude Code engine
+driver.
 
 ## Contract tests
 

@@ -33,6 +33,15 @@ export class HcError extends Error {
 
 const labels = z.record(z.string(), z.string()).default({});
 
+/**
+ * An agent's status. `hc ls` reports the word; `hc get` and `hc run` report the whole
+ * status record (`{app, state, ...}`). Either way, only the word is kept.
+ */
+const status = z
+  .union([z.string(), z.looseObject({ state: z.string() })])
+  .nullish()
+  .transform((value) => (value == null ? null : typeof value === 'string' ? value : value.state));
+
 export const hcTerminal = z.looseObject({
   address: z.string(),
   name: z.string().nullish(),
@@ -40,7 +49,7 @@ export const hcTerminal = z.looseObject({
   agent: z.string().nullish(),
   cwd: z.string(),
   state: z.string(),
-  status: z.string().nullish(),
+  status,
   turn: z.number().int().nonnegative(),
   exit_code: z.number().int().nullish(),
   labels,

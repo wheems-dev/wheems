@@ -8,9 +8,9 @@ have a chief of staff, agents, scoped skills, workflows, rules, a knowledge base
 Agents are Claude Code, Codex and opencode, unchanged, each live in its own Herdr terminal.
 Everything that extends Opinr is a driver with a contract, as in Laravel.
 
-> **Status: milestone 0, skeleton.** The CLI, the config formats, the driver contracts with
-> their contract tests, and the Herdr runtime driver. Nothing talks to Slack or runs agents
-> yet. See the [roadmap](docs/roadmap.md).
+> **Status: milestone 1, talk to one chief of staff.** Chat with a chief of staff on Claude
+> Code from Slack, one conversation per thread, with the service running under launchd. See
+> [getting started](docs/getting-started.md) and the [roadmap](docs/roadmap.md).
 
 ## Install
 
@@ -36,8 +36,13 @@ node dist/cli/main.js doctor --home examples/install  # both
 
 `doctor` starts a tiny test session in Herdr core and removes it again; `--quick` skips that.
 
+If `node --version` is older than 22.12, run these with a newer Node.js instead, such as
+Homebrew's (`brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node dist/cli/main.js
+doctor`). Doctor fails with the version it found when Node.js is too old.
+
 ## Docs
 
+- [Getting started](docs/getting-started.md): set up Opinr on a Mac and chat from Slack
 - [The product](docs/product.md): what Opinr is, and the opinions it holds
 - [Architecture](docs/architecture.md): the service, the CLI, engines, integrations and guardrails
 - [Config formats](docs/config.md): `install.yaml`, `workspace.yaml`, agents, `skills.yaml`, workflows

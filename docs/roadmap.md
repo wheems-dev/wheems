@@ -39,6 +39,8 @@ Telegram, across a laptop and an always-on server, with no hand-built setup.
 
 ## Milestones
 
+Milestone 0 is done. Milestone 1 is built and being tried out day to day.
+
 Each milestone ends with something used every day, and what's learned from using it shapes the
 next.
 

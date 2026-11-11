@@ -25,8 +25,19 @@ export interface ChannelDriver extends Driver<'channel'> {
    */
   send(message: OutboundMessage): Promise<SentMessage>;
 
+  /**
+   * Adds (`on: true`) or removes a reaction on a message, such as `eyes`.
+   * Throws `DriverError` `unsupported` on a driver without reactions.
+   */
+  react(message: MessageRef, reaction: string, on: boolean): Promise<void>;
+
   /** Disconnects. No handler calls happen after it resolves. Safe to call twice. */
   stop(): Promise<void>;
+}
+
+export interface MessageRef {
+  channel: string;
+  messageId: string;
 }
 
 export interface ChannelCapabilities {
@@ -34,6 +45,10 @@ export interface ChannelCapabilities {
   threads: boolean;
   /** Messages can carry buttons whose presses come back as inbound events. */
   buttons: boolean;
+  /** Messages can be marked with reactions, such as one that says the agent is on it. */
+  reactions: boolean;
+  /** Posts can carry a per-workspace name and icon. Drivers without it ignore `identity`. */
+  identities: boolean;
 }
 
 export type InboundHandler = (event: InboundEvent) => void | Promise<void>;
@@ -49,6 +64,8 @@ export interface InboundMessage {
   /** The driver's id for the person who wrote it. */
   userId: string;
   text: string;
+  /** True for a direct message between the person and the bot. */
+  direct: boolean;
   receivedAt: Date;
 }
 
@@ -70,6 +87,14 @@ export interface OutboundMessage {
   threadId?: string;
   text: string;
   buttons?: Button[];
+  /** Who the post appears to be from, on drivers with `identities`. */
+  identity?: Identity;
+}
+
+export interface Identity {
+  name: string;
+  /** An emoji such as `:robot_face:`, or an image URL. */
+  icon?: string;
 }
 
 export interface Button {

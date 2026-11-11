@@ -114,8 +114,22 @@ export class HerdrRuntime implements RuntimeDriver {
     if (options.command.length === 0) {
       throw new DriverError(this.name, 'invalid', 'A session needs a command');
     }
+    const env = Object.entries(options.env ?? {});
+    const badKey = env.find(([key]) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key));
+    if (badKey) {
+      throw new DriverError(
+        this.name,
+        'invalid',
+        `Not an environment variable name: "${badKey[0]}"`,
+      );
+    }
+    // hc run has no option for environment variables, so env(1) sets them for the program.
+    const command =
+      env.length > 0
+        ? ['/usr/bin/env', ...env.map(([key, value]) => `${key}=${value}`), ...options.command]
+        : options.command;
     return this.call(async () => {
-      const terminal = await this.hc.run(options.command, {
+      const terminal = await this.hc.run(command, {
         name: options.name,
         ...(options.cwd !== undefined && { cwd: options.cwd }),
         ...(options.labels !== undefined && { labels: options.labels }),

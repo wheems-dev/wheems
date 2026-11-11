@@ -19,6 +19,24 @@ export interface EngineDriver extends Driver<'engine'> {
 
   /** Turns an agent definition into a launch plan. Must be deterministic and side-effect free. */
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan>;
+
+  /**
+   * Optional: the agent's answers, one per finished turn (the last thing it wrote in the
+   * turn), read from the engine's own structured record of the conversation, never the
+   * screen. A turn still running has no answer. Each answer's id must stay the same once
+   * the turn has finished. Returns the answers after the one with id \`after\`: all of them
+   * when \`after\` is null, and only the latest when no answer has that id, so history is
+   * never posted again. Use \`answersAfter\` for this. With it, the service posts each answer
+   * for the agent; without it, agents answer only through \`opinr reply\`.
+   */
+  answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
+}
+
+/** An agent's answer: its final message of a turn. */
+export interface FinalMessage {
+  /** Identifies this message in the engine's record, so it is never posted twice. */
+  id: string;
+  text: string;
 }
 
 export interface EngineCapabilities {
@@ -32,6 +50,8 @@ export interface EngineCapabilities {
   hooks: boolean;
   /** Has permission settings the framework can write. */
   permissions: boolean;
+  /** Can carry on an earlier conversation by its session id. */
+  resume: boolean;
 }
 
 /** An agent as config defines it: front matter plus the Markdown body. */
@@ -44,15 +64,32 @@ export interface AgentDefinition {
   account: string;
   skills: string[];
   integrations: string[];
+  /**
+   * How much the agent may do without asking. `ask`: the engine's normal prompts.
+   * `auto`: the engine decides routine actions itself and asks for risky ones.
+   * `skip`: never asks.
+   */
+  permissions: PermissionLevel;
   /** The Markdown body of the agent file. */
   instructions: string;
 }
+
+export type PermissionLevel = 'ask' | 'auto' | 'skip';
 
 export interface EngineContext {
   workspace: { id: string; dir: string };
   /** The folder the agent's session runs in. Plan file paths are relative to it. */
   sessionDir: string;
   account: { name: string; driver: string };
+  /** The conversation this launch is for. */
+  session: {
+    /** A UUID that names the conversation in the engine, stable across restarts. */
+    id: string;
+    /** True when the engine has had this conversation before and should carry it on. */
+    resume: boolean;
+    /** The first thing to say to the agent, or null to start it idle. */
+    task: string | null;
+  };
 }
 
 export interface LaunchPlan {
@@ -69,4 +106,11 @@ export interface LaunchPlan {
 export interface PlannedFile {
   path: string;
   content: string;
+}
+
+/** The answers after the one with id \`after\`, as \`EngineDriver.answers\` returns them. */
+export function answersAfter(all: FinalMessage[], after: string | null): FinalMessage[] {
+  if (after === null) return all;
+  const index = all.findIndex((answer) => answer.id === after);
+  return index === -1 ? all.slice(-1) : all.slice(index + 1);
 }

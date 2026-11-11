@@ -54,6 +54,12 @@ export const accountSchema = z.strictObject({
 });
 
 export const connectionSchema = z.strictObject({
+  allowed_users: z
+    .array(nonEmpty)
+    .default([])
+    .describe(
+      "For chat connections: the service's user ids allowed to talk to agents, such as Slack member ids. Everyone else is ignored.",
+    ),
   driver: nameSchema.describe(
     'The channel or integration driver, such as `slack`, `telegram` or `github`.',
   ),
@@ -85,10 +91,22 @@ export type InstallConfig = z.infer<typeof installSchema>;
 
 // workspace.yaml -------------------------------------------------------------
 
-export const channelBindingSchema = z.strictObject({
-  connection: nameSchema.describe('The install connection that carries it, such as `slack`.'),
-  channel: nonEmpty.describe("The channel's id or name in that service."),
-});
+export const channelBindingSchema = z.union([
+  z.strictObject({
+    connection: nameSchema.describe('The install connection that carries it, such as `slack`.'),
+    channel: nonEmpty.describe("The channel's id or name in that service."),
+  }),
+  z.strictObject({
+    connection: nameSchema.describe('The install connection that carries it, such as `slack`.'),
+    direct: z
+      .literal(true)
+      .describe(
+        "Direct messages with the connection's bot. Only one workspace per connection can have them.",
+      ),
+  }),
+]);
+
+export type ChannelBinding = z.infer<typeof channelBindingSchema>;
 
 export const ruleSchema = z
   .strictObject({
@@ -148,6 +166,15 @@ export const workspaceSchema = z.strictObject({
     .default(20)
     .describe('Doctor warns when the workspace or one agent goes past this many skills.'),
   machine: nameSchema.optional().describe('The machine agents run on by default.'),
+  identity: z
+    .strictObject({
+      name: nonEmpty,
+      icon: nonEmpty.optional().describe('An emoji such as `:house:`, or an image URL.'),
+    })
+    .optional()
+    .describe(
+      "The name and icon the workspace's posts appear under, where the channel supports it.",
+    ),
   rules: z
     .array(ruleSchema)
     .default([])
@@ -171,6 +198,12 @@ export const agentFrontMatterSchema = z.strictObject({
     .array(nameSchema)
     .default([])
     .describe("Integrations from the workspace's `integrations`."),
+  permissions: z
+    .enum(['ask', 'auto', 'skip'])
+    .default('ask')
+    .describe(
+      "How much the agent may do without asking. `ask`: the engine's normal prompts. `auto`: the engine allows routine actions and asks for risky ones. `skip`: never asks.",
+    ),
 });
 
 export type AgentFrontMatter = z.infer<typeof agentFrontMatterSchema>;

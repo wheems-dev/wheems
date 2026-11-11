@@ -104,6 +104,15 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
+          "allowed_users": {
+            "default": [],
+            "description": "For chat connections: the service's user ids allowed to talk to agents, such as Slack member ids. Everyone else is ignored.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
           "driver": {
             "type": "string",
             "maxLength": 64,
