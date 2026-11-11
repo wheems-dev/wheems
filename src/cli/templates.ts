@@ -33,7 +33,21 @@ export interface WorkspaceTemplate {
   name: string;
   /** A channel name, or null for the bot's direct messages. */
   channel: string | null;
+  /** The engine the chief of staff runs in, its model, and the account that pays. */
+  engine: EngineChoice;
 }
+
+export interface EngineChoice {
+  name: string;
+  model: string;
+  account: string;
+}
+
+export const DEFAULT_ENGINE: EngineChoice = {
+  name: 'claude-code',
+  model: 'claude-opus-5-5',
+  account: 'claude-subscription',
+};
 
 /** A YAML scalar for text a person typed, such as `Acme: UK` or `#work-chat`. */
 function yamlString(value: string): string {
@@ -46,7 +60,7 @@ export function workspaceYaml(template: WorkspaceTemplate): string {
       ? '{ connection: slack, direct: true }'
       : `{ connection: slack, channel: ${yamlString(template.channel)} }`;
   return `name: ${yamlString(template.name)}
-accounts: [claude-subscription]
+accounts: [${template.engine.account}]
 
 channels:
   chat: ${chat}
@@ -63,9 +77,9 @@ skills: {}
 export function chiefOfStaffMd(template: WorkspaceTemplate): string {
   return `---
 description: ${yamlString(`The one entry point for ${template.name}, aware of everything going on in it.`)}
-engine: claude-code
-model: claude-opus-5-5
-account: claude-subscription
+engine: ${template.engine.name}
+model: ${yamlString(template.engine.model)}
+account: ${template.engine.account}
 permissions: auto
 ---
 

@@ -1,12 +1,13 @@
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { access, readFile, realpath } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { access } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { LoadedInstall } from '../config/load.js';
 import { paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { request } from '../service/control.js';
 import { serviceStatus } from '../service/launchd.js';
+export { trustedIn } from '../util/trust.js';
 import { crossCheck } from '../config/check.js';
 import { loadInstall, type Problem } from '../config/load.js';
 import type { HealthCheck } from '../contracts/driver.js';
@@ -28,8 +29,8 @@ export interface DoctorOptions {
   /** Overrides for tests. */
   nodeVersion?: string;
   platform?: NodeJS.Platform;
-  /** Whether Claude Code trusts a folder: true, false, or null when it can't tell. */
-  claudeTrust?: (dir: string) => Promise<boolean | null>;
+  /** Whether an engine trusts a folder: true, false, or null when it can't tell. */
+  trust?: (engine: string, dir: string) => Promise<boolean | null>;
   /** Whether the service is installed and answering. */
   service?: (home: string) => Promise<{ installed: boolean; answering: boolean }>;
 }
@@ -117,29 +118,37 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
     if (!options.registry.has('engine', name)) continue; // Config already warns about these.
     checks.push(...(await options.registry.create('engine', name).check()));
   }
-  const trust = options.claudeTrust ?? claudeTrusts;
+  const catalog = options.registry.catalog('engine');
+  const trustOf =
+    options.trust ??
+    ((engine: string, dir: string) => {
+      const setup = catalog.find((e) => e.name === engine)?.engine;
+      return setup?.trusted ? setup.trusted(dir) : Promise.resolve(null);
+    });
   for (const workspace of install.workspaces) {
     const chief = workspace.agents.find(
       (a) => a.definition.name === workspace.config?.chief_of_staff,
     );
-    if (chief?.definition.engine !== 'claude-code') continue;
-    const trusted = await trust(workspace.dir);
+    if (!chief) continue;
+    const engine = chief.definition.engine;
+    const label = catalog.find((e) => e.name === engine)?.label ?? engine;
+    const trusted = await trustOf(engine, workspace.dir);
     if (trusted === true) {
       checks.push({
         name: `${workspace.id} folder`,
         status: 'pass',
-        message: 'Claude Code trusts the workspace folder',
+        message: `${label} trusts the workspace folder`,
       });
     } else if (trusted === false) {
       checks.push({
         name: `${workspace.id} folder`,
         status: 'warn',
-        message:
-          "Claude Code hasn't been told to trust the workspace folder, so its first session will wait for that answer at the Mac",
-        hint: `cd ${workspace.dir} && claude, choose "Yes, I trust this folder", then /exit.`,
+        message: `${label} hasn't been told to trust the workspace folder, so its first session will wait for that answer at the Mac`,
+        hint: 'Open the engine in that folder once and say yes, or run opinr setup.',
       });
     }
   }
+
   if (checks.length === 0)
     checks.push({ name: 'engines', status: 'skip', message: 'No agents yet' });
   return checks;
@@ -225,35 +234,6 @@ async function probeService(home: string): Promise<{ installed: boolean; answeri
     () => false,
   );
   return { installed: status.loaded, answering };
-}
-
-/** Reads, never writes, Claude Code's record of trusted folders. */
-async function claudeTrusts(dir: string): Promise<boolean | null> {
-  let projects: Record<string, { hasTrustDialogAccepted?: boolean }>;
-  try {
-    const config = JSON.parse(await readFile(join(homedir(), '.claude.json'), 'utf8')) as {
-      projects?: Record<string, { hasTrustDialogAccepted?: boolean }>;
-    };
-    projects = config.projects ?? {};
-  } catch {
-    return null;
-  }
-  const real = await realpath(dir).catch(() => dir);
-  return trustedIn(projects, real) || trustedIn(projects, dir);
-}
-
-/**
- * Whether Claude Code trusts a folder: it records trust for the folder it was asked about,
- * or for the git repository around it, and either covers everything inside.
- */
-export function trustedIn(
-  projects: Record<string, { hasTrustDialogAccepted?: boolean }>,
-  dir: string,
-): boolean {
-  for (let folder = dir; ; folder = dirname(folder)) {
-    if (projects[folder]?.hasTrustDialogAccepted === true) return true;
-    if (dirname(folder) === folder) return false;
-  }
 }
 
 function systemChecks(options: DoctorOptions): HealthCheck[] {

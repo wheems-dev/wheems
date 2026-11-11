@@ -50,7 +50,16 @@ framework writes the files and starts the command through the runtime driver. It
 can say what won't work.
 
 Each launch is for one conversation: the context carries its `session` (a stable UUID, whether
-to `resume` it, and the first `task`), and the agent carries its `permissions` level. An engine
+to `resume` it, the first `task`, and the engine's own id once known), and the agent carries its
+`permissions` level. Engines that choose their own session ids (Codex, opencode) offer
+`findSession`, which finds the session they started from its folder, start time and first
+message; the service keeps that id with the conversation and resumes by it. An engine that
+can't take a message on its command line in some case (opencode, when resuming) returns it as
+the plan's `typeAfterStart`, and the service types it in once the program has started.
+
+Engines declare whether they report their `status` (working, done, blocked) to the runtime.
+Claude Code and Codex do, so the service follows each turn by status; opencode doesn't under
+Herdr core, so the service follows its turns by its answers instead. An engine
 can also offer `answers(session, after)`, the agent's answer to each turn after a given one, read from
 the engine's own structured record (for Claude Code, its session transcript), never the screen.
 With it, the service posts each answer for the agent.
@@ -66,8 +75,9 @@ without buttons or reactions refuses them with `unsupported` rather than droppin
 and one without identities ignores them. To keep a conversation together, reply in
 `replyThread(event)`.
 
-Milestone 1 ships the Slack driver (Socket Mode, so no public address) and the Claude Code engine
-driver.
+Milestone 1 ships the Slack driver (Socket Mode, so no public address) and the engine drivers for
+Claude Code, Codex and opencode. Each engine also brings its setup steps (`EngineSetup`): how to
+install it, sign in, and check that it trusts a folder.
 
 ## Contract tests
 

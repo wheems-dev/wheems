@@ -68,6 +68,29 @@ export interface ConnectResult {
   allowedUsers: string[];
 }
 
+/** How `opinr setup` installs an engine's CLI, signs in and wires it to Herdr. */
+export interface EngineSetup {
+  /** The installed version, or null when the CLI isn't installed. */
+  version(): Promise<string | null>;
+  /** The command that installs it, shown and run after asking, such as \`npm install -g …\`. */
+  install: string[];
+  /** The command that signs in, run on the person's terminal; null when there is nothing to sign in to. */
+  signIn: string[] | null;
+  /** Whether it is signed in: true, false, or null when it can't tell or needn't. */
+  signedIn(): Promise<boolean | null>;
+  /** The model a new agent on this engine starts with. */
+  defaultModel: string;
+  /**
+   * The command that opens the engine in a folder so the person can answer its one-time
+   * "trust this folder?" question; null when it doesn't ask.
+   */
+  trust: string[] | null;
+  /** Whether the engine trusts a folder (or one around it): true, false, or null when it can't tell. */
+  trusted?(dir: string): Promise<boolean | null>;
+  /** The install account a new agent on this engine is paid through. */
+  account: { name: string; driver: string };
+}
+
 /** A driver's interactive connect flow, run by `opinr setup`. */
 export interface ConnectFlow {
   connect(ui: SetupUi, context: ConnectContext): Promise<ConnectResult>;

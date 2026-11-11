@@ -19,6 +19,16 @@ const conversationSchema = z.object({
    * conversation that started here; missing when it is not known.
    */
   lastAnswerId: z.string().optional(),
+  /** The engine's own id for the conversation, for engines that choose their own ids. */
+  engineSessionId: z.string().optional(),
+  /** When the current engine session started, and the tag on its first message, to find its id. */
+  startedAt: z.string().optional(),
+  launchTag: z.string().optional(),
+  /**
+   * How many messages are waiting for their answers. While any are, the session is never
+   * stopped, and after a restart the service follows it until they are all answered.
+   */
+  pending: z.number().int().nonnegative().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -48,6 +58,44 @@ export class ConversationStore {
   async set(key: string, conversation: Conversation): Promise<void> {
     await this.load();
     this.conversations.set(key, conversation);
+    await this.save();
+  }
+
+  async setEngineSession(key: string, id: string): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.engineSessionId = id;
+    await this.save();
+  }
+
+  /**
+   * Answers were posted: moves the answer position on and takes them off the waiting count,
+   * in one write, so a restart never sees one without the other.
+   */
+  async answered(key: string, lastAnswerId: string, count: number): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.lastAnswerId = lastAnswerId;
+    conversation.pending = Math.max(0, (conversation.pending ?? 0) - count);
+    await this.save();
+  }
+
+  /** One more message waits for its answer. */
+  async addPending(key: string): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.pending = (conversation.pending ?? 0) + 1;
+    await this.save();
+  }
+
+  async setPending(key: string, pending: number): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation || (conversation.pending ?? 0) === pending) return;
+    conversation.pending = pending;
     await this.save();
   }
 

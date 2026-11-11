@@ -17,7 +17,7 @@ const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 /** Doctor never looks at the real launchd or Claude Code config in tests. */
 const probes = {
   service: () => Promise.resolve({ installed: false, answering: false }),
-  claudeTrust: () => Promise.resolve(true),
+  trust: () => Promise.resolve(true),
 };
 
 describe('doctor', () => {
@@ -146,7 +146,7 @@ describe('doctor', () => {
       env,
       quick: true,
       service: () => Promise.resolve({ installed: false, answering: false }),
-      claudeTrust: () => Promise.resolve(false),
+      trust: () => Promise.resolve(false),
     });
     expect(statuses(before).Agents).toEqual(['pass claude-code engine', 'warn personal folder']);
     expect(statuses(before).Channels).toEqual(['warn slack allowed users', 'fail slack']);
@@ -163,7 +163,7 @@ describe('doctor', () => {
       env,
       quick: true,
       service: () => Promise.resolve({ installed: true, answering: true }),
-      claudeTrust: () => Promise.resolve(true),
+      trust: () => Promise.resolve(true),
     });
     expect(statuses(after).Agents).toEqual(['pass claude-code engine', 'pass personal folder']);
     expect(statuses(after).Channels).toEqual([

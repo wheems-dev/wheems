@@ -117,9 +117,10 @@ export function createProgram(io: Io): Command {
           ui,
           registry,
           actions: {
-            trustFolder: async (dir) => {
-              await runInteractive('claude', [], { cwd: dir });
-            },
+            run: (command, cwd) =>
+              runInteractive(command[0] ?? '', command.slice(1), {
+                ...(cwd !== undefined && { cwd }),
+              }),
             installService: () => installAndWait(where),
             serviceRunning: () => serviceAnswers(where),
             copy: async (text) =>
@@ -150,32 +151,67 @@ export function createProgram(io: Io): Command {
     .argument('<workspace>', 'the workspace id, such as personal')
     .option('--name <name>', 'its display name (default: from the id)')
     .option('--channel <channel>', "chat in this channel instead of the bot's direct messages")
+    .option(
+      '--engine <engine>',
+      'what the chief of staff runs in: claude-code, codex or opencode',
+      'claude-code',
+    )
+    .option('--model <model>', "the engine's model (default: the engine's usual one)")
     .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
-    .action(async (id: string, options: { name?: string; channel?: string; home?: string }) => {
-      const dir = await initWorkspace({
-        home: resolve(options.home ?? defaultHome(io.env)),
-        id,
-        env: io.env,
-        ...(options.name !== undefined && { name: options.name }),
-        ...(options.channel !== undefined && { channel: options.channel }),
-      });
-      io.out(
-        [
-          `Created ${dir}`,
-          '',
-          'Claude Code asks once whether to trust a new folder, and nobody can answer it from Slack.',
-          'Answer it now: run the two lines below, choose "Yes, I trust this folder", then type /exit.',
-          '',
-          `  cd ${shellPath(dir)}`,
-          '  claude',
-          '',
-          options.channel !== undefined
-            ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: opinr service restart`
-            : 'Then message the bot in Slack. If the service is already running, restart it first: opinr service restart',
-          '',
-        ].join('\n'),
-      );
-    });
+    .action(
+      async (
+        id: string,
+        options: { name?: string; channel?: string; engine: string; model?: string; home?: string },
+      ) => {
+        const entry = io
+          .registry()
+          .catalog('engine')
+          .find((e) => e.name === options.engine && e.engine);
+        if (!entry?.engine) {
+          const known = io
+            .registry()
+            .catalog('engine')
+            .map((e) => e.name)
+            .join(', ');
+          throw new Error(`No engine "${options.engine}". Choose one of: ${known}`);
+        }
+        const setup = entry.engine;
+        const dir = await initWorkspace({
+          home: resolve(options.home ?? defaultHome(io.env)),
+          id,
+          env: io.env,
+          engine: {
+            name: entry.name,
+            model: options.model ?? setup.defaultModel,
+            account: setup.account.name,
+          },
+          accountDriver: setup.account.driver,
+          ...(options.name !== undefined && { name: options.name }),
+          ...(options.channel !== undefined && { channel: options.channel }),
+        });
+        const trust = setup.trust;
+        io.out(
+          [
+            `Created ${dir}, with its chief of staff on ${entry.label}`,
+            '',
+            ...(trust !== null
+              ? [
+                  `${entry.label} asks once whether to trust a new folder, and nobody can answer it from Slack.`,
+                  'Answer it now: run the two lines below, say yes, then quit it.',
+                  '',
+                  `  cd ${shellPath(dir)}`,
+                  `  ${trust.join(' ')}`,
+                  '',
+                ]
+              : []),
+            options.channel !== undefined
+              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: opinr service restart`
+              : 'Then message the bot in Slack. If the service is already running, restart it first: opinr service restart',
+            '',
+          ].join('\n'),
+        );
+      },
+    );
 
   program
     .command('slack')

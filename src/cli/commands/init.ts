@@ -3,7 +3,15 @@ import { join } from 'node:path';
 import { loadInstall } from '../../config/load.js';
 import { nameSchema } from '../../config/schemas.js';
 import { paths } from '../../home.js';
-import { chiefOfStaffMd, SKILLS_YAML, workspaceYaml } from '../templates.js';
+import { readFile } from 'node:fs/promises';
+import { parseDocument } from 'yaml';
+import {
+  chiefOfStaffMd,
+  DEFAULT_ENGINE,
+  SKILLS_YAML,
+  workspaceYaml,
+  type EngineChoice,
+} from '../templates.js';
 
 export interface InitOptions {
   home: string;
@@ -11,6 +19,10 @@ export interface InitOptions {
   name?: string;
   /** A channel to chat in, instead of the bot's direct messages. */
   channel?: string;
+  /** The engine the chief of staff runs in. Defaults to Claude Code. */
+  engine?: EngineChoice;
+  /** The install account's driver, added to install.yaml if the account isn't there. */
+  accountDriver?: string;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -54,10 +66,21 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
     id: options.id,
     name: name ?? options.id.charAt(0).toUpperCase() + options.id.slice(1).replaceAll('-', ' '),
     channel: channel ?? null,
+    engine: options.engine ?? DEFAULT_ENGINE,
   };
+  await ensureAccount(where.install, template.engine.account, options.accountDriver ?? 'claude');
   await mkdir(join(dir, 'agents'), { recursive: true });
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));
   await writeFile(join(dir, 'skills.yaml'), SKILLS_YAML);
   await writeFile(join(dir, 'agents', 'chief-of-staff.md'), chiefOfStaffMd(template));
   return dir;
+}
+
+/** Adds an account to install.yaml, keeping its comments, when it isn't there yet. */
+async function ensureAccount(installFile: string, name: string, driver: string): Promise<void> {
+  const doc = parseDocument(await readFile(installFile, 'utf8'));
+  if (doc.hasIn(['accounts', name])) return;
+  if (!doc.has('accounts')) doc.set('accounts', doc.createNode({}));
+  doc.setIn(['accounts', name], doc.createNode({ driver }));
+  await writeFile(installFile, doc.toString());
 }

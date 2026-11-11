@@ -4,7 +4,12 @@ import { parseDocument } from 'yaml';
 import { loadInstall, type LoadedInstall } from '../../config/load.js';
 import { nameSchema } from '../../config/schemas.js';
 import type { DriverRegistry } from '../../contracts/registry.js';
-import { SetupCancelled, type Choice, type SetupUi } from '../../contracts/setup.js';
+import {
+  SetupCancelled,
+  type Choice,
+  type EngineSetup,
+  type SetupUi,
+} from '../../contracts/setup.js';
 import { paths, type Paths } from '../../home.js';
 import { readSecrets, writeSecret } from '../../secrets.js';
 import { runCommand } from '../../util/process.js';
@@ -13,8 +18,8 @@ import { initWorkspace } from './init.js';
 
 /** Things setup does that reach outside the install folder, replaceable in tests. */
 export interface SetupActions {
-  /** Opens Claude Code in a folder so the person can answer its trust question. */
-  trustFolder(dir: string): Promise<void>;
+  /** Runs a command on the person's terminal, such as an installer or a sign-in, and returns its exit code. */
+  run(command: string[], cwd?: string): Promise<number | null>;
   /** Installs the background service and says whether it answers. */
   installService(): Promise<boolean>;
   /** Whether the background service is answering. */
@@ -35,7 +40,7 @@ export interface SetupOptions {
   actions: SetupActions;
 }
 
-type Section = 'channels' | 'workspaces' | 'service' | 'doctor' | 'done';
+type Section = 'engines' | 'channels' | 'workspaces' | 'service' | 'doctor' | 'done';
 
 /**
  * Interactive setup: makes the install folder if there is none, then offers what can be
@@ -48,15 +53,29 @@ export async function setup(options: SetupOptions): Promise<void> {
   if (await ensureInstall(where)) ui.success(`Created your install at ${home}`);
   else ui.info(`Install: ${home}`);
 
-  let next: Section = (await connectedChannels(options)).length === 0 ? 'channels' : 'workspaces';
+  let next: Section =
+    (await installedEngines(options)).length === 0
+      ? 'engines'
+      : (await connectedChannels(options)).length === 0
+        ? 'channels'
+        : 'workspaces';
   for (;;) {
     const install = await loadInstall(home);
     const connected = await connectedChannels(options);
+    const engineNames = (await installedEngines(options)).map((e) => e.label);
     const running = await options.actions.serviceRunning();
     const section = await ui.select<Section>({
       message: 'What do you want to set up?',
       initial: next,
       choices: [
+        {
+          value: 'engines',
+          label: 'Engines',
+          hint:
+            engineNames.length > 0
+              ? `${engineNames.join(', ')} installed`
+              : 'install Claude Code, Codex or opencode for your agents',
+        },
         {
           value: 'channels',
           label: 'Channels',
@@ -84,6 +103,7 @@ export async function setup(options: SetupOptions): Promise<void> {
     });
     if (section === 'done') return;
     try {
+      if (section === 'engines') next = (await engines(options)) ? 'channels' : 'engines';
       if (section === 'channels')
         next = (await channels(options, where)) ? 'workspaces' : 'channels';
       if (section === 'workspaces')
@@ -232,30 +252,140 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
             value.replace(/^#/, '').trim() === '' ? 'Give a channel name' : undefined,
         })
       : undefined;
+  const installed = await installedEngines(options);
+  if (installed.length === 0) {
+    ui.warn('Install an engine first (Engines), for the chief of staff to run in.');
+    return false;
+  }
+  const engineName =
+    installed.length === 1
+      ? (installed[0]?.name ?? 'claude-code')
+      : await ui.select({
+          message: 'Which engine runs its chief of staff?',
+          initial: installed.some((e) => e.name === 'claude-code')
+            ? 'claude-code'
+            : installed[0]?.name,
+          choices: installed.map((e) => ({ value: e.name, label: e.label, hint: e.version })),
+        });
+  const chosen = installed.find((e) => e.name === engineName) ?? installed[0];
+  if (!chosen) return false;
+  const model = await ui.text({
+    message: 'Model',
+    initial: chosen.setup.defaultModel,
+    validate: (value) => (value.trim() === '' ? 'Give a model' : undefined),
+  });
+  const engine = { label: chosen.label, model: model.trim(), setup: chosen.setup };
   const dir = await initWorkspace({
     home: options.home,
     id,
     name: name.trim(),
     env: options.env,
+    engine: { name: chosen.name, model: model.trim(), account: chosen.setup.account.name },
+    accountDriver: chosen.setup.account.driver,
     ...(channel !== undefined && { channel }),
   });
-  ui.success(`Created ${dir}, with its chief of staff on Claude Code`);
+  ui.success(`Created ${dir}, with its chief of staff on ${engine.label} (${engine.model})`);
   if (channel !== undefined) ui.info(`Invite the app to #${channel.replace(/^#/, '')} in Slack.`);
+  const trust = engine.setup.trust;
+  if (trust === null) return true;
   ui.note(
     [
-      'Claude Code asks once whether to trust a new folder, and nobody can answer that from Slack.',
-      'Choose "Yes, I trust this folder", then press Ctrl+C twice to come back here.',
+      `${engine.label} asks once whether to trust a new folder, and nobody can answer that from Slack.`,
+      'Answer yes, then press Ctrl+C twice to come back here.',
     ].join('\n'),
     'Trust the folder',
   );
   try {
-    if (await ui.confirm('Open Claude Code there now?', true))
-      await options.actions.trustFolder(dir);
+    if (await ui.confirm(`Open ${engine.label} there now?`, true))
+      await options.actions.run(trust, dir);
   } catch (error) {
     if (!(error instanceof SetupCancelled)) throw error;
     // The workspace is made; only the trust step was skipped.
-    ui.info(`The workspace is saved. Trust its folder later: cd ${dir} && claude`);
+    ui.info(`The workspace is saved. Trust its folder later: cd ${dir} && ${trust.join(' ')}`);
   }
+  return true;
+}
+
+interface InstalledEngine {
+  name: string;
+  label: string;
+  version: string;
+  setup: EngineSetup;
+}
+
+async function installedEngines(options: SetupOptions): Promise<InstalledEngine[]> {
+  const found: InstalledEngine[] = [];
+  for (const entry of options.registry.catalog('engine')) {
+    if (!entry.available || !entry.engine) continue;
+    const version = await entry.engine.version();
+    if (version !== null)
+      found.push({ name: entry.name, label: entry.label, version, setup: entry.engine });
+  }
+  return found;
+}
+
+/** Installs an engine's CLI and signs in, asking before each. */
+async function engines(options: SetupOptions): Promise<boolean> {
+  const { ui, actions } = options;
+  const catalog = options.registry.catalog('engine').filter((e) => e.engine !== undefined);
+  const status = await ui.task(
+    'Looking for Claude Code, Codex and opencode',
+    () =>
+      Promise.all(
+        catalog.map(async (entry) => {
+          const setup = entry.engine as EngineSetup;
+          const version = entry.available ? await setup.version() : null;
+          const signedIn = version !== null ? await setup.signedIn() : null;
+          return { entry, setup, version, signedIn };
+        }),
+      ),
+    (found) =>
+      `${String(found.filter((f) => f.version !== null).length)} of ${String(found.length)} installed`,
+  );
+  const choice = await ui.select({
+    message: 'Which engine?',
+    choices: status.map(({ entry, version, signedIn }): Choice<string> => ({
+      value: entry.name,
+      label: entry.label,
+      hint: !entry.available
+        ? 'coming in a later version'
+        : version === null
+          ? `not installed · ${entry.description}`
+          : [version, signedIn === true ? 'signed in' : signedIn === false ? 'not signed in' : null]
+              .filter((part) => part !== null)
+              .join(' · '),
+      ...(!entry.available && { disabled: true }),
+    })),
+  });
+  const picked = status.find((s) => s.entry.name === choice);
+  if (!picked) return false;
+  const { entry, setup } = picked;
+
+  let version = picked.version;
+  if (version === null) {
+    if (!(await ui.confirm(`Install ${entry.label} with: ${setup.install.join(' ')}?`, true)))
+      return false;
+    await actions.run(setup.install);
+    version = await setup.version();
+    if (version === null) {
+      ui.warn(`${entry.label} still isn't on your PATH. Check the installer's output above.`);
+      return false;
+    }
+    ui.success(`${entry.label} ${version} is installed`);
+  }
+
+  const signedIn = picked.version === null ? await setup.signedIn() : picked.signedIn;
+  if (setup.signIn !== null && signedIn !== true) {
+    const ask =
+      signedIn === false
+        ? `Sign in to ${entry.label} now?`
+        : `Sign in to a provider for ${entry.label} now? (Its free models need none.)`;
+    if (await ui.confirm(ask, signedIn === false)) {
+      await actions.run(setup.signIn);
+      if ((await setup.signedIn()) === false) ui.warn(`${entry.label} still isn't signed in.`);
+    }
+  }
+  ui.success(`${entry.label} is ready`);
   return true;
 }
 

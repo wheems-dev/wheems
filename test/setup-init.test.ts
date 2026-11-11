@@ -8,6 +8,8 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { slackConnectFlow } from '../src/drivers/channel/slack/connect.js';
 import { MemoryChannel } from '../src/testing/index.js';
 import { CANCEL, scriptedUi } from './helpers/scripted-ui.js';
+import type { EngineSetup } from '../src/contracts/setup.js';
+import { StubEngine } from '../src/testing/index.js';
 import { crossCheck } from '../src/config/check.js';
 import { loadInstall } from '../src/config/load.js';
 import { readSecrets } from '../src/secrets.js';
@@ -19,7 +21,12 @@ describe('opinr setup', () => {
   let env: NodeJS.ProcessEnv;
   let calls: string[];
   let running: boolean;
+  /** The fake world: which engine CLIs exist and which are signed in. */
+  let installed: Set<string>;
+  let signedIn: Set<string>;
   beforeEach(() => {
+    installed = new Set(['claude-code']);
+    signedIn = new Set(['claude-code']);
     root = mkdtempSync(join(tmpdir(), 'opinr-setup-'));
     home = join(root, 'opinr');
     env = { OPINR_SECRETS: join(root, 'config', 'secrets.json') };
@@ -46,11 +53,44 @@ describe('opinr setup', () => {
               : Promise.resolve(id === 'UMEMBER1' || id === 'UMEMBER2' ? 'Me' : null),
         }),
       })
-      .plan('channel', 'telegram', { label: 'Telegram', description: 'chat in Telegram' });
+      .plan('channel', 'telegram', { label: 'Telegram', description: 'chat in Telegram' })
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }), {
+        label: 'Claude Code',
+        description: 'x',
+        engine: fakeEngine('claude-code', ['claude'], 'claude-opus-5-5', {
+          name: 'claude-subscription',
+          driver: 'claude',
+        }),
+      })
+      .register('engine', 'codex', () => new StubEngine({ name: 'codex' }), {
+        label: 'Codex',
+        description: 'x',
+        engine: fakeEngine('codex', ['codex', '--no-daemon'], 'gpt-6.1-sol', {
+          name: 'chatgpt-subscription',
+          driver: 'chatgpt',
+        }),
+      });
+  const fakeEngine = (
+    name: string,
+    trust: string[],
+    defaultModel: string,
+    account: { name: string; driver: string },
+  ): EngineSetup => ({
+    version: () => Promise.resolve(installed.has(name) ? '1.0.0' : null),
+    install: ['npm', 'install', '-g', `${name}-cli`],
+    signIn: [name, 'login'],
+    signedIn: () => Promise.resolve(signedIn.has(name)),
+    trust,
+    defaultModel,
+    account,
+  });
   const actions = {
-    trustFolder: (dir: string) => {
-      calls.push(`trust ${dir}`);
-      return Promise.resolve();
+    run: (command: string[], cwd?: string) => {
+      calls.push(`run ${command.join(' ')}${cwd !== undefined ? ` in ${cwd}` : ''}`);
+      const [program, ...args] = command;
+      if (program === 'npm') installed.add(args.at(-1)?.replace(/-cli$/, '') ?? '');
+      if (args[0] === 'login') signedIn.add(program ?? '');
+      return Promise.resolve(0);
     },
     installService: () => {
       calls.push('install service');
@@ -90,6 +130,7 @@ describe('opinr setup', () => {
       'personal',
       'Personal',
       'direct',
+      'claude-opus-5-5', // the model
       true, // open Claude Code to trust the folder
       'service',
       'doctor',
@@ -125,7 +166,7 @@ describe('opinr setup', () => {
     expect(calls).toEqual([
       'copy display_information:',
       'open https://api.slack.com/apps?new_app=1',
-      `trust ${join(home, 'workspaces', 'personal')}`,
+      `run claude in ${join(home, 'workspaces', 'personal')}`,
       'install service',
       'doctor',
     ]);
@@ -213,6 +254,51 @@ describe('opinr setup', () => {
     ]);
   });
 
+  it('installs an engine and signs in, then runs a workspace on it', async () => {
+    const ui = scriptedUi([
+      'engines',
+      'codex',
+      true, // install it
+      true, // sign in
+      'channels',
+      'slack',
+      false,
+      'xoxb-good',
+      'xapp-good',
+      'UMEMBER1',
+      'workspaces',
+      'work',
+      'Work',
+      'direct',
+      'codex', // which engine runs its chief of staff
+      'gpt-6.1-sol',
+      false, // open Codex to trust the folder
+      'done',
+    ]);
+    await setup({ home, env, ui, registry: registry(), actions });
+    expect(ui.remaining()).toBe(0);
+    expect(calls.filter((c) => c.startsWith('run'))).toEqual([
+      'run npm install -g codex-cli',
+      'run codex login',
+    ]);
+    const which = ui.shown.find((s) => s.message === 'Which engine?');
+    expect(which?.choices?.map((c) => [c.value, c.hint])).toEqual([
+      ['claude-code', '1.0.0 · signed in'],
+      ['codex', 'not installed · x'],
+    ]);
+    const install = await loadInstall(home);
+    expect(install.problems).toEqual([]);
+    expect(install.config?.accounts['chatgpt-subscription']).toEqual({ driver: 'chatgpt' });
+    const work = install.workspaces.find((w) => w.id === 'work');
+    expect(work?.config?.accounts).toEqual(['chatgpt-subscription']);
+    expect(work?.agents[0]?.definition).toMatchObject({
+      engine: 'codex',
+      model: 'gpt-6.1-sol',
+      account: 'chatgpt-subscription',
+    });
+    expect(crossCheck(install, { engines: ['claude-code', 'codex'] })).toEqual([]);
+  });
+
   it('keeps a new workspace when only its trust step is cancelled', async () => {
     await setup({
       home,
@@ -228,6 +314,7 @@ describe('opinr setup', () => {
         'personal',
         'Personal',
         'direct',
+        'claude-opus-5-5',
         CANCEL,
         'done',
       ]),
@@ -265,11 +352,13 @@ describe('opinr setup', () => {
         'personal',
         'Personal',
         'direct',
+        'claude-opus-5-5',
         false,
         'workspaces',
         'acme',
         'Acme: UK',
         '#acme-chat',
+        'claude-opus-5-5',
         false,
         'done',
       ]),

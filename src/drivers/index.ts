@@ -4,7 +4,9 @@ import { DriverRegistry } from '../contracts/registry.js';
 import { slackConnectFlow } from './channel/slack/connect.js';
 import { SlackChannel } from './channel/slack/slack-channel.js';
 import { SocketModeTransport } from './channel/slack/transport.js';
-import { ClaudeCodeEngine } from './engine/claude-code.js';
+import { ClaudeCodeEngine, claudeCodeSetup } from './engine/claude-code.js';
+import { CodexEngine, codexSetup } from './engine/codex.js';
+import { OpencodeEngine, opencodeSetup } from './engine/opencode.js';
 import { HerdrRuntime } from './runtime/herdr/herdr-runtime.js';
 
 const herdrOptions = z.strictObject({
@@ -42,7 +44,21 @@ export function createDriverRegistry(): DriverRegistry {
         ...(minimumVersion !== undefined && { minimumVersion }),
       });
     })
-    .register('engine', 'claude-code', () => new ClaudeCodeEngine())
+    .register('engine', 'claude-code', () => new ClaudeCodeEngine(), {
+      label: 'Claude Code',
+      description: "Anthropic's coding agent, on a Claude subscription",
+      engine: claudeCodeSetup(),
+    })
+    .register('engine', 'codex', () => new CodexEngine(), {
+      label: 'Codex',
+      description: "OpenAI's coding agent, on a ChatGPT subscription",
+      engine: codexSetup(),
+    })
+    .register('engine', 'opencode', () => new OpencodeEngine(), {
+      label: 'opencode',
+      description: 'any model, through OpenRouter, a provider key or its free models',
+      engine: opencodeSetup(),
+    })
     .register(
       'channel',
       'slack',

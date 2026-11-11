@@ -2,6 +2,7 @@ import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { HealthCheck } from '../../contracts/driver.js';
+import type { EngineSetup } from '../../contracts/setup.js';
 import {
   answersAfter,
   type AgentDefinition,
@@ -13,6 +14,7 @@ import {
   type PermissionLevel,
 } from '../../contracts/engine.js';
 import { runCommand } from '../../util/process.js';
+import { claudeTrusts } from '../../util/trust.js';
 import { extractVersion } from '../../util/version.js';
 
 export interface ClaudeCodeOptions {
@@ -42,6 +44,7 @@ export class ClaudeCodeEngine implements EngineDriver {
     hooks: true,
     permissions: true,
     resume: true,
+    status: true,
   };
   private readonly binary: string;
   private readonly configDir: string;
@@ -191,4 +194,29 @@ export function turnAnswers(jsonl: string): FinalMessage[] {
     }
   }
   return answers;
+}
+
+/** How `opinr setup` installs Claude Code and signs in. */
+export function claudeCodeSetup(binary = 'claude'): EngineSetup {
+  return {
+    version: async () => {
+      const result = await runCommand(binary, ['--version'], { timeoutMs: 15_000 });
+      return result.code === 0 ? (extractVersion(result.stdout) ?? result.stdout.trim()) : null;
+    },
+    install: ['npm', 'install', '-g', '@anthropic-ai/claude-code'],
+    signIn: [binary, 'auth', 'login'],
+    signedIn: async () => {
+      const result = await runCommand(binary, ['auth', 'status', '--json'], { timeoutMs: 15_000 });
+      if (result.code !== 0) return false;
+      try {
+        return (JSON.parse(result.stdout) as { loggedIn?: boolean }).loggedIn === true;
+      } catch {
+        return null;
+      }
+    },
+    trust: [binary],
+    trusted: (dir) => claudeTrusts(dir),
+    defaultModel: 'claude-opus-5-5',
+    account: { name: 'claude-subscription', driver: 'claude' },
+  };
 }
