@@ -39,7 +39,7 @@ TypeScript first.
 ## Installing on a new machine
 
 ```bash
-npm install -g opinr   # the same way Claude Code is installed
+npm install -g @opinr/hq   # the same way Claude Code is installed; the command is opinr
 opinr setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
 opinr init acme        # creates a workspace

@@ -12,6 +12,16 @@ Everything that extends Opinr is a driver with a contract, as in Laravel.
 > Code from Slack, one conversation per thread, with the service running under launchd. See
 > [getting started](docs/getting-started.md) and the [roadmap](docs/roadmap.md).
 
+## Install
+
+Opinr is published on npm as `@opinr/hq`; the command it installs is `opinr`. It isn't published
+yet, so for now run it from this repository (below).
+
+```bash
+npm install -g @opinr/hq
+opinr doctor
+```
+
 ## Try it
 
 Requires Node.js 22.12 or later, and Herdr core 0.1.20 or later (`hc`) for the runtime checks.
@@ -53,16 +63,16 @@ The tests run the runtime contract suite against the real `hc` when it is instal
 core of their own so your terminals are never touched; `OPINR_TEST_HC=0` turns that off. They
 also run it against a fake `hc`, which is what CI uses.
 
-| Folder                       | What is in it                                                            |
-| ---------------------------- | ------------------------------------------------------------------------ |
-| `src/cli/`                   | The `opinr` command                                                      |
-| `src/config/`                | Config schemas, loading with line numbers, and checks across files       |
-| `src/contracts/`             | Driver contracts: runtime, engine, channel, and the registry             |
-| `src/drivers/runtime/herdr/` | The Herdr runtime driver; `hc.ts` is the only module that calls `hc`     |
-| `src/doctor/`                | `opinr doctor`                                                           |
-| `src/testing/`               | Contract test suites and in-memory drivers, published as `opinr/testing` |
-| `schemas/`                   | JSON Schemas for the config formats                                      |
-| `examples/install/`          | A complete example install                                               |
+| Folder                       | What is in it                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `src/cli/`                   | The `opinr` command                                                          |
+| `src/config/`                | Config schemas, loading with line numbers, and checks across files           |
+| `src/contracts/`             | Driver contracts: runtime, engine, channel, and the registry                 |
+| `src/drivers/runtime/herdr/` | The Herdr runtime driver; `hc.ts` is the only module that calls `hc`         |
+| `src/doctor/`                | `opinr doctor`                                                               |
+| `src/testing/`               | Contract test suites and in-memory drivers, published as `@opinr/hq/testing` |
+| `schemas/`                   | JSON Schemas for the config formats                                          |
+| `examples/install/`          | A complete example install                                                   |
 
 ## Licence
 

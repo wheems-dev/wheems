@@ -72,19 +72,19 @@ driver.
 ## Contract tests
 
 Each driver type ships a test suite that any driver of that type must pass, published as
-`opinr/testing`. A plugin written by an agent, by you or by a stranger is checked against the
+`@opinr/hq/testing`. A plugin written by an agent, by you or by a stranger is checked against the
 same contract before it's switched on. The suites use [Vitest](https://vitest.dev).
 
 ```ts
 // my-runtime.test.ts
-import { runtimeContract } from 'opinr/testing';
+import { runtimeContract } from '@opinr/hq/testing';
 import { MyRuntime } from './my-runtime.js';
 
 runtimeContract('my-runtime', { create: () => new MyRuntime() });
 ```
 
 ```ts
-import { engineContract, channelContract } from 'opinr/testing';
+import { engineContract, channelContract } from '@opinr/hq/testing';
 
 engineContract('gemini', {
   create: () => new GeminiEngine(),
@@ -100,7 +100,7 @@ channelContract('discord', {
 });
 ```
 
-`opinr/testing` also exports in-memory reference drivers: `MemoryRuntime` (simulated programs),
+`@opinr/hq/testing` also exports in-memory reference drivers: `MemoryRuntime` (simulated programs),
 `MemoryChannel` (messages kept in memory) and `StubEngine`. The suites run against them in this
 repository's own tests, and later milestones use them to test the service without Herdr or
 Slack.
