@@ -248,7 +248,14 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
     ].join('\n'),
     'Trust the folder',
   );
-  if (await ui.confirm('Open Claude Code there now?', true)) await options.actions.trustFolder(dir);
+  try {
+    if (await ui.confirm('Open Claude Code there now?', true))
+      await options.actions.trustFolder(dir);
+  } catch (error) {
+    if (!(error instanceof SetupCancelled)) throw error;
+    // The workspace is made; only the trust step was skipped.
+    ui.info(`The workspace is saved. Trust its folder later: cd ${dir} && claude`);
+  }
   return true;
 }
 

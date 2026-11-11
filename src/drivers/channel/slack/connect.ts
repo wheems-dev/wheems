@@ -46,10 +46,35 @@ export function slackConnectFlow(options: SlackConnectOptions = {}): ConnectFlow
         secret = undefined;
       }
 
+      const replaced = secret === undefined;
       if (secret === undefined) secret = await newTokens(ui, context, verify);
       const botToken = secret.bot_token ?? '';
 
       let allowedUsers = context.allowedUsers;
+      if (replaced && allowedUsers.length > 0) {
+        // New tokens may be for another Slack workspace, where these member ids mean nothing.
+        const still = await ui.task(
+          'Checking who may talk to agents in this Slack workspace',
+          async () => {
+            const found: string[] = [];
+            for (const id of allowedUsers) {
+              if (
+                await memberName(botToken, id).then(
+                  () => true,
+                  () => false,
+                )
+              )
+                found.push(id);
+            }
+            return found;
+          },
+          (found) =>
+            found.length === allowedUsers.length
+              ? 'Everyone allowed before is in this Slack workspace'
+              : `${String(allowedUsers.length - found.length)} allowed member(s) aren't in this Slack workspace`,
+        );
+        allowedUsers = still;
+      }
       if (allowedUsers.length === 0) {
         ui.note(
           [

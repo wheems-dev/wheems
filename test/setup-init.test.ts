@@ -148,6 +148,70 @@ describe('opinr setup', () => {
     expect(menu?.choices?.find((c) => c.value === 'channels')?.hint).toBe('Slack connected');
   });
 
+  it('checks who may talk to agents when the Slack app is replaced', async () => {
+    await setup({
+      home,
+      env,
+      ui: scriptedUi(['channels', 'slack', false, 'xoxb-good', 'xapp-good', 'UMEMBER1', 'done']),
+      registry: registry(),
+      actions,
+    });
+    // UMEMBER1 is not in the other Slack workspace, so setup asks again.
+    const other = new DriverRegistry().register('channel', 'slack', () => new MemoryChannel(), {
+      label: 'Slack',
+      description: 'x',
+      connect: slackConnectFlow({
+        verifyTokens: (bot) =>
+          bot === 'xoxb-good'
+            ? Promise.resolve({ team: 'Home', botUser: 'opinr' })
+            : Promise.resolve({ team: 'Work', botUser: 'opinr' }),
+        memberName: (bot, id) =>
+          bot === 'xoxb-work' && id === 'UWORKER1'
+            ? Promise.resolve('Me at work')
+            : Promise.reject(new Error(`Slack has no member ${id}`)),
+      }),
+    });
+    const ui = scriptedUi([
+      'channels',
+      'slack',
+      false,
+      false,
+      'xoxb-work',
+      'xapp-work',
+      'UWORKER1',
+      'done',
+    ]);
+    await setup({ home, env, ui, registry: other, actions });
+    expect(ui.remaining()).toBe(0);
+    expect((await loadInstall(home)).config?.connections.slack?.allowed_users).toEqual([
+      'UWORKER1',
+    ]);
+  });
+
+  it('keeps a new workspace when only its trust step is cancelled', async () => {
+    await setup({
+      home,
+      env,
+      ui: scriptedUi([
+        'channels',
+        'slack',
+        false,
+        'xoxb-good',
+        'xapp-good',
+        'UMEMBER1',
+        'workspaces',
+        'personal',
+        'Personal',
+        'direct',
+        CANCEL,
+        'done',
+      ]),
+      registry: registry(),
+      actions,
+    });
+    expect((await loadInstall(home)).workspaces.map((w) => w.id)).toEqual(['personal']);
+  });
+
   it('goes back to the menu when a step is cancelled, saving nothing from it', async () => {
     const ui = scriptedUi(['channels', 'slack', CANCEL, 'done']);
     await setup({ home, env, ui, registry: registry(), actions });
