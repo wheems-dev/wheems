@@ -375,8 +375,10 @@ export class ConversationManager {
         }
         await unmarkSeen();
         if (watch.queued.length === 0) return done(null);
-        // Messages arrived during that turn. Follow the turn that answers them, if one starts.
-        watch.seen = watch.queued.splice(0);
+        // Messages arrived during that turn. The agent takes queued messages a turn at a
+        // time (or several in one), so follow the next turn for the oldest of them, and keep
+        // the rest queued for the turns after.
+        watch.seen = watch.queued.splice(0, 1);
         watch.fromTurn = session.turn;
         watch.sentAt = Date.now();
         startBy = Date.now() + this.options.followUpSeconds * 1000;

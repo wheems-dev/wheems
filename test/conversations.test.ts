@@ -199,7 +199,7 @@ describe('conversations', () => {
     ]);
   });
 
-  it('answers a message sent while the agent was busy, in the turn after', async () => {
+  it('answers messages sent while the agent was busy, in the turns after', async () => {
     behaviour = () => 'answer';
     await manager.stop();
     runtime = new MemoryRuntime({
@@ -214,10 +214,12 @@ describe('conversations', () => {
     const first = await dm('one');
     await new Promise((r) => setTimeout(r, 20));
     await dm('two', first);
+    await dm('three', first);
     await settle();
     expect(posts()).toEqual([
       { thread: first, text: 'answer: one' },
       { thread: first, text: 'answer: two' },
+      { thread: first, text: 'answer: three' },
     ]);
     expect([...channel.reactions.values()].every((set) => set.size === 0)).toBe(true);
   });
