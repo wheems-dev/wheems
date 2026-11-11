@@ -797,6 +797,29 @@ describe('conversations', () => {
       expect(stored()[key]?.noting).toBeUndefined();
     });
 
+    it("keeps a message out of a note turn's session that can't be stopped, and says so", async () => {
+      behaviour = (line) => (isNoteRequest(line) ? 'silent' : 'answer');
+      const first = await dm('one');
+      await settle();
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      await manager.sweepNotes(later());
+      await settle();
+      const stop = runtime.stop.bind(runtime);
+      runtime.stop = () => Promise.reject(new Error('hc refused'));
+      await dm('two', first);
+      await settle();
+      expect(received.get(session.id)?.filter((l) => !isNoteRequest(l))).toEqual(['one']);
+      expect(posts().at(-1)?.text).toMatch(/Couldn't stop the agent's session/);
+      expect(stored()[key]?.noting).toBe(true);
+      // Once it can be stopped, the next message goes through.
+      runtime.stop = stop;
+      await dm('three', first);
+      await settle();
+      expect(posts().at(-1)?.text).toBe('answer: three');
+      expect(stored()[key]?.noting).toBeUndefined();
+    });
+
     it('loads the page about the person and the brief into the instructions', async () => {
       writeFileSync(join(home, 'about-you.md'), '# About me\n\nI like short answers.');
       writeFileSync(

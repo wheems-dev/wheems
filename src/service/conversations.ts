@@ -789,12 +789,25 @@ export class ConversationManager {
     }
   }
 
-  private async stopSession(session: SessionInfo): Promise<void> {
+  /** Stops and removes a session. Returns whether it is no longer running. */
+  private async stopSession(session: SessionInfo): Promise<boolean> {
     this.options.log(
       `Stopping idle session ${session.name ?? session.id}; its conversation resumes when needed`,
     );
     await this.options.runtime.stop(session.id).catch(() => undefined);
     await this.options.runtime.remove(session.id).catch(() => undefined);
+    const after = await this.options.runtime.get(session.id).catch(() => undefined);
+    return after !== undefined && after?.state !== 'live';
+  }
+
+  /** Stops a note turn's session; only once it has certainly stopped is the turn over. */
+  private async endNoteTurn(key: string, binding: Binding, session: SessionInfo): Promise<boolean> {
+    if (!(await this.stopSession(session))) {
+      this.options.log(`Could not stop ${session.name ?? session.id} after its note turn`);
+      return false;
+    }
+    await this.afterStopped(key, binding);
+    return true;
   }
 
   /**
@@ -834,9 +847,8 @@ export class ConversationManager {
     // A note turn that didn't end could answer at any time, and that answer would be taken for
     // the reply to the next message. Stop its session instead; the conversation resumes.
     this.options.log(`${conversation.sessionName} did not finish its note in time; stopping it`);
-    const current = await this.options.runtime.get(session.id);
-    if (current?.state === 'live') await this.stopSession(current);
-    await this.afterStopped(key, binding);
+    // If it can't be stopped, it stays marked as noting, and the next message settles it.
+    await this.endNoteTurn(key, binding, session);
   }
 
   /** A note turn's session has ended: skip any answer it wrote before it did. No more can come. */
@@ -857,7 +869,13 @@ export class ConversationManager {
       await this.untilSettled(key, session.id, this.conversationFor(key, binding));
       if (await this.skipNoteAnswers(key, binding)) return;
       this.options.log(`${session.name ?? session.id}'s note turn gave no answer; stopping it`);
-      await this.stopSession(session);
+      if (!(await this.endNoteTurn(key, binding, session))) {
+        // Its answer could still come and be taken for this message's reply: don't send it in.
+        throw new Error(
+          `Couldn't stop the agent's session after Opinr asked it for a note, so this message wasn't sent. Its session is \`${session.id}\` in Herdr; try again shortly.`,
+        );
+      }
+      return;
     }
     // No session, so no answer can come any more.
     await this.afterStopped(key, binding);
