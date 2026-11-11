@@ -32,6 +32,8 @@ export interface EngineCapabilities {
   hooks: boolean;
   /** Has permission settings the framework can write. */
   permissions: boolean;
+  /** Can carry on an earlier conversation by its session id. */
+  resume: boolean;
 }
 
 /** An agent as config defines it: front matter plus the Markdown body. */
@@ -44,15 +46,32 @@ export interface AgentDefinition {
   account: string;
   skills: string[];
   integrations: string[];
+  /**
+   * How much the agent may do without asking. `ask`: the engine's normal prompts.
+   * `auto`: the engine decides routine actions itself and asks for risky ones.
+   * `skip`: never asks.
+   */
+  permissions: PermissionLevel;
   /** The Markdown body of the agent file. */
   instructions: string;
 }
+
+export type PermissionLevel = 'ask' | 'auto' | 'skip';
 
 export interface EngineContext {
   workspace: { id: string; dir: string };
   /** The folder the agent's session runs in. Plan file paths are relative to it. */
   sessionDir: string;
   account: { name: string; driver: string };
+  /** The conversation this launch is for. */
+  session: {
+    /** A UUID that names the conversation in the engine, stable across restarts. */
+    id: string;
+    /** True when the engine has had this conversation before and should carry it on. */
+    resume: boolean;
+    /** The first thing to say to the agent, or null to start it idle. */
+    task: string | null;
+  };
 }
 
 export interface LaunchPlan {

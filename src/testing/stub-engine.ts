@@ -22,6 +22,7 @@ export class StubEngine implements EngineDriver {
     mcp: false,
     hooks: false,
     permissions: false,
+    resume: true,
   };
   private readonly command: string[];
 
@@ -38,12 +39,16 @@ export class StubEngine implements EngineDriver {
 
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan> {
     return Promise.resolve({
-      command: [...this.command],
+      command: [...this.command, ...(context.session.resume ? ['--resume'] : [])],
       cwd: join(context.sessionDir),
       env: {
         OPINR_AGENT: agent.name,
         OPINR_MODEL: agent.model,
         OPINR_WORKSPACE: context.workspace.id,
+        STUB_SESSION: context.session.id,
+        STUB_RESUME: context.session.resume ? '1' : '0',
+        STUB_PERMISSIONS: agent.permissions,
+        ...(context.session.task !== null && { STUB_TASK: context.session.task }),
       },
       files: [{ path: this.capabilities.instructionsFile, content: `${agent.instructions}\n` }],
     });

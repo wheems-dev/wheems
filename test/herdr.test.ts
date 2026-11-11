@@ -182,6 +182,31 @@ describe('herdr runtime', () => {
     ]);
   });
 
+  it("reads an agent's status whether hc reports the word or the whole record", async () => {
+    const herdr = runtime();
+    const session = await herdr.start({ name: 'agent', command: ['fake-agent'], env: { A: 'b' } });
+    expect((await herdr.get(session.id))?.status).toBe('idle');
+    const sent = await herdr.send(session.id, 'hi');
+    expect(sent).toMatchObject({ turn: 0, status: 'idle' });
+    expect(await herdr.wait(session.id, { timeoutSeconds: 1 })).toMatchObject({
+      ended: true,
+      reason: 'status',
+      status: 'done',
+      turn: 1,
+    });
+    expect((await herdr.get(session.id))?.status).toBe('done');
+    expect((await herdr.list()).find((s) => s.id === session.id)?.status).toBe('done');
+    // hc run has no env option, so the driver puts env(1) in front.
+    expect((await herdr.get(session.id))?.command).toEqual(['/usr/bin/env', 'A=b', 'fake-agent']);
+  });
+
+  it('refuses environment variable names that env(1) would misread', async () => {
+    await expectDriverError(
+      runtime().start({ name: 'x', command: ['sleep', '1'], env: { 'BAD=NAME': 'v' } }),
+      'invalid',
+    );
+  });
+
   it('refuses a session without a command', async () => {
     await expectDriverError(runtime().start({ name: 'x', command: [] }), 'invalid');
   });

@@ -7,8 +7,18 @@ import { defaultHome, runDoctor, type DoctorReport } from '../src/doctor/doctor.
 import { HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
 import { formatReport } from '../src/cli/program.js';
 import { fakeHc, type FakeHc } from './helpers/hc.js';
+import { initWorkspace } from '../src/cli/commands/init.js';
+import { installYaml } from '../src/cli/templates.js';
+import { writeSecret } from '../src/secrets.js';
+import { MemoryChannel, StubEngine } from '../src/testing/index.js';
 
 const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
+
+/** Doctor never looks at the real launchd or Claude Code config in tests. */
+const probes = {
+  service: () => Promise.resolve({ installed: false, answering: false }),
+  claudeTrust: () => Promise.resolve(true),
+};
 
 describe('doctor', () => {
   const cleanups: (() => void)[] = [];
@@ -46,6 +56,7 @@ describe('doctor', () => {
       rmSync(home, { recursive: true, force: true });
     });
     const report = await runDoctor({
+      ...probes,
       home,
       registry: registryWith().registry,
       nodeVersion: '22.12.0',
@@ -62,6 +73,7 @@ describe('doctor', () => {
 
   it('checks the example install and warns about engines without drivers', async () => {
     const report = await runDoctor({
+      ...probes,
       home: EXAMPLE,
       registry: registryWith().registry,
       quick: true,
@@ -86,6 +98,7 @@ describe('doctor', () => {
     });
     writeFileSync(join(home, 'install.yaml'), 'herdr: { version: 0.1.25 }\nmachines: { a: {} }\n');
     const report = await runDoctor({
+      ...probes,
       home,
       registry: registryWith().registry,
       nodeVersion: '20.19.0',
@@ -107,9 +120,55 @@ describe('doctor', () => {
       rmSync(home, { recursive: true, force: true });
     });
     writeFileSync(join(home, 'install.yaml'), 'herdr: { version: 0.2.0 }\n');
-    const report = await runDoctor({ home, registry: registryWith().registry });
+    const report = await runDoctor({ home, registry: registryWith().registry, ...probes });
     expect(report.ok).toBe(false);
     expect(statuses(report)['Herdr core']).toEqual(['pass hc installed', 'fail hc version']);
+  });
+
+  it('checks engines, folder trust, chat connections and the service once there is an install', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    const { registry } = registryWith();
+    registry
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
+      .register('channel', 'slack', (options) => {
+        if (options.bot_token === undefined) throw new Error('Invalid slack options: no bot_token');
+        return new MemoryChannel();
+      });
+    const env = { OPINR_SECRETS: join(home, 'secrets.json') };
+    const before = await runDoctor({
+      home,
+      registry,
+      env,
+      quick: true,
+      service: () => Promise.resolve({ installed: false, answering: false }),
+      claudeTrust: () => Promise.resolve(false),
+    });
+    expect(statuses(before).Agents).toEqual(['pass claude-code engine', 'warn personal folder']);
+    expect(statuses(before).Channels).toEqual(['warn slack allowed users', 'fail slack']);
+    expect(statuses(before).Service).toEqual(['warn service']);
+    expect(before.ok).toBe(false);
+
+    await writeSecret(env.OPINR_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
+    const after = await runDoctor({
+      home,
+      registry,
+      env,
+      quick: true,
+      service: () => Promise.resolve({ installed: true, answering: true }),
+      claudeTrust: () => Promise.resolve(true),
+    });
+    expect(statuses(after).Agents).toEqual(['pass claude-code engine', 'pass personal folder']);
+    expect(statuses(after).Channels).toEqual([
+      'warn slack allowed users',
+      'pass slack: memory channel',
+    ]);
+    expect(statuses(after).Service).toEqual(['pass service']);
+    expect(after.ok).toBe(true);
   });
 
   it('uses OPINR_HOME, then ~/opinr', () => {

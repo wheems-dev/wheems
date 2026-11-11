@@ -175,6 +175,7 @@ describe('agent files', () => {
       account: 'openrouter',
       skills: [],
       integrations: [],
+      permissions: 'ask',
       instructions: '# Writer\n\nWrite posts.',
     });
   });

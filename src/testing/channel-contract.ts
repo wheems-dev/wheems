@@ -93,6 +93,7 @@ export function channelContract(label: string, options: ChannelContractOptions):
       expect(event.messageId).toBeTruthy();
       expect(event.userId).toBeTruthy();
       expect(event.receivedAt).toBeInstanceOf(Date);
+      expect(event.type === 'message' && event.direct).toBe(false);
     });
 
     it('refuses to start twice', async () => {
@@ -165,6 +166,29 @@ export function channelContract(label: string, options: ChannelContractOptions):
         messageId: sent.messageId,
         buttonId: 'yes',
       });
+    });
+
+    it('marks messages with reactions, or refuses reactions it cannot add', async () => {
+      await driver.start(handler);
+      const sent = await driver.send({ channel: options.channel, text: 'contract: react to me' });
+      const ref = { channel: options.channel, messageId: sent.messageId };
+      if (!driver.capabilities.reactions) {
+        await expectDriverError(driver.react(ref, 'eyes', true), 'unsupported');
+        return;
+      }
+      await driver.react(ref, 'eyes', true);
+      await driver.react(ref, 'eyes', false);
+    });
+
+    it('sends a message with an identity, whether or not it can show it', async () => {
+      await driver.start(handler);
+      const sent = await driver.send({
+        channel: options.channel,
+        text: 'contract: from a named bot',
+        identity: { name: 'Contract bot', icon: ':robot_face:' },
+      });
+      expect(sent.messageId).toBeTruthy();
+      expect(typeof driver.capabilities.identities).toBe('boolean');
     });
 
     it('stops delivering after stop, and stop can be called twice', async () => {

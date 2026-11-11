@@ -18,6 +18,7 @@ import {
 runtimeContract('memory', {
   create: () => new MemoryRuntime(),
   echoCommand: ['echo-line'],
+  envCommand: ['echo-env'],
   longCommand: ['sleep', '600'],
 });
 
@@ -39,7 +40,8 @@ channelContract('memory', {
 });
 
 channelContract('memory without threads or buttons', {
-  create: () => new MemoryChannel({ threads: false, buttons: false }),
+  create: () =>
+    new MemoryChannel({ threads: false, buttons: false, reactions: false, identities: false }),
   channel: 'general',
   simulateMessage: async (driver, message) => {
     await (driver as MemoryChannel).receive(message);
@@ -86,6 +88,7 @@ describe('channel helpers', () => {
       channel: 'c',
       userId: 'u',
       text: 't',
+      direct: false,
       receivedAt: new Date(),
     };
     expect(replyThread({ ...base, messageId: '1', threadId: null })).toBe('1');

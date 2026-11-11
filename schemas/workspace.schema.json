@@ -37,25 +37,50 @@
         "pattern": "^[a-z0-9][a-z0-9-]*$"
       },
       "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "connection": {
-            "type": "string",
-            "maxLength": 64,
-            "pattern": "^[a-z0-9][a-z0-9-]*$",
-            "description": "The install connection that carries it, such as `slack`."
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "connection": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "The install connection that carries it, such as `slack`."
+              },
+              "channel": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The channel's id or name in that service."
+              }
+            },
+            "required": [
+              "connection",
+              "channel"
+            ],
+            "additionalProperties": false
           },
-          "channel": {
-            "type": "string",
-            "minLength": 1,
-            "description": "The channel's id or name in that service."
+          {
+            "type": "object",
+            "properties": {
+              "connection": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "The install connection that carries it, such as `slack`."
+              },
+              "direct": {
+                "type": "boolean",
+                "const": true,
+                "description": "Direct messages with the connection's bot. Only one workspace per connection can have them."
+              }
+            },
+            "required": [
+              "connection",
+              "direct"
+            ],
+            "additionalProperties": false
           }
-        },
-        "required": [
-          "connection",
-          "channel"
-        ],
-        "additionalProperties": false
+        ]
       }
     },
     "integrations": {
@@ -103,6 +128,25 @@
       "type": "string",
       "maxLength": 64,
       "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "identity": {
+      "description": "The name and icon the workspace's posts appear under, where the channel supports it.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "icon": {
+          "description": "An emoji such as `:house:`, or an image URL.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
     },
     "rules": {
       "default": [],

@@ -47,6 +47,16 @@
         "maxLength": 64,
         "pattern": "^[a-z0-9][a-z0-9-]*$"
       }
+    },
+    "permissions": {
+      "default": "ask",
+      "description": "How much the agent may do without asking. `ask`: the engine's normal prompts. `auto`: the engine allows routine actions and asks for risky ones. `skip`: never asks.",
+      "type": "string",
+      "enum": [
+        "ask",
+        "auto",
+        "skip"
+      ]
     }
   },
   "required": [

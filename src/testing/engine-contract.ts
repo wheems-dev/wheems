@@ -33,12 +33,14 @@ export function engineContract(label: string, options: EngineContractOptions): v
       account: 'contract-account',
       skills: [],
       integrations: [],
+      permissions: 'ask',
       instructions: '# Contract agent\n\nReply with the word ready.',
     };
     const context: EngineContext = {
       workspace: { id: 'contract', dir: `${root}/workspaces/contract` },
       sessionDir: `${root}/workspaces/contract/sessions/contract-agent`,
       account: { name: 'contract-account', driver: options.accountDriver },
+      session: { id: '6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f', resume: false, task: null },
     };
 
     beforeAll(async () => {
@@ -54,7 +56,7 @@ export function engineContract(label: string, options: EngineContractOptions): v
     it('declares its capabilities', () => {
       const caps = driver.capabilities;
       expect(caps.instructionsFile).toMatch(/^[^/\\]+$/);
-      for (const key of ['skills', 'mcp', 'hooks', 'permissions'] as const) {
+      for (const key of ['skills', 'mcp', 'hooks', 'permissions', 'resume'] as const) {
         expect(typeof caps[key]).toBe('boolean');
       }
     });
@@ -105,6 +107,39 @@ export function engineContract(label: string, options: EngineContractOptions): v
 
     it('plans the same launch for the same agent', async () => {
       expect(await driver.prepare(agent, context)).toEqual(await driver.prepare(agent, context));
+    });
+
+    it('names the conversation by its session id, and carries it on when resuming', async (ctx) => {
+      const fresh = await driver.prepare(agent, context);
+      expect(JSON.stringify(fresh)).toContain(context.session.id);
+      if (!driver.capabilities.resume) {
+        ctx.skip();
+        return;
+      }
+      const resumed = await driver.prepare(agent, {
+        ...context,
+        session: { ...context.session, resume: true },
+      });
+      expect(JSON.stringify(resumed)).toContain(context.session.id);
+      expect(resumed.command).not.toEqual(fresh.command);
+    });
+
+    it('hands the agent its first task', async () => {
+      const task = 'Say the word ready, then wait. --not-an-option';
+      const plan = await driver.prepare(agent, {
+        ...context,
+        session: { ...context.session, task },
+      });
+      expect(JSON.stringify([plan.command, plan.env, plan.files])).toContain(
+        JSON.stringify(task).slice(1, -1),
+      );
+    });
+
+    it('plans every permission level', async () => {
+      for (const permissions of ['ask', 'auto', 'skip'] as const) {
+        const plan = await driver.prepare({ ...agent, permissions }, context);
+        expect(plan.command.length).toBeGreaterThan(0);
+      }
     });
   });
 }

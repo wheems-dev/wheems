@@ -8,6 +8,7 @@ import {
   type SendOptions,
   type SendResult,
   type SessionInfo,
+  type SessionStatus,
   type StartOptions,
   type WaitOptions,
   type WaitResult,
@@ -17,19 +18,38 @@ import {
 export interface ProgramIo {
   print(text: string): void;
   exit(code: number): void;
+  /** Reports a status, as agent programs do. `working` starts a new turn. */
+  status(status: SessionStatus): void;
 }
 
-/** A simulated program: it gets each line typed into it. */
+/** A simulated program: it may act on start, and gets each line typed into it. */
 export interface Program {
+  start?(io: ProgramIo): void;
   input(line: string, io: ProgramIo): void;
 }
 
-export type ProgramFactory = (args: string[]) => Program;
+export interface ProgramContext {
+  args: string[];
+  env: Record<string, string>;
+  cwd: string;
+  /** The session's id in the runtime. */
+  sessionId: string;
+}
+
+export type ProgramFactory = (context: ProgramContext) => Program;
 
 /** Prints `got:<line>` for the first line it reads, then exits 0. */
 export const echoLineProgram: ProgramFactory = () => ({
   input(line, io) {
     io.print(`got:${line}`);
+    io.exit(0);
+  },
+});
+
+/** Prints `got:<value of CONTRACT_VALUE>` once it reads a line, then exits 0. */
+export const echoEnvProgram: ProgramFactory = ({ env }) => ({
+  input(_line, io) {
+    io.print(`got:${env.CONTRACT_VALUE ?? ''}`);
     io.exit(0);
   },
 });
@@ -40,8 +60,9 @@ export const sleepProgram: ProgramFactory = () => ({ input: () => undefined });
 interface MemorySession {
   info: SessionInfo;
   program: Program;
+  io: ProgramIo;
   screen: string[];
-  exitWaiters: (() => void)[];
+  waiters: (() => void)[];
 }
 
 /**
@@ -56,7 +77,12 @@ export class MemoryRuntime implements RuntimeDriver {
   private nextId = 1;
 
   constructor(programs: Record<string, ProgramFactory> = {}) {
-    this.programs = { 'echo-line': echoLineProgram, sleep: sleepProgram, ...programs };
+    this.programs = {
+      'echo-line': echoLineProgram,
+      'echo-env': echoEnvProgram,
+      sleep: sleepProgram,
+      ...programs,
+    };
   }
 
   check(): Promise<HealthCheck[]> {
@@ -100,24 +126,52 @@ export class MemoryRuntime implements RuntimeDriver {
       exitCode: null,
       labels: { ...options.labels },
     };
-    this.sessions.set(info.id, { info, program: factory(args), screen: [], exitWaiters: [] });
-    return Promise.resolve({ ...info, labels: { ...info.labels } });
+    const session: MemorySession = {
+      info,
+      program: factory({ args, env: { ...options.env }, cwd: info.cwd, sessionId: info.id }),
+      screen: [],
+      waiters: [],
+      io: {
+        print: (line) => session.screen.push(line),
+        exit: (code) => {
+          this.finish(session, code);
+        },
+        status: (status) => {
+          if (session.info.state !== 'live') return;
+          if (status === 'working' && session.info.status !== 'working') session.info.turn++;
+          session.info.status = status;
+          if (status !== 'working') this.wake(session);
+        },
+      },
+    };
+    this.sessions.set(info.id, session);
+    const snapshot = copy(info);
+    // Like a real runtime, start returns before the program has done anything.
+    setTimeout(() => {
+      if (session.info.state === 'live') session.program.start?.(session.io);
+    }, 0);
+    return Promise.resolve(snapshot);
   }
 
-  send(id: string, text: string, _options: SendOptions = {}): Promise<SendResult> {
+  send(id: string, text: string, options: SendOptions = {}): Promise<SendResult> {
     const session = this.find(id);
     if (!session) return Promise.reject(this.notFound(id));
     if (session.info.state === 'finished') {
       return Promise.reject(new DriverError(this.name, 'failed', `Session ${id} has finished`));
     }
+    if (session.info.status === 'blocked') {
+      return Promise.reject(new DriverError(this.name, 'blocked', `Session ${id} needs a person`));
+    }
+    if (options.ifStatus !== undefined && session.info.status !== options.ifStatus) {
+      return Promise.reject(
+        new DriverError(this.name, 'failed', `Session ${id} is not ${options.ifStatus}`),
+      );
+    }
+    const turn = session.info.turn;
+    const status = session.info.status;
     session.screen.push(text);
-    session.program.input(text, {
-      print: (line) => session.screen.push(line),
-      exit: (code) => {
-        this.finish(session, code);
-      },
-    });
-    return Promise.resolve({ turn: session.info.turn, status: session.info.status, wait: null });
+    session.program.input(text, session.io);
+    return Promise.resolve({ turn, status, wait: null });
   }
 
   read(id: string, _options: ReadOptions = {}): Promise<ReadResult> {
@@ -129,18 +183,21 @@ export class MemoryRuntime implements RuntimeDriver {
   async wait(id: string, options: WaitOptions = {}): Promise<WaitResult> {
     const session = this.find(id);
     if (!session) throw this.notFound(id);
-    if (session.info.state === 'live') {
+    const settled = () =>
+      session.info.state === 'finished' ||
+      (session.info.status !== null && session.info.status !== 'working');
+    if (!settled()) {
       const ms = (options.timeoutSeconds ?? 180) * 1000;
-      const exited = await new Promise<boolean>((resolve) => {
+      const woke = await new Promise<boolean>((resolve) => {
         const timer = setTimeout(() => {
           resolve(false);
         }, ms);
-        session.exitWaiters.push(() => {
+        session.waiters.push(() => {
           clearTimeout(timer);
           resolve(true);
         });
       });
-      if (!exited) {
+      if (!woke) {
         return {
           ended: false,
           reason: 'timeout',
@@ -152,7 +209,7 @@ export class MemoryRuntime implements RuntimeDriver {
     }
     return {
       ended: true,
-      reason: 'exit',
+      reason: session.info.state === 'finished' ? 'exit' : 'status',
       status: session.info.status,
       exitCode: session.info.exitCode,
       turn: session.info.turn,
@@ -161,9 +218,7 @@ export class MemoryRuntime implements RuntimeDriver {
 
   get(id: string): Promise<SessionInfo | null> {
     const session = this.find(id);
-    return Promise.resolve(
-      session ? { ...session.info, labels: { ...session.info.labels } } : null,
-    );
+    return Promise.resolve(session ? copy(session.info) : null);
   }
 
   list(options: ListOptions = {}): Promise<SessionInfo[]> {
@@ -172,7 +227,7 @@ export class MemoryRuntime implements RuntimeDriver {
       [...this.sessions.values()]
         .filter((s) => s.info.state === 'live')
         .filter((s) => wanted.every(([k, v]) => s.info.labels[k] === v))
-        .map((s) => ({ ...s.info, labels: { ...s.info.labels } })),
+        .map((s) => copy(s.info)),
     );
   }
 
@@ -180,7 +235,7 @@ export class MemoryRuntime implements RuntimeDriver {
     const session = this.find(id);
     if (!session) return Promise.reject(this.notFound(id));
     if (session.info.state === 'live') this.finish(session, null);
-    return Promise.resolve({ ...session.info });
+    return Promise.resolve(copy(session.info));
   }
 
   remove(id: string): Promise<void> {
@@ -196,7 +251,11 @@ export class MemoryRuntime implements RuntimeDriver {
   private finish(session: MemorySession, code: number | null): void {
     session.info.state = 'finished';
     session.info.exitCode = code;
-    for (const wake of session.exitWaiters.splice(0)) wake();
+    this.wake(session);
+  }
+
+  private wake(session: MemorySession): void {
+    for (const wake of session.waiters.splice(0)) wake();
   }
 
   private find(idOrName: string): MemorySession | undefined {
@@ -209,4 +268,8 @@ export class MemoryRuntime implements RuntimeDriver {
   private notFound(id: string): DriverError {
     return new DriverError(this.name, 'not_found', `No session "${id}"`);
   }
+}
+
+function copy(info: SessionInfo): SessionInfo {
+  return { ...info, labels: { ...info.labels }, command: info.command ? [...info.command] : null };
 }

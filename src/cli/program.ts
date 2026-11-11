@@ -1,29 +1,44 @@
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { text as readStream } from 'node:stream/consumers';
 import { styleText } from 'node:util';
 import { Command, CommanderError } from 'commander';
 import { crossCheck } from '../config/check.js';
 import { loadInstall, validateFile, type Problem } from '../config/load.js';
 import type { HealthCheck } from '../contracts/driver.js';
+import type { DriverRegistry } from '../contracts/registry.js';
 import { createDriverRegistry } from '../drivers/index.js';
+import { slackManifest } from '../drivers/channel/slack/setup.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
 import { stat } from 'node:fs/promises';
+import { initWorkspace } from './commands/init.js';
+import { registerReply } from './commands/reply.js';
+import { registerService } from './commands/service.js';
+import { setup } from './commands/setup.js';
+import { terminalPrompter, type Prompter } from './prompt.js';
+import { packageVersion } from './version.js';
+
+export { packageVersion };
 
 export interface Io {
   out: (text: string) => void;
   err: (text: string) => void;
   env: NodeJS.ProcessEnv;
   color: boolean;
+  registry: () => DriverRegistry;
+  prompter: () => Prompter;
+  stdin: () => Promise<string>;
 }
 
-export function packageVersion(): string {
-  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version: string;
+/** The parts of Io that tests rarely need to replace. */
+export function defaultIo(): Pick<Io, 'registry' | 'prompter' | 'stdin'> {
+  return {
+    registry: createDriverRegistry,
+    prompter: terminalPrompter,
+    stdin: () => readStream(process.stdin),
   };
-  return pkg.version;
 }
 
-/** Builds the `opinr` command. Milestone 0 has doctor and validate; later milestones add the rest. */
+/** Builds the `opinr` command. */
 export function createProgram(io: Io): Command {
   const program = new Command('opinr')
     .description('An opinionated framework for running teams of AI agents, on Herdr core')
@@ -41,8 +56,9 @@ export function createProgram(io: Io): Command {
     .action(async (options: { home?: string; quick?: boolean; json?: boolean }) => {
       const report = await runDoctor({
         home: resolve(options.home ?? defaultHome(io.env)),
-        registry: createDriverRegistry(),
+        registry: io.registry(),
         quick: options.quick === true,
+        env: io.env,
       });
       if (options.json === true) io.out(`${JSON.stringify(report, null, 2)}\n`);
       else io.out(formatReport(report, io.color));
@@ -79,7 +95,74 @@ export function createProgram(io: Io): Command {
       if (errors > 0) process.exitCode = 1;
     });
 
+  program
+    .command('setup')
+    .description('Create the install, connect Slack and choose who may talk to agents')
+    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .action(async (options: { home?: string }) => {
+      const prompter = io.prompter();
+      try {
+        await setup({
+          home: resolve(options.home ?? defaultHome(io.env)),
+          env: io.env,
+          prompter,
+          out: io.out,
+        });
+      } finally {
+        prompter.close();
+      }
+    });
+
+  program
+    .command('init')
+    .description('Create a workspace with its chief of staff')
+    .argument('<workspace>', 'the workspace id, such as personal')
+    .option('--name <name>', 'its display name (default: from the id)')
+    .option('--channel <channel>', "chat in this channel instead of the bot's direct messages")
+    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .action(async (id: string, options: { name?: string; channel?: string; home?: string }) => {
+      const dir = await initWorkspace({
+        home: resolve(options.home ?? defaultHome(io.env)),
+        id,
+        env: io.env,
+        ...(options.name !== undefined && { name: options.name }),
+        ...(options.channel !== undefined && { channel: options.channel }),
+      });
+      io.out(
+        [
+          `Created ${dir}`,
+          '',
+          'Claude Code asks once whether to trust a new folder, and nobody can answer it from Slack.',
+          'Answer it now: run the two lines below, choose "Yes, I trust this folder", then type /exit.',
+          '',
+          `  cd ${shellPath(dir)}`,
+          '  claude',
+          '',
+          options.channel !== undefined
+            ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: opinr service restart`
+            : 'Then message the bot in Slack. If the service is already running, restart it first: opinr service restart',
+          '',
+        ].join('\n'),
+      );
+    });
+
+  program
+    .command('slack')
+    .description('Slack helpers')
+    .command('manifest')
+    .description('Print the Slack app manifest to create the app from')
+    .action(() => {
+      io.out(slackManifest());
+    });
+
+  registerService(program, io);
+  registerReply(program, io);
+
   return program;
+}
+
+function shellPath(path: string): string {
+  return /^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
 /** Runs the CLI and returns the exit code. */

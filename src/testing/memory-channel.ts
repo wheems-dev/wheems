@@ -2,6 +2,7 @@ import type {
   ChannelCapabilities,
   ChannelDriver,
   InboundHandler,
+  MessageRef,
   OutboundMessage,
   SentMessage,
 } from '../contracts/channel.js';
@@ -17,11 +18,19 @@ export class MemoryChannel implements ChannelDriver {
   readonly capabilities: ChannelCapabilities;
   /** Everything sent through the driver, oldest first. */
   readonly sent: (OutboundMessage & { messageId: string })[] = [];
+  /** Reactions currently on messages, as `<channel>/<messageId>` to reaction names. */
+  readonly reactions = new Map<string, Set<string>>();
   private handler: InboundHandler | undefined;
   private nextId = 1;
 
   constructor(capabilities: Partial<ChannelCapabilities> = {}) {
-    this.capabilities = { threads: true, buttons: true, ...capabilities };
+    this.capabilities = {
+      threads: true,
+      buttons: true,
+      reactions: true,
+      identities: true,
+      ...capabilities,
+    };
   }
 
   check(): Promise<HealthCheck[]> {
@@ -57,6 +66,20 @@ export class MemoryChannel implements ChannelDriver {
     });
   }
 
+  react(message: MessageRef, reaction: string, on: boolean): Promise<void> {
+    if (!this.capabilities.reactions) {
+      return Promise.reject(
+        new DriverError(this.name, 'unsupported', 'This channel has no reactions'),
+      );
+    }
+    const key = `${message.channel}/${message.messageId}`;
+    const set = this.reactions.get(key) ?? new Set<string>();
+    if (on) set.add(reaction);
+    else set.delete(reaction);
+    this.reactions.set(key, set);
+    return Promise.resolve();
+  }
+
   stop(): Promise<void> {
     this.handler = undefined;
     return Promise.resolve();
@@ -68,6 +91,7 @@ export class MemoryChannel implements ChannelDriver {
     text: string;
     threadId?: string;
     userId?: string;
+    direct?: boolean;
   }): Promise<string> {
     const messageId = this.id();
     await this.handler?.({
@@ -77,6 +101,7 @@ export class MemoryChannel implements ChannelDriver {
       threadId: message.threadId ?? null,
       userId: message.userId ?? 'person',
       text: message.text,
+      direct: message.direct ?? false,
       receivedAt: new Date(),
     });
     return messageId;
