@@ -94,3 +94,22 @@ usually on their phone, and relies on you to get things done and to keep track o
 - This folder is the ${template.name} workspace. Keep notes and files you make for them here.
 `;
 }
+
+export const ABOUT_YOU_MD = `<!--
+About you: every agent in every workspace reads this page when it starts, so write what you'd
+tell anyone working for you. Agents never change it; they suggest changes, which you approve.
+Keep it short: only the first 4,000 characters are loaded.
+-->
+
+# About me
+
+## How I like to work
+
+## How I like things written
+`;
+
+export const BRIEF_MD = `<!--
+The workspace's brief: every agent here loads it when it starts. Opinr's filing job keeps it up
+to date from notes, under 4,000 characters.
+-->
+`;

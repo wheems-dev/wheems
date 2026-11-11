@@ -25,7 +25,9 @@ describe('conversations', () => {
   let logs: string[];
   let answers: Map<string, FinalMessage[]>;
 
-  const make = (options: { maxLiveSessions?: number; startupSeconds?: number } = {}) => {
+  const make = (
+    options: { maxLiveSessions?: number; startupSeconds?: number; noteSweepMs?: number } = {},
+  ) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
     manager = new ConversationManager({
       install: install.config!,
@@ -40,6 +42,8 @@ describe('conversations', () => {
       followUpSeconds: 0.5,
       log: (m) => logs.push(m),
       ...(options.maxLiveSessions !== undefined && { maxLiveSessions: options.maxLiveSessions }),
+      ...(options.noteSweepMs !== undefined && { noteSweepMs: options.noteSweepMs }),
+      aboutYouFile: join(home, 'about-you.md'),
     });
   };
 
@@ -629,6 +633,131 @@ describe('conversations', () => {
 
   it('refuses replies to conversations it does not know', async () => {
     await expect(manager.reply('personal:slack:D1:nope', 'x')).rejects.toThrow(/No conversation/);
+  });
+
+  describe('notes', () => {
+    const isNoteRequest = (line: string) =>
+      line.startsWith('Opinr: this conversation has gone quiet');
+    const later = () => Date.now() + 31 * 60_000;
+    const stored = () =>
+      JSON.parse(readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8')) as Record<
+        string,
+        { notedAt?: string; noting?: boolean; lastAnswerId?: string }
+      >;
+
+    it("saves an agent's note to its workspace's inbox and counts the work so far as noted", async () => {
+      const first = await dm('hello');
+      await settle();
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      const file = await manager.note(key, '# Said hello\n\nNothing else yet.');
+      expect(file.startsWith(join(home, 'workspaces', 'personal', 'knowledge', 'inbox'))).toBe(
+        true,
+      );
+      expect(readFileSync(file, 'utf8')).toContain('agent: chief-of-staff\nengine: claude-code');
+      expect(stored()[key]?.notedAt).toBeDefined();
+      // Noted, so a quiet spell asks for nothing.
+      await manager.sweepNotes(later());
+      await settle();
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      expect(received.get(session.id)).toEqual(['hello']);
+    });
+
+    it('refuses notes for conversations it does not know', async () => {
+      await expect(manager.note('personal:slack:D1:nope', '# x')).rejects.toThrow(
+        'No conversation',
+      );
+    });
+
+    it('asks a quiet conversation for its note once, and never posts the answer to that turn', async () => {
+      behaviour = () => 'answer';
+      const first = await dm('plan the week');
+      await settle();
+      expect(posts()).toEqual([{ thread: first, text: 'answer: plan the week' }]);
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      // Not quiet for long enough yet.
+      await manager.sweepNotes(Date.now() + 60_000);
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      expect(received.get(session.id)).toEqual(['plan the week']);
+
+      await manager.sweepNotes(later());
+      await settle();
+      expect(received.get(session.id)?.map((l) => isNoteRequest(l))).toEqual([false, true]);
+      expect(posts()).toHaveLength(1);
+      expect(stored()[key]?.noting).toBeUndefined();
+      expect(stored()[key]?.lastAnswerId).toBe('answer-2');
+      expect(stored()[key]?.notedAt).toBeDefined();
+
+      // Asked once: no new work, no new request.
+      await manager.sweepNotes(later());
+      await settle();
+      expect(received.get(session.id)).toHaveLength(2);
+
+      // The next message's answer is posted, and only that.
+      await dm('and next week?', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual([
+        'answer: plan the week',
+        'answer: and next week?',
+      ]);
+    });
+
+    it('leaves notes alone in a workspace that turned them off', async () => {
+      const file = join(home, 'workspaces', 'personal', 'workspace.yaml');
+      writeFileSync(file, `${readFileSync(file, 'utf8')}\nknowledge:\n  note_after_idle: 0\n`);
+      install = await loadInstall(home);
+      make();
+      await dm('hello');
+      await settle();
+      await manager.sweepNotes(later());
+      await settle();
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      expect(received.get(session.id)).toEqual(['hello']);
+    });
+
+    it('skips a note answer left over from before a restart, before the next message', async () => {
+      behaviour = () => 'answer';
+      const first = await dm('one');
+      await settle();
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      // A note turn whose answer arrived after the service stopped following it.
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      await new ConversationStore(join(home, '.opinr', 'conversations.json')).setNoting(key, true);
+      make();
+      await runtime.send(session.id, 'Opinr: this conversation has gone quiet (old request)');
+      await new Promise((r) => setTimeout(r, 50));
+      await dm('two', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+      expect(stored()[key]?.noting).toBeUndefined();
+    });
+
+    it('asks for the note before stopping an idle session to make room', async () => {
+      make({ maxLiveSessions: 1, noteSweepMs: 60_000 });
+      behaviour = () => 'answer';
+      const first = await dm('one');
+      await settle();
+      const oldSession = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      await dm('two');
+      await settle();
+      expect(received.get(oldSession.id)?.map((l) => isNoteRequest(l))).toEqual([false, true]);
+      const live = await runtime.list({ labels: { opinr: 'conversation' } });
+      expect(live.map((s) => s.id)).not.toContain(oldSession.id);
+      expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+      expect(stored()[conversationKey('personal', 'slack', 'D1', first)]?.notedAt).toBeDefined();
+    });
+
+    it('loads the page about the person and the brief into the instructions', async () => {
+      writeFileSync(join(home, 'about-you.md'), '# About me\n\nI like short answers.');
+      writeFileSync(
+        join(home, 'workspaces', 'personal', 'knowledge', 'brief.md'),
+        'Working on the CRM this week.',
+      );
+      await dm('hello');
+      await settle();
+      const instructions = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
+      expect(instructions).toContain('I like short answers.');
+      expect(instructions).toContain('Working on the CRM this week.');
+    });
   });
 
   it('makes stable conversation UUIDs', () => {

@@ -69,6 +69,8 @@ accounts: [claude-subscription, openrouter] # install accounts this workspace ma
 machine: server # where its agents run by default
 isolation: enforced # or hard
 skill_budget: 20 # doctor warns past this many skills
+knowledge:
+  note_after_idle: 30 # minutes quiet, after new work, before the agent is asked for a note; 0 is off
 
 identity: { name: Acme chief of staff, icon: ':office:' } # how its posts appear, where supported
 

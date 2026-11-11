@@ -18,6 +18,8 @@ export interface Paths {
   /** Holds the `opinr` command that agents run, pinned to this Node.js. */
   bin: string;
   secrets: string;
+  /** The page about the person, which every agent in every workspace reads. */
+  aboutYou: string;
 }
 
 export function defaultHome(env: NodeJS.ProcessEnv = process.env): string {
@@ -34,6 +36,7 @@ export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths
     home,
     install: join(home, 'install.yaml'),
     workspaces: join(home, 'workspaces'),
+    aboutYou: join(home, 'about-you.md'),
     state,
     conversations: join(state, 'conversations.json'),
     socket: join(state, 'opinr.sock'),

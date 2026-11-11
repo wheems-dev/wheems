@@ -165,6 +165,19 @@ export const workspaceSchema = z.strictObject({
     .positive()
     .default(20)
     .describe('Doctor warns when the workspace or one agent goes past this many skills.'),
+  knowledge: z
+    .strictObject({
+      note_after_idle: z
+        .number()
+        .int()
+        .nonnegative()
+        .default(30)
+        .describe(
+          'Minutes a conversation stays quiet, after new work, before Opinr asks its agent for a note. 0 turns this off.',
+        ),
+    })
+    .default({ note_after_idle: 30 })
+    .describe("How the workspace's knowledge loop runs."),
   machine: nameSchema.optional().describe('The machine agents run on by default.'),
   identity: z
     .strictObject({

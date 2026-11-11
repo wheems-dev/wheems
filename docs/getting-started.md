@@ -81,5 +81,9 @@ conversation, and replies in its thread carry it on. Each conversation is its ow
 session in Herdr, which you can watch or take over with `hc attach`. The 👀 reaction means your
 message has reached the agent; it goes when the agent replies.
 
+When a conversation has been quiet for half an hour, Opinr asks its agent to write a note,
+which lands in `workspaces/<id>/knowledge/inbox/`. You won't see that in Slack. Fill in
+`~/opinr/about-you.md` with what you'd tell anyone working for you: every agent reads it.
+
 If something isn't right, run `opinr doctor`. It checks Node.js, Herdr core, Claude Code, the
 folder trust, Slack and the service.

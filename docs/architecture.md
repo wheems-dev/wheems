@@ -54,6 +54,7 @@ and never pass through an agent.
 ```text
 ~/opinr/
 ├── install.yaml          machines, connections, accounts, Herdr version
+├── about-you.md          about you; every agent in every workspace reads it
 ├── library/              agent templates, skills, workflow templates (never loaded directly)
 └── workspaces/
     └── acme/
@@ -63,8 +64,21 @@ and never pass through an agent.
         ├── workflows/        one YAML file per workflow
         ├── projects/         one file per project: folder, space, agents, rules
         ├── .claude/          this workspace's own Claude Code config
-        └── wiki/             inbox/, raw/ and the filed pages
+        └── knowledge/
+            ├── brief.md      short, capped; every agent here loads it at launch
+            ├── inbox/        notes land here, from opinr note
+            ├── notes/        filed notes, kept as the sources
+            ├── pages/        the knowledge base, one topic per page
+            └── reports/      nightly: contradictions and stale pages
 ```
+
+Agents never write into `knowledge/` or `about-you.md` themselves. They write notes with
+`opinr note`, and the service saves each note to its workspace's inbox with where it came from:
+workspace, agent, engine, conversation and time. When a conversation has been quiet for
+`knowledge.note_after_idle` minutes after new work, and before the service stops an idle session
+to make room, the service asks the agent for its note as a turn of its own. The answer to that
+turn is never posted. Each agent's instructions file carries the brief and `about-you.md`, as they
+were when its session started.
 
 `OPINR_HOME` moves the install folder.
 

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative } from 'node:path';
-import { withBuiltins } from '../agents/builtin.js';
+import { NOTE_REQUEST, withBuiltins } from '../agents/builtin.js';
 import type { LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import {
@@ -18,7 +18,14 @@ import {
   type LaunchPlan,
 } from '../contracts/engine.js';
 import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
-import type { ConversationStore } from './store.js';
+import {
+  ABOUT_YOU_LIMIT,
+  BRIEF_LIMIT,
+  knowledgePaths,
+  readCapped,
+  writeNote,
+} from '../knowledge/notes.js';
+import type { Conversation, ConversationStore } from './store.js';
 
 export interface Binding {
   workspace: LoadedWorkspace;
@@ -52,6 +59,15 @@ export interface ConversationManagerOptions {
   answerWaitSeconds?: number;
   /** For engines that report no status: how long to let a program start before typing into it. */
   typeDelayMs?: number;
+  /** The page about the person that every agent loads (`about-you.md`). */
+  aboutYouFile?: string;
+  /**
+   * How often to look for conversations gone quiet that need a note, in milliseconds. 0 (the
+   * default) asks for notes only before stopping a session, and only when this is above 0.
+   */
+  noteSweepMs?: number;
+  /** How long an agent gets to write a note it was asked for. */
+  noteTurnSeconds?: number;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -88,7 +104,10 @@ interface Watch {
  * Agents answer with `opinr reply`, which arrives here through `reply()`.
  */
 export class ConversationManager {
-  private readonly options: Required<Omit<ConversationManagerOptions, 'writeFile' | 'log'>> & {
+  private readonly options: Required<
+    Omit<ConversationManagerOptions, 'writeFile' | 'log' | 'aboutYouFile'>
+  > & {
+    aboutYouFile: string | undefined;
     writeFile: (path: string, content: string) => Promise<void>;
     log: (message: string) => void;
   };
@@ -98,6 +117,9 @@ export class ConversationManager {
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
+  private sweepTimer: NodeJS.Timeout | undefined;
+  private sweeping = false;
+  private trimming: Promise<void> = Promise.resolve();
 
   constructor(options: ConversationManagerOptions) {
     this.options = {
@@ -108,6 +130,9 @@ export class ConversationManager {
       answerPollMs: 2000,
       answerWaitSeconds: 3600,
       typeDelayMs: 5000,
+      noteSweepMs: 0,
+      noteTurnSeconds: 600,
+      aboutYouFile: undefined,
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -139,10 +164,8 @@ export class ConversationManager {
       event.channel,
       replyThread(event),
     );
-    const previous = this.queues.get(key) ?? Promise.resolve();
-    const next = previous
-      .then(() => this.deliver(key, binding, event))
-      .catch((error: unknown) => {
+    return this.enqueue(key, () =>
+      this.deliver(key, binding, event).catch((error: unknown) => {
         this.options.log(`Conversation ${key}: ${describe(error)}`);
         return this.notice(
           key,
@@ -150,10 +173,75 @@ export class ConversationManager {
           replyThread(event),
           `Something went wrong: ${describe(error)}`,
         );
-      })
-      .catch(() => undefined);
+      }),
+    );
+  }
+
+  /** Runs work for one conversation after the work already queued for it, one at a time. */
+  private enqueue(key: string, work: () => Promise<void>): Promise<void> {
+    const previous = this.queues.get(key) ?? Promise.resolve();
+    const next = previous.then(work).catch((error: unknown) => {
+      this.options.log(`Conversation ${key}: ${describe(error)}`);
+    });
     this.queues.set(key, next);
     return next;
+  }
+
+  /**
+   * Saves a note an agent wrote (`opinr note`) to its workspace's inbox, and counts the
+   * conversation's work so far as noted. Returns the note's file.
+   */
+  async note(key: string, text: string): Promise<string> {
+    const conversation = await this.options.store.get(key);
+    if (!conversation) throw new Error(`No conversation ${key}`);
+    const binding = this.bindingFor(conversation);
+    if (!binding) throw new Error(`Workspace ${conversation.workspace} is not running here`);
+    const agent = this.chiefOfStaff(binding).definition;
+    const file = await writeNote(
+      binding.workspace.dir,
+      {
+        workspace: binding.workspace.id,
+        agent: agent.name,
+        engine: agent.engine,
+        conversation: key,
+        origin: 'person',
+      },
+      text,
+    );
+    await this.options.store.setNoted(key, new Date());
+    this.options.log(`Note from ${key}: ${file}`);
+    return file;
+  }
+
+  /** Starts looking, every `noteSweepMs`, for quiet conversations that need a note. */
+  startNotes(): void {
+    if (this.options.noteSweepMs <= 0 || this.sweepTimer) return;
+    this.sweepTimer = setInterval(() => {
+      void this.sweepNotes();
+    }, this.options.noteSweepMs);
+    this.sweepTimer.unref();
+  }
+
+  /**
+   * Asks for a note in each conversation that has been quiet, after new work, for longer than
+   * its workspace's `knowledge.note_after_idle`. Resolves once those notes are written.
+   */
+  async sweepNotes(now = Date.now()): Promise<void> {
+    if (this.sweeping || this.stopped) return;
+    this.sweeping = true;
+    try {
+      const asks: Promise<void>[] = [];
+      for (const [key, conversation] of await this.options.store.all()) {
+        const binding = this.bindingFor(conversation);
+        const minutes = binding?.workspace.config?.knowledge.note_after_idle ?? 0;
+        if (!binding || minutes <= 0 || !needsNote(conversation)) continue;
+        if (now - Date.parse(conversation.lastActiveAt) < minutes * 60_000) continue;
+        asks.push(this.enqueue(key, () => this.askForNote(key, binding)));
+      }
+      await Promise.all(asks);
+    } finally {
+      this.sweeping = false;
+    }
   }
 
   /** Posts an agent's reply (`opinr reply`) into its conversation's thread. */
@@ -225,6 +313,7 @@ export class ConversationManager {
   /** Stops watching sessions. Sessions themselves keep running. */
   async stop(): Promise<void> {
     this.stopped = true;
+    clearInterval(this.sweepTimer);
     await Promise.allSettled([...this.watchers]);
   }
 
@@ -238,7 +327,12 @@ export class ConversationManager {
     if (channel.capabilities.reactions)
       await channel.react(seen, 'eyes', true).catch(() => undefined);
 
-    const existing = await this.options.store.get(key);
+    let existing = await this.options.store.get(key);
+    if (existing?.noting === true) {
+      // A note turn's answer must never reach the thread, even after a restart.
+      await this.skipNoteAnswers(key, binding);
+      existing = await this.options.store.get(key);
+    }
     const sessionName = existing?.sessionName ?? sessionNameFor(binding.workspace.id, key);
     const session = await this.options.runtime.get(sessionName);
     const now = new Date();
@@ -309,8 +403,9 @@ export class ConversationManager {
       createdAt: existing?.createdAt ?? now.toISOString(),
       lastActiveAt: now.toISOString(),
       // A conversation that starts here has had no answers posted yet.
-      lastAnswerId: resume ? existing.lastAnswerId : '',
+      lastAnswerId: resume ? existing?.lastAnswerId : '',
       ...(resume && { engineSessionId: engineId }),
+      ...(existing?.notedAt !== undefined && { notedAt: existing.notedAt }),
       startedAt: now.toISOString(),
       ...(launchTag !== undefined && { launchTag }),
       pending: 1,
@@ -318,7 +413,21 @@ export class ConversationManager {
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
-    await this.trim(binding.workspace.id, sessionName);
+    this.trimLater(binding.workspace.id, sessionName);
+  }
+
+  /**
+   * Makes room in the background, one trim at a time: asking a session for its note first
+   * can take minutes, and the new conversation shouldn't wait for it.
+   */
+  private trimLater(workspace: string, keep: string): void {
+    const run = (this.trimming = this.trimming
+      .then(() => this.trim(workspace, keep))
+      .catch((error: unknown) => {
+        this.options.log(`Making room in ${workspace}: ${describe(error)}`);
+      })
+      .finally(() => this.watchers.delete(run)));
+    this.watchers.add(run);
   }
 
   /** Waits, up to the startup time, until a session reports a status: it has started. */
@@ -362,8 +471,15 @@ export class ConversationManager {
     const agent = this.chiefOfStaff(binding);
     const account = this.options.install.accounts[agent.definition.account];
     const engine = this.options.engine(agent.definition.engine);
+    const knowledge = {
+      aboutYou:
+        this.options.aboutYouFile !== undefined
+          ? await readCapped(this.options.aboutYouFile, ABOUT_YOU_LIMIT)
+          : null,
+      brief: await readCapped(knowledgePaths(workspace.dir).brief, BRIEF_LIMIT),
+    };
     const plan = await engine.prepare(
-      { ...agent.definition, instructions: withBuiltins(agent.definition.instructions) },
+      { ...agent.definition, instructions: withBuiltins(agent.definition.instructions, knowledge) },
       {
         workspace: { id: workspace.id, dir: workspace.dir },
         sessionDir: workspace.dir,
@@ -608,7 +724,7 @@ export class ConversationManager {
   private async engineSessionId(
     key: string,
     engine: EngineDriver,
-    watch: Watch,
+    watch: Pick<Watch, 'conversation'>,
   ): Promise<string | null> {
     if (!engine.findSession) return watch.conversation.id;
     const conversation = await this.options.store.get(key);
@@ -650,13 +766,141 @@ export class ConversationManager {
       .sort((a, b) =>
         (lastActive.get(a.name ?? '') ?? '').localeCompare(lastActive.get(b.name ?? '') ?? ''),
       );
+    const keys = new Map<string, [string, Conversation]>();
+    for (const entry of await this.options.store.all()) keys.set(entry[1].sessionName, entry);
     for (const session of candidates.slice(0, live.length - this.options.maxLiveSessions)) {
-      this.options.log(
-        `Stopping idle session ${session.name ?? session.id}; its conversation resumes when needed`,
-      );
-      await this.options.runtime.stop(session.id).catch(() => undefined);
-      await this.options.runtime.remove(session.id).catch(() => undefined);
+      const entry = keys.get(session.name ?? '');
+      const binding = entry ? this.bindingFor(entry[1]) : undefined;
+      if (!entry || !binding || this.options.noteSweepMs <= 0) {
+        await this.stopSession(session);
+        continue;
+      }
+      // Ask for its note first, in its conversation's turn, so no message slips in between.
+      const [key] = entry;
+      await this.enqueue(key, async () => {
+        await this.askForNote(key, binding);
+        const current = await this.options.store.get(key);
+        const live = await this.options.runtime.get(session.id);
+        const watch = this.watches.get(key);
+        if ((current?.pending ?? 0) > 0 || (watch && !watch.closed)) return;
+        if (live?.status === 'working' || live?.status === 'blocked') return;
+        await this.stopSession(session);
+      });
     }
+  }
+
+  private async stopSession(session: SessionInfo): Promise<void> {
+    this.options.log(
+      `Stopping idle session ${session.name ?? session.id}; its conversation resumes when needed`,
+    );
+    await this.options.runtime.stop(session.id).catch(() => undefined);
+    await this.options.runtime.remove(session.id).catch(() => undefined);
+  }
+
+  /**
+   * Asks a conversation's agent for its note, as a turn of its own, and waits for it. The
+   * answer to that turn is skipped, never posted. Does nothing when the work so far is noted,
+   * a turn is in progress, or the session isn't running.
+   */
+  private async askForNote(key: string, binding: Binding): Promise<void> {
+    const conversation = await this.options.store.get(key);
+    if (!conversation || !needsNote(conversation) || (conversation.pending ?? 0) > 0) return;
+    const active = this.watches.get(key);
+    if (active && !active.closed) return;
+    const session = await this.options.runtime.get(conversation.sessionName);
+    if (session?.state !== 'live' || session.status === 'working' || session.status === 'blocked')
+      return;
+    const engine = this.options.engine(this.chiefOfStaff(binding).definition.engine);
+    // Without its answers, the note turn's answer couldn't be kept out of the thread.
+    if (!engine.answers) return;
+    await this.options.store.setNoted(key, new Date());
+    await this.options.store.setNoting(key, true);
+    this.options.log(`Asking ${conversation.sessionName} for its note on ${key}`);
+    let fromTurn: number;
+    try {
+      fromTurn = (await this.options.runtime.send(session.id, NOTE_REQUEST)).turn;
+    } catch (error) {
+      await this.options.store.setNoting(key, false);
+      if (isDriverError(error, 'blocked')) return;
+      throw error;
+    }
+    const target = this.conversationFor(key, binding);
+    if (await this.untilTurnEnds(key, session.id, fromTurn, target)) {
+      await this.skipNoteAnswers(key, binding);
+    } else {
+      this.options.log(`${conversation.sessionName} did not finish its note in time`);
+    }
+  }
+
+  /** Waits for the turn after `fromTurn` to end. False when it didn't, in the time a note gets. */
+  private async untilTurnEnds(
+    key: string,
+    id: string,
+    fromTurn: number,
+    target: Pick<Watch, 'conversation' | 'engine'>,
+  ): Promise<boolean> {
+    const deadline = Date.now() + this.options.noteTurnSeconds * 1000;
+    const startBy = Date.now() + this.options.startupSeconds * 1000;
+    const cursor = (await this.options.store.get(key))?.lastAnswerId;
+    while (!this.stopped && Date.now() < deadline) {
+      const session = await this.options.runtime.get(id);
+      if (session?.state !== 'live') return false;
+      if (!target.engine.capabilities.status) {
+        // No status to follow: the turn has ended once its answer is there.
+        const engineId = await this.engineSessionId(key, target.engine, target);
+        const found =
+          engineId !== null && target.engine.answers
+            ? await target.engine.answers(
+                { id: engineId, dir: target.conversation.dir },
+                cursor ? cursor : null,
+              )
+            : [];
+        if (found.length > 0) return true;
+        await sleep(this.options.answerPollMs);
+        continue;
+      }
+      if (session.status === 'blocked' || session.status === 'error') return false;
+      if (session.turn > fromTurn && session.status !== 'working') return true;
+      if (session.status !== 'working' && Date.now() > startBy) return false;
+      if (session.status === 'working') {
+        await this.options.runtime.wait(id, {
+          timeoutSeconds: Math.min(60, secondsLeft(deadline)),
+        });
+      } else {
+        await sleep(this.options.pollMs);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Moves the answer position past a note turn's answers without posting them. Leaves the
+   * conversation marked as noting when no answer is there yet, so it's skipped later instead.
+   */
+  private async skipNoteAnswers(key: string, binding: Binding): Promise<void> {
+    const target = this.conversationFor(key, binding);
+    const engine = target.engine;
+    const cursor = (await this.options.store.get(key))?.lastAnswerId;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
+      const id = await this.engineSessionId(key, engine, target);
+      if (id === null || !engine.answers) continue;
+      const found = await engine.answers(
+        { id, dir: target.conversation.dir },
+        cursor ? cursor : null,
+      );
+      const last = found.at(-1);
+      if (last) {
+        await this.options.store.setNoting(key, false, last.id);
+        return;
+      }
+    }
+  }
+
+  private bindingFor(conversation: Conversation): Binding | undefined {
+    return this.options.bindings.find(
+      (b) => b.workspace.id === conversation.workspace && b.connection === conversation.connection,
+    );
   }
 
   private repliedSince(key: string, since: number): boolean {
@@ -704,6 +948,11 @@ export function uuidFor(key: string): string {
 export function sessionNameFor(workspace: string, key: string): string {
   const hash = createHash('sha1').update(key).digest('hex').slice(0, 8);
   return `${workspace.slice(0, 20)}-${hash}`;
+}
+
+/** Whether a conversation has had work since its last note. */
+function needsNote(conversation: Conversation): boolean {
+  return conversation.lastActiveAt > (conversation.notedAt ?? '');
 }
 
 function blockedText(session: SessionInfo): string {

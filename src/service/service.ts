@@ -24,6 +24,8 @@ export interface ServiceOptions {
   /** Passed through to the conversation manager, for tests. */
   startupSeconds?: number;
   pollMs?: number;
+  /** How often to look for quiet conversations that need a note; 0 turns it off. */
+  noteSweepMs?: number;
 }
 
 export interface RunningService {
@@ -121,6 +123,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       return engine;
     },
     store: new ConversationStore(where.conversations),
+    aboutYouFile: where.aboutYou,
+    noteSweepMs: options.noteSweepMs ?? 60_000,
     sessionEnv: {
       OPINR_HOME: options.home,
       PATH: `${where.bin}:${env.PATH ?? '/usr/bin:/bin'}`,
@@ -150,6 +154,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
           case 'reply':
             await manager.reply(request.conversation, request.text);
             return { ok: true };
+          case 'note':
+            return { ok: true, path: await manager.note(request.conversation, request.text) };
         }
       },
     );
@@ -161,6 +167,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const listening = server;
   log(`Opinr ${options.version} is running from ${options.home}`);
   await manager.recover();
+  manager.startNotes();
 
   return {
     async stop() {

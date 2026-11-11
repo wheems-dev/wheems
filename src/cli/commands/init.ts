@@ -5,7 +5,9 @@ import { nameSchema } from '../../config/schemas.js';
 import { paths } from '../../home.js';
 import { readFile } from 'node:fs/promises';
 import { parseDocument } from 'yaml';
+import { knowledgePaths } from '../../knowledge/notes.js';
 import {
+  BRIEF_MD,
   chiefOfStaffMd,
   DEFAULT_ENGINE,
   SKILLS_YAML,
@@ -73,6 +75,10 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));
   await writeFile(join(dir, 'skills.yaml'), SKILLS_YAML);
   await writeFile(join(dir, 'agents', 'chief-of-staff.md'), chiefOfStaffMd(template));
+  const knowledge = knowledgePaths(dir);
+  for (const folder of [knowledge.inbox, knowledge.notes, knowledge.pages, knowledge.reports])
+    await mkdir(folder, { recursive: true });
+  await writeFile(knowledge.brief, BRIEF_MD);
   return dir;
 }
 
