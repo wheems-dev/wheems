@@ -21,15 +21,16 @@ export interface EngineDriver extends Driver<'engine'> {
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan>;
 
   /**
-   * Optional: the agent's final message of its latest turn, read from the engine's own
-   * structured record of the conversation (never the screen), or null when there is none
-   * yet. With it, the service posts each answer for the agent; without it, agents answer
-   * only through `opinr reply`.
+   * Optional: the agent's answers, one per turn (the last thing it wrote before the next
+   * message reached it), read from the engine's own structured record of the conversation,
+   * never the screen. Only those after the answer with id `after` are returned; all of
+   * them when `after` is null. With it, the service posts each answer for the agent;
+   * without it, agents answer only through `opinr reply`.
    */
-  finalMessage?(session: { id: string; dir: string }): Promise<FinalMessage | null>;
+  answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
 }
 
-/** An agent's final message of a turn. */
+/** An agent's answer: its final message of a turn. */
 export interface FinalMessage {
   /** Identifies this message in the engine's record, so it is never posted twice. */
   id: string;

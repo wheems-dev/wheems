@@ -52,19 +52,25 @@ export class ClaudeCodeEngine implements EngineDriver {
   }
 
   /**
-   * The last text Claude wrote after the latest prompt, from the session's transcript
+   * Claude's answer to each prompt, from the session's transcript
    * (`projects/<folder>/<session id>.jsonl` in Claude Code's config folder).
    */
-  async finalMessage(session: { id: string; dir: string }): Promise<FinalMessage | null> {
+  async answers(
+    session: { id: string; dir: string },
+    after: string | null,
+  ): Promise<FinalMessage[]> {
     const file = await this.transcript(session);
-    if (file === null) return null;
+    if (file === null) return [];
     let text: string;
     try {
       text = await readFile(file, 'utf8');
     } catch {
-      return null;
+      return [];
     }
-    return finalText(text);
+    const all = turnAnswers(text);
+    if (after === null) return all;
+    const index = all.findIndex((answer) => answer.id === after);
+    return index === -1 ? all : all.slice(index + 1);
   }
 
   private async transcript(session: { id: string; dir: string }): Promise<string | null> {
@@ -145,8 +151,11 @@ interface TranscriptEntry {
   message?: { content?: string | { type?: string; text?: string }[] };
 }
 
-/** The last text block after the last prompt the person (not a tool) sent, with its entry's id. */
-export function finalText(jsonl: string): FinalMessage | null {
+/**
+ * The answer to each prompt the person (not a tool) sent: the last text block before the
+ * next prompt, with its transcript entry's id. A prompt still being worked on has none.
+ */
+export function turnAnswers(jsonl: string): FinalMessage[] {
   const entries: TranscriptEntry[] = [];
   for (const line of jsonl.split('\n')) {
     if (line.trim() === '') continue;
@@ -156,7 +165,8 @@ export function finalText(jsonl: string): FinalMessage | null {
       // A line being written as we read; skip it.
     }
   }
-  let last: FinalMessage | null = null;
+  const answers: FinalMessage[] = [];
+  let current: FinalMessage | null = null;
   let line = 0;
   for (const entry of entries) {
     line++;
@@ -166,13 +176,18 @@ export function finalText(jsonl: string): FinalMessage | null {
       const isPrompt =
         typeof content === 'string' ||
         (Array.isArray(content) && content.some((block) => block.type === 'text'));
-      if (isPrompt) last = null;
+      if (isPrompt) {
+        if (current) answers.push(current);
+        current = null;
+      }
     } else if (entry.type === 'assistant' && Array.isArray(content)) {
       for (const block of content) {
-        if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '')
-          last = { id: entry.uuid ?? `line-${String(line)}`, text: block.text.trim() };
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '') {
+          current = { id: entry.uuid ?? `line-${String(line)}`, text: block.text.trim() };
+        }
       }
     }
   }
-  return last;
+  if (current) answers.push(current);
+  return answers;
 }

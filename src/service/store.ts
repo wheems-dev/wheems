@@ -14,6 +14,11 @@ const conversationSchema = z.object({
   sessionName: z.string(),
   createdAt: z.string(),
   lastActiveAt: z.string(),
+  /**
+   * The engine's id for the last answer posted. Empty when none has been posted yet in a
+   * conversation that started here; missing when it is not known.
+   */
+  lastAnswerId: z.string().optional(),
 });
 
 export type Conversation = z.infer<typeof conversationSchema>;
@@ -43,6 +48,14 @@ export class ConversationStore {
   async set(key: string, conversation: Conversation): Promise<void> {
     await this.load();
     this.conversations.set(key, conversation);
+    await this.save();
+  }
+
+  async setLastAnswer(key: string, id: string): Promise<void> {
+    await this.load();
+    const conversation = this.conversations.get(key);
+    if (!conversation) return;
+    conversation.lastAnswerId = id;
     await this.save();
   }
 

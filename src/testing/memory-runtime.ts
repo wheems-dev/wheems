@@ -76,7 +76,17 @@ export class MemoryRuntime implements RuntimeDriver {
   private readonly sessions = new Map<string, MemorySession>();
   private nextId = 1;
 
-  constructor(programs: Record<string, ProgramFactory> = {}) {
+  private readonly waitDelayMs: number;
+
+  /**
+   * `waitDelayMs` holds back each wait's answer, as a slow runtime would, so the session
+   * may have moved on by the time the caller hears.
+   */
+  constructor(
+    programs: Record<string, ProgramFactory> = {},
+    options: { waitDelayMs?: number } = {},
+  ) {
+    this.waitDelayMs = options.waitDelayMs ?? 0;
     this.programs = {
       'echo-line': echoLineProgram,
       'echo-env': echoEnvProgram,
@@ -207,13 +217,15 @@ export class MemoryRuntime implements RuntimeDriver {
         };
       }
     }
-    return {
+    const result: WaitResult = {
       ended: true,
       reason: session.info.state === 'finished' ? 'exit' : 'status',
       status: session.info.status,
       exitCode: session.info.exitCode,
       turn: session.info.turn,
     };
+    if (this.waitDelayMs > 0) await new Promise((r) => setTimeout(r, this.waitDelayMs));
+    return result;
   }
 
   get(id: string): Promise<SessionInfo | null> {

@@ -51,7 +51,7 @@ can say what won't work.
 
 Each launch is for one conversation: the context carries its `session` (a stable UUID, whether
 to `resume` it, and the first `task`), and the agent carries its `permissions` level. An engine
-can also offer `finalMessage(session)`, the agent's last message of its latest turn, read from
+can also offer `answers(session, after)`, the agent's answer to each turn after a given one, read from
 the engine's own structured record (for Claude Code, its session transcript), never the screen.
 With it, the service posts each answer for the agent.
 

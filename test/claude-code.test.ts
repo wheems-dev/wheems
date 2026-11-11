@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AgentDefinition, EngineContext } from '../src/contracts/engine.js';
-import { ClaudeCodeEngine, finalText } from '../src/drivers/engine/claude-code.js';
+import { ClaudeCodeEngine, turnAnswers } from '../src/drivers/engine/claude-code.js';
 import { engineContract } from '../src/testing/index.js';
 import { realHcAvailable } from './helpers/hc.js';
 
@@ -85,7 +85,11 @@ describe('claude-code transcripts', () => {
   const transcript = [
     line({ type: 'custom-title', customTitle: 'x' }),
     line({ type: 'user', message: { content: 'First question' } }),
-    line({ type: 'assistant', message: { content: [{ type: 'text', text: 'First answer' }] } }),
+    line({
+      uuid: 'a1',
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'First answer' }] },
+    }),
     line({ type: 'user', message: { content: [{ type: 'text', text: 'Second question' }] } }),
     line({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'hmm' }] } }),
     line({
@@ -114,12 +118,16 @@ describe('claude-code transcripts', () => {
     '{"half a line',
   ].join('\n');
 
-  it('takes the last text after the latest prompt, skipping tool results, thinking and subagents', () => {
-    expect(finalText(transcript)).toEqual({ id: 'a2', text: 'The second answer.' });
+  it("takes each prompt's last text, skipping tool results, thinking and subagents", () => {
+    expect(turnAnswers(transcript)).toEqual([
+      { id: 'a1', text: 'First answer' },
+      { id: 'a2', text: 'The second answer.' },
+    ]);
+    // A prompt still being worked on has no answer yet.
     expect(
-      finalText(`${transcript}\n${line({ type: 'user', message: { content: 'Third' } })}`),
-    ).toBeNull();
-    expect(finalText('')).toBeNull();
+      turnAnswers(`${transcript}\n${line({ type: 'user', message: { content: 'Third' } })}`),
+    ).toHaveLength(2);
+    expect(turnAnswers('')).toEqual([]);
   });
 
   it("finds the session's transcript in Claude Code's config folder", async () => {
@@ -137,18 +145,17 @@ describe('claude-code transcripts', () => {
       mkdirSync(folder, { recursive: true });
       writeFileSync(join(folder, `${id}.jsonl`), transcript);
       const engine = new ClaudeCodeEngine({ configDir: join(root, 'claude') });
-      expect(await engine.finalMessage({ id, dir })).toEqual({
-        id: 'a2',
-        text: 'The second answer.',
-      });
+      expect((await engine.answers({ id, dir }, null)).map((a) => a.id)).toEqual(['a1', 'a2']);
+      expect(await engine.answers({ id, dir }, 'a1')).toEqual([
+        { id: 'a2', text: 'The second answer.' },
+      ]);
+      expect(await engine.answers({ id, dir }, 'a2')).toEqual([]);
       // A session elsewhere is still found by its id.
-      expect((await engine.finalMessage({ id, dir: '/somewhere/else' }))?.text).toBe(
-        'The second answer.',
-      );
+      expect(await engine.answers({ id, dir: '/somewhere/else' }, 'a1')).toHaveLength(1);
       expect(
-        await engine.finalMessage({ id: '99999999-2222-5333-8444-555555555555', dir }),
-      ).toBeNull();
-      expect(await engine.finalMessage({ id: '../../etc/passwd', dir })).toBeNull();
+        await engine.answers({ id: '99999999-2222-5333-8444-555555555555', dir }, null),
+      ).toEqual([]);
+      expect(await engine.answers({ id: '../../etc/passwd', dir }, null)).toEqual([]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

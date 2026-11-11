@@ -59,6 +59,8 @@ interface Watch {
   seen: MessageRef[];
   /** Messages that arrived while a turn was being followed. */
   queued: MessageRef[];
+  /** Set the moment the watch decides to finish; later messages start a new watch. */
+  closed: boolean;
 }
 
 /**
@@ -76,8 +78,6 @@ export class ConversationManager {
   private readonly watches = new Map<string, Watch>();
   /** The latest `opinr reply` in each conversation. */
   private readonly lastReply = new Map<string, { at: number; text: string }>();
-  /** The id of the latest final message posted in each conversation. */
-  private readonly lastFinal = new Map<string, string>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
 
@@ -190,6 +190,9 @@ export class ConversationManager {
 
     if (session?.state === 'live') {
       try {
+        // Text sent to an agent that is still starting can be lost, and would arrive ahead
+        // of the task it was started with; wait until it reports in.
+        await this.untilReady(session.id);
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
         this.watchTurn(
@@ -225,11 +228,24 @@ export class ConversationManager {
       sessionName,
       createdAt: existing?.createdAt ?? now.toISOString(),
       lastActiveAt: now.toISOString(),
+      // A conversation that starts here has had no answers posted yet.
+      lastAnswerId: existing ? existing.lastAnswerId : '',
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
     await this.trim(binding.workspace.id, sessionName);
+  }
+
+  /** Waits, up to the startup time, until a session reports a status: it has started. */
+  private async untilReady(id: string): Promise<void> {
+    const deadline = Date.now() + this.options.startupSeconds * 1000;
+    for (;;) {
+      const session = await this.options.runtime.get(id);
+      if (!session || session.state !== 'live' || session.status !== null) return;
+      if (Date.now() > deadline) return;
+      await sleep(this.options.pollMs);
+    }
   }
 
   private chiefOfStaff(binding: Binding) {
@@ -306,7 +322,7 @@ export class ConversationManager {
     target: Pick<Watch, 'conversation' | 'engine'>,
   ): void {
     const active = this.watches.get(key);
-    if (active && active.sessionName === sessionName) {
+    if (active && active.sessionName === sessionName && !active.closed) {
       // A turn is already being followed. The agent takes this message during that turn or
       // in the next one, so it is followed into the next turn too.
       active.queued.push(seen);
@@ -318,6 +334,7 @@ export class ConversationManager {
       sentAt: Date.now(),
       seen: [seen],
       queued: [],
+      closed: false,
       ...target,
     };
     this.watches.set(key, watch);
@@ -345,6 +362,9 @@ export class ConversationManager {
       for (const message of watch.seen.splice(0)) await this.unmark(channel, message);
     };
     const done = async (text: string | null) => {
+      // Close before any await, so a message arriving from here on is followed afresh.
+      watch.closed = true;
+      if (this.watches.get(key) === watch) this.watches.delete(key);
       await unmarkSeen();
       for (const message of watch.queued.splice(0)) await this.unmark(channel, message);
       if (text !== null) await this.notice(key, binding, thread, text);
@@ -354,7 +374,7 @@ export class ConversationManager {
       const session = await runtime.get(watch.sessionName);
       if (!session) return done(null);
       if (session.state === 'finished') {
-        if (await this.postFinal(key, watch)) return done(null);
+        if (await this.postAnswers(key, watch)) return done(null);
         return done(
           this.repliedSince(key, watch.sentAt) ? null : 'The session ended without replying.',
         );
@@ -364,7 +384,7 @@ export class ConversationManager {
         return done(`The agent hit an error. Its session is \`${session.id}\` in Herdr.`);
       }
       if (session.turn > watch.fromTurn && session.status !== 'working') {
-        const answered = await this.postFinal(key, watch);
+        const answered = await this.postAnswers(key, watch);
         if (!answered && !this.repliedSince(key, watch.sentAt)) {
           await this.notice(
             key,
@@ -409,25 +429,33 @@ export class ConversationManager {
   }
 
   /**
-   * Posts the agent's final message of the turn, when its engine can read it. A message
-   * already posted (the same transcript entry) is not posted again, nor is one the agent
-   * already sent word for word with `opinr reply` during this turn. Returns whether the
-   * turn has an answer in the thread.
+   * Posts the agent's answers since the last one posted, when its engine can read them:
+   * usually one, more when turns followed each other quickly. An answer the agent already
+   * sent word for word with `opinr reply` during this turn is not posted again. Returns
+   * whether the turn has an answer in the thread.
    */
-  private async postFinal(key: string, watch: Watch): Promise<boolean> {
-    if (!watch.engine.finalMessage) return false;
+  private async postAnswers(key: string, watch: Watch): Promise<boolean> {
+    const engine = watch.engine;
+    if (!engine.answers) return false;
+    const conversation = await this.options.store.get(key);
+    const cursor = conversation?.lastAnswerId;
     // The engine may still be writing its record when the turn ends; give it a moment.
-    let final: FinalMessage | null = null;
-    for (let attempt = 0; attempt < 5 && final === null; attempt++) {
+    let fresh: FinalMessage[] = [];
+    for (let attempt = 0; attempt < 5 && fresh.length === 0; attempt++) {
       if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
-      final = await watch.engine.finalMessage(watch.conversation);
+      const found = await engine.answers(watch.conversation, cursor ? cursor : null);
+      // Without a known position (a conversation from before positions were kept), only
+      // the latest answer can be new.
+      fresh = cursor === undefined ? found.slice(-1) : found;
     }
-    if (final === null || final.text.trim() === '') return false;
-    if (this.lastFinal.get(key) === final.id) return false;
-    this.lastFinal.set(key, final.id);
+    if (fresh.length === 0) return false;
     const reply = this.lastReply.get(key);
-    if (reply && reply.at >= watch.sentAt && reply.text === final.text.trim()) return true;
-    await this.post(key, final.text);
+    for (const answer of fresh) {
+      if (answer.text.trim() === '') continue;
+      if (reply && reply.at >= watch.sentAt && reply.text === answer.text.trim()) continue;
+      await this.post(key, answer.text);
+    }
+    await this.options.store.setLastAnswer(key, fresh[fresh.length - 1]?.id ?? '');
     return true;
   }
 

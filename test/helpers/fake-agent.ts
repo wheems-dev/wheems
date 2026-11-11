@@ -20,7 +20,7 @@ export interface FakeAgentOptions {
   /** Every message each session received, by session id. */
   received?: Map<string, string[]>;
   /** Where the agent's final messages go, by conversation id, for an engine to read. */
-  answers?: Map<string, FinalMessage>;
+  answers?: Map<string, FinalMessage[]>;
   /** How long each turn takes, in milliseconds. Defaults to 5. */
   delayMs?: number;
 }
@@ -59,11 +59,11 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
             return;
           }
           const conversation = env.OPINR_CONVERSATION ?? '';
-          const answer = (text: string) =>
-            options.answers?.set(env.STUB_SESSION ?? '', {
-              id: `answer-${String(++answerCount)}`,
-              text,
-            });
+          const answer = (text: string) => {
+            const id = env.STUB_SESSION ?? '';
+            const list = options.answers?.get(id) ?? [];
+            options.answers?.set(id, [...list, { id: `answer-${String(++answerCount)}`, text }]);
+          };
           if (behaviour === 'reply') await options.reply(conversation, `echo: ${line}`);
           if (behaviour === 'answer') answer(`answer: ${line}`);
           if (behaviour === 'same-answer') answer('Yes.');

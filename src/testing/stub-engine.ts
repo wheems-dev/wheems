@@ -26,25 +26,29 @@ export class StubEngine implements EngineDriver {
     resume: true,
   };
   private readonly command: string[];
-  private readonly answers: Map<string, FinalMessage> | undefined;
+  private readonly recorded: Map<string, FinalMessage[]> | undefined;
 
   /**
-   * With `answers`, the engine reports final messages from it, by conversation id, as an
-   * engine that reads its own transcripts does.
+   * With `answers`, the engine reports each conversation's answers from it, by conversation
+   * id, as an engine that reads its own transcripts does.
    */
   constructor(
-    options: { name?: string; command?: string[]; answers?: Map<string, FinalMessage> } = {},
+    options: { name?: string; command?: string[]; answers?: Map<string, FinalMessage[]> } = {},
   ) {
     this.name = options.name ?? 'stub';
     this.command = options.command ?? ['sh'];
-    this.answers = options.answers;
-    if (this.answers) {
-      const answers = this.answers;
-      this.finalMessage = (session) => Promise.resolve(answers.get(session.id) ?? null);
+    this.recorded = options.answers;
+    if (this.recorded) {
+      const recorded = this.recorded;
+      this.answers = (session, after) => {
+        const all = recorded.get(session.id) ?? [];
+        const index = after === null ? -1 : all.findIndex((a) => a.id === after);
+        return Promise.resolve(all.slice(index + 1));
+      };
     }
   }
 
-  finalMessage?: (session: { id: string; dir: string }) => Promise<FinalMessage | null>;
+  answers?: (session: { id: string; dir: string }, after: string | null) => Promise<FinalMessage[]>;
 
   check(): Promise<HealthCheck[]> {
     return Promise.resolve([

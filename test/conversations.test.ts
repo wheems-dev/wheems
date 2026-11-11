@@ -23,7 +23,7 @@ describe('conversations', () => {
   let behaviour: (line: string) => Behaviour;
   let received: Map<string, string[]>;
   let logs: string[];
-  let answers: Map<string, FinalMessage>;
+  let answers: Map<string, FinalMessage[]>;
 
   const make = (options: { maxLiveSessions?: number; startupSeconds?: number } = {}) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
@@ -222,6 +222,33 @@ describe('conversations', () => {
       { thread: first, text: 'answer: three' },
     ]);
     expect([...channel.reactions.values()].every((set) => set.size === 0)).toBe(true);
+  });
+
+  it('posts every answer even when turns follow each other faster than it checks', async () => {
+    behaviour = () => 'answer';
+    await manager.stop();
+    // Each wait answers late, so by the time the manager looks, the next turn has started.
+    runtime = new MemoryRuntime(
+      {
+        'fake-agent': fakeAgent({
+          behaviour: (line) => behaviour(line),
+          reply: (conversation, text) => manager.reply(conversation, text),
+          answers,
+          delayMs: 15,
+        }),
+      },
+      { waitDelayMs: 25 },
+    );
+    make();
+    const first = await dm('one');
+    await dm('two', first);
+    await dm('three', first);
+    await settle();
+    expect(posts()).toEqual([
+      { thread: first, text: 'answer: one' },
+      { thread: first, text: 'answer: two' },
+      { thread: first, text: 'answer: three' },
+    ]);
   });
 
   it('says so when the agent finishes without replying', async () => {
