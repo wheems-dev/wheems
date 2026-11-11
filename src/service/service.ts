@@ -10,6 +10,8 @@ import { paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { ConversationManager, type Binding } from './conversations.js';
 import { listen, type ControlRequest, type ControlResponse } from './control.js';
+import { FilingQueue } from './filing.js';
+import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
 
 export interface ServiceOptions {
@@ -26,6 +28,8 @@ export interface ServiceOptions {
   pollMs?: number;
   /** How often to look for quiet conversations that need a note; 0 turns it off. */
   noteSweepMs?: number;
+  /** How long the filer gets for one note, in seconds. */
+  filingSeconds?: number;
 }
 
 export interface RunningService {
@@ -112,23 +116,42 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   }
 
   const engines = new Map<string, EngineDriver>();
+  const engineFor = (name: string): EngineDriver => {
+    const engine = engines.get(name) ?? options.registry.create('engine', name);
+    engines.set(name, engine);
+    return engine;
+  };
+  const sessionEnv = {
+    OPINR_HOME: options.home,
+    PATH: `${where.bin}:${env.PATH ?? '/usr/bin:/bin'}`,
+  };
+  const filing = new FilingQueue({
+    home: options.home,
+    install: config,
+    workspaces: install.workspaces,
+    engine: engineFor,
+    runner: new TaskRunner({
+      runtime,
+      log,
+      ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
+    }),
+    stateDir: where.state,
+    aboutYouFile: where.aboutYou,
+    sessionEnv,
+    log,
+    ...(options.filingSeconds !== undefined && { timeoutSeconds: options.filingSeconds }),
+  });
   const manager = new ConversationManager({
     install: config,
     bindings,
     channels,
     runtime,
-    engine: (name) => {
-      const engine = engines.get(name) ?? options.registry.create('engine', name);
-      engines.set(name, engine);
-      return engine;
-    },
+    engine: engineFor,
     store: new ConversationStore(where.conversations),
+    onNote: (workspace) => void filing.file(workspace),
     aboutYouFile: where.aboutYou,
     noteSweepMs: options.noteSweepMs ?? 60_000,
-    sessionEnv: {
-      OPINR_HOME: options.home,
-      PATH: `${where.bin}:${env.PATH ?? '/usr/bin:/bin'}`,
-    },
+    sessionEnv,
     log,
     ...(options.startupSeconds !== undefined && { startupSeconds: options.startupSeconds }),
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
@@ -168,6 +191,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   log(`Opinr ${options.version} is running from ${options.home}`);
   await manager.recover();
   manager.startNotes();
+  // Notes that landed while the service was away.
+  void filing.fileAll();
 
   return {
     async stop() {
@@ -178,6 +203,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       );
       for (const channel of channels.values()) await channel.stop().catch(() => undefined);
       await manager.stop();
+      filing.stop();
     },
   };
 }

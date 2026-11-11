@@ -80,6 +80,25 @@ to make room, the service asks the agent for its note as a turn of its own. The 
 turn is never posted. Each agent's instructions file carries the brief and `about-you.md`, as they
 were when its session started.
 
+When a note lands, and for any notes waiting when the service starts, the **filer** files it.
+The filer is a built-in agent, one note at a time per workspace, running in Herdr like any other
+(named `filer-<workspace>`). It works on a copy of the knowledge base in
+`.opinr/filing/<workspace>/`: the note, the brief, every page, and `about-you.md` to read. Opinr
+then checks every change in code before it reaches the real knowledge base:
+
+- a page keeps at least three quarters of its text, has a name of lowercase words and dashes,
+  and holds nothing that looks like a credential;
+- every page changed lists the note among its `sources`, and keeps the sources it had;
+- pages are never deleted;
+- the brief stays under 4,000 characters;
+- anything else the filer wrote is ignored.
+
+Opinr writes the changes that pass, moves the note to `notes/<year>/<month>/`, and commits those
+paths, and only those, in the install's git folder as "Opinr". A suggested change to
+`about-you.md` waits in `.opinr/review/about-you/` for you to approve it. A note the filer can't
+file stays in the inbox and is tried again; after three failed tries, it waits until the service
+restarts.
+
 `OPINR_HOME` moves the install folder.
 
 ## Engines, models and accounts
