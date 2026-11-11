@@ -13,7 +13,8 @@ const NEW_APP_URL = 'https://api.slack.com/apps?new_app=1';
 export interface SlackConnectOptions {
   /** Slack checks, replaceable in tests. */
   verifyTokens?: (botToken: string, appToken: string) => Promise<SlackIdentity>;
-  memberName?: (botToken: string, userId: string) => Promise<string>;
+  /** A member's name, null when Slack says there is no such member, throwing on other failures. */
+  memberName?: (botToken: string, userId: string) => Promise<string | null>;
 }
 
 /**
@@ -56,15 +57,11 @@ export function slackConnectFlow(options: SlackConnectOptions = {}): ConnectFlow
         const still = await ui.task(
           'Checking who may talk to agents in this Slack workspace',
           async () => {
+            // Only Slack saying "no such member" removes someone. Any other failure stops
+            // this step, so nothing is saved, rather than dropping someone by mistake.
             const found: string[] = [];
             for (const id of allowedUsers) {
-              if (
-                await memberName(botToken, id).then(
-                  () => true,
-                  () => false,
-                )
-              )
-                found.push(id);
+              if ((await memberName(botToken, id)) !== null) found.push(id);
             }
             return found;
           },
@@ -93,11 +90,13 @@ export function slackConnectFlow(options: SlackConnectOptions = {}): ConnectFlow
                 : 'A member ID starts with U or W, then letters and digits',
           });
           try {
-            await ui.task(
+            const name = await ui.task(
               'Looking you up in Slack',
               () => memberName(botToken, id.trim()),
-              (found) => `Allowed: ${found}`,
+              (found) =>
+                found === null ? `Slack has no member ${id.trim()}` : `Allowed: ${found}`,
             );
+            if (name === null) continue;
             allowedUsers = [id.trim()];
             break;
           } catch (error) {

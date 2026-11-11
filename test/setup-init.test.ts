@@ -41,9 +41,9 @@ describe('opinr setup', () => {
               ? Promise.resolve({ team: 'Home', botUser: 'opinr' })
               : Promise.reject(new Error('Slack refused the bot token: invalid_auth')),
           memberName: (_bot, id) =>
-            id === 'UMEMBER1'
-              ? Promise.resolve('Me')
-              : Promise.reject(new Error(`Slack has no member ${id}`)),
+            id === 'UFLAKY01'
+              ? Promise.reject(new Error("Couldn't look up UFLAKY01 in Slack: ECONNRESET"))
+              : Promise.resolve(id === 'UMEMBER1' || id === 'UMEMBER2' ? 'Me' : null),
         }),
       })
       .plan('channel', 'telegram', { label: 'Telegram', description: 'chat in Telegram' });
@@ -166,9 +166,7 @@ describe('opinr setup', () => {
             ? Promise.resolve({ team: 'Home', botUser: 'opinr' })
             : Promise.resolve({ team: 'Work', botUser: 'opinr' }),
         memberName: (bot, id) =>
-          bot === 'xoxb-work' && id === 'UWORKER1'
-            ? Promise.resolve('Me at work')
-            : Promise.reject(new Error(`Slack has no member ${id}`)),
+          Promise.resolve(bot === 'xoxb-work' && id === 'UWORKER1' ? 'Me at work' : null),
       }),
     });
     const ui = scriptedUi([
@@ -185,6 +183,33 @@ describe('opinr setup', () => {
     expect(ui.remaining()).toBe(0);
     expect((await loadInstall(home)).config?.connections.slack?.allowed_users).toEqual([
       'UWORKER1',
+    ]);
+  });
+
+  it('saves nothing when Slack fails to answer while rechecking allowed users', async () => {
+    await setup({
+      home,
+      env,
+      ui: scriptedUi(['channels', 'slack', false, 'xoxb-good', 'xapp-good', 'UMEMBER1', 'done']),
+      registry: registry(),
+      actions,
+    });
+    // Two people are allowed; looking up the second fails for a reason that isn't "no such member".
+    const file = join(home, 'install.yaml');
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace('[ UMEMBER1 ]', '[ UMEMBER1, UFLAKY01 ]'),
+    );
+    expect((await loadInstall(home)).config?.connections.slack?.allowed_users).toEqual([
+      'UMEMBER1',
+      'UFLAKY01',
+    ]);
+    const ui = scriptedUi(['channels', 'slack', false, false, 'xoxb-good', 'xapp-good', 'done']);
+    await setup({ home, env, ui, registry: registry(), actions });
+    expect(ui.shown.some((s) => s.kind === 'warn' && s.message.includes('ECONNRESET'))).toBe(true);
+    expect((await loadInstall(home)).config?.connections.slack?.allowed_users).toEqual([
+      'UMEMBER1',
+      'UFLAKY01',
     ]);
   });
 

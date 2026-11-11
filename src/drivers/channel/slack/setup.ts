@@ -72,12 +72,17 @@ export async function verifySlackTokens(
 }
 
 /** The display name of a Slack member, to confirm the member id is right. */
-export async function slackMemberName(botToken: string, userId: string): Promise<string> {
+/**
+ * The display name of a Slack member, or null when Slack says there is no such member.
+ * Any other failure (network, rate limit, permissions) throws: it says nothing about the member.
+ */
+export async function slackMemberName(botToken: string, userId: string): Promise<string | null> {
   try {
     const info = await new WebClient(botToken).users.info({ user: userId });
     const user = info.user;
     return user?.real_name ?? user?.name ?? userId;
   } catch (error) {
-    throw new Error(`Slack has no member ${userId}: ${slackError(error)}`, { cause: error });
+    if (slackError(error) === 'user_not_found') return null;
+    throw new Error(`Couldn't look up ${userId} in Slack: ${slackError(error)}`, { cause: error });
   }
 }
