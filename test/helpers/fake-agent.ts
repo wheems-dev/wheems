@@ -8,6 +8,7 @@ export type Behaviour =
   | 'reply-and-answer-same'
   | 'same-answer'
   | 'silent'
+  | 'slow-answer'
   | 'block'
   | 'never-start'
   | 'exit';
@@ -23,6 +24,10 @@ export interface FakeAgentOptions {
   answers?: Map<string, FinalMessage[]>;
   /** How long each turn takes, in milliseconds. Defaults to 5. */
   delayMs?: number;
+  /** Whether the agent's session is still running, checked before a late answer. */
+  alive?: (sessionId: string) => Promise<boolean>;
+  /** How long a `slow-answer` turn takes, in milliseconds. Defaults to 400. */
+  slowMs?: number;
   /** False for an agent that reports no status, like opencode under Herdr core. */
   reportsStatus?: boolean;
 }
@@ -74,6 +79,12 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
           };
           if (behaviour === 'reply') await options.reply(conversation, `echo: ${line}`);
           if (behaviour === 'answer') answer(`answer: ${line}`);
+          if (behaviour === 'slow-answer') {
+            // Still working long after it was asked; its answer comes late.
+            await new Promise((r) => setTimeout(r, options.slowMs ?? 400));
+            // A stopped agent never finishes its turn, so it writes no answer.
+            if ((await options.alive?.(sessionId)) !== false) answer(`answer: ${line}`);
+          }
           if (behaviour === 'same-answer') answer('Yes.');
           if (behaviour === 'progress-and-answer') {
             await options.reply(conversation, 'On it.');

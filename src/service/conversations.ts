@@ -330,7 +330,7 @@ export class ConversationManager {
     let existing = await this.options.store.get(key);
     if (existing?.noting === true) {
       // A note turn's answer must never reach the thread, even after a restart.
-      await this.skipNoteAnswers(key, binding);
+      await this.settleNoteTurn(key, binding);
       existing = await this.options.store.get(key);
     }
     const sessionName = existing?.sessionName ?? sessionNameFor(binding.workspace.id, key);
@@ -826,9 +826,70 @@ export class ConversationManager {
     }
     const target = this.conversationFor(key, binding);
     if (await this.untilTurnEnds(key, session.id, fromTurn, target)) {
+      // Its answer may not be written yet; then the next message settles it first.
       await this.skipNoteAnswers(key, binding);
-    } else {
-      this.options.log(`${conversation.sessionName} did not finish its note in time`);
+      return;
+    }
+    if (this.stopped) return; // The next message settles it, after the restart.
+    // A note turn that didn't end could answer at any time, and that answer would be taken for
+    // the reply to the next message. Stop its session instead; the conversation resumes.
+    this.options.log(`${conversation.sessionName} did not finish its note in time; stopping it`);
+    const current = await this.options.runtime.get(session.id);
+    if (current?.state === 'live') await this.stopSession(current);
+    await this.afterStopped(key, binding);
+  }
+
+  /** A note turn's session has ended: skip any answer it wrote before it did. No more can come. */
+  private async afterStopped(key: string, binding: Binding): Promise<void> {
+    if (!(await this.skipNoteAnswers(key, binding, 1)))
+      await this.options.store.setNoting(key, false);
+  }
+
+  /**
+   * Before a message goes in: makes sure a note turn that was asked for can no longer answer.
+   * Lets it finish, skips its answer, and if no answer comes, stops its session so none can
+   * arrive later and be taken for the reply to this message.
+   */
+  private async settleNoteTurn(key: string, binding: Binding): Promise<void> {
+    const conversation = await this.options.store.get(key);
+    const session = conversation ? await this.options.runtime.get(conversation.sessionName) : null;
+    if (session?.state === 'live') {
+      await this.untilSettled(key, session.id, this.conversationFor(key, binding));
+      if (await this.skipNoteAnswers(key, binding)) return;
+      this.options.log(`${session.name ?? session.id}'s note turn gave no answer; stopping it`);
+      await this.stopSession(session);
+    }
+    // No session, so no answer can come any more.
+    await this.afterStopped(key, binding);
+  }
+
+  /** Waits, up to the time a note gets, until a session isn't working, or has a new answer. */
+  private async untilSettled(
+    key: string,
+    id: string,
+    target: Pick<Watch, 'conversation' | 'engine'>,
+  ): Promise<void> {
+    const deadline = Date.now() + this.options.noteTurnSeconds * 1000;
+    const cursor = (await this.options.store.get(key))?.lastAnswerId;
+    while (!this.stopped && Date.now() < deadline) {
+      const session = await this.options.runtime.get(id);
+      if (session?.state !== 'live') return;
+      if (target.engine.capabilities.status) {
+        if (session.status !== 'working') return;
+        await this.options.runtime.wait(id, {
+          timeoutSeconds: Math.min(60, secondsLeft(deadline)),
+        });
+        continue;
+      }
+      const engineId = await this.engineSessionId(key, target.engine, target);
+      if (engineId !== null && target.engine.answers) {
+        const found = await target.engine.answers(
+          { id: engineId, dir: target.conversation.dir },
+          cursor ? cursor : null,
+        );
+        if (found.length > 0) return;
+      }
+      await sleep(this.options.answerPollMs);
     }
   }
 
@@ -874,14 +935,14 @@ export class ConversationManager {
   }
 
   /**
-   * Moves the answer position past a note turn's answers without posting them. Leaves the
-   * conversation marked as noting when no answer is there yet, so it's skipped later instead.
+   * Moves the answer position past a note turn's answers without posting them. Returns false,
+   * leaving the conversation marked as noting, when no answer is there yet.
    */
-  private async skipNoteAnswers(key: string, binding: Binding): Promise<void> {
+  private async skipNoteAnswers(key: string, binding: Binding, attempts = 5): Promise<boolean> {
     const target = this.conversationFor(key, binding);
     const engine = target.engine;
     const cursor = (await this.options.store.get(key))?.lastAnswerId;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
       const id = await this.engineSessionId(key, engine, target);
       if (id === null || !engine.answers) continue;
@@ -892,9 +953,10 @@ export class ConversationManager {
       const last = found.at(-1);
       if (last) {
         await this.options.store.setNoting(key, false, last.id);
-        return;
+        return true;
       }
     }
+    return false;
   }
 
   private bindingFor(conversation: Conversation): Binding | undefined {

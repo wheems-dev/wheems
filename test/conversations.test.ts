@@ -26,7 +26,12 @@ describe('conversations', () => {
   let answers: Map<string, FinalMessage[]>;
 
   const make = (
-    options: { maxLiveSessions?: number; startupSeconds?: number; noteSweepMs?: number } = {},
+    options: {
+      maxLiveSessions?: number;
+      startupSeconds?: number;
+      noteSweepMs?: number;
+      noteTurnSeconds?: number;
+    } = {},
   ) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
     manager = new ConversationManager({
@@ -43,6 +48,7 @@ describe('conversations', () => {
       log: (m) => logs.push(m),
       ...(options.maxLiveSessions !== undefined && { maxLiveSessions: options.maxLiveSessions }),
       ...(options.noteSweepMs !== undefined && { noteSweepMs: options.noteSweepMs }),
+      ...(options.noteTurnSeconds !== undefined && { noteTurnSeconds: options.noteTurnSeconds }),
       aboutYouFile: join(home, 'about-you.md'),
     });
   };
@@ -64,6 +70,7 @@ describe('conversations', () => {
       'fake-agent': fakeAgent({
         behaviour: (line) => behaviour(line),
         reply: (conversation, text) => manager.reply(conversation, text),
+        alive: async (id) => (await runtime.get(id))?.state === 'live',
         received,
         answers,
       }),
@@ -744,6 +751,50 @@ describe('conversations', () => {
       expect(live.map((s) => s.id)).not.toContain(oldSession.id);
       expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
       expect(stored()[conversationKey('personal', 'slack', 'D1', first)]?.notedAt).toBeDefined();
+    });
+
+    it("stops a session whose note turn runs late, so its answer can't stand in for the next reply", async () => {
+      make({ noteTurnSeconds: 0.1 });
+      behaviour = (line) => (isNoteRequest(line) ? 'slow-answer' : 'answer');
+      const first = await dm('one');
+      await settle();
+      const oldSession = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      await manager.sweepNotes(later());
+      expect((await runtime.get(oldSession.id))?.state).not.toBe('live');
+      await dm('two', first);
+      await settle();
+      await new Promise((r) => setTimeout(r, 500));
+      expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+    });
+
+    it('lets a late note turn finish before the next message goes in, and skips its answer', async () => {
+      // The note turn outlived the service's wait, as after a restart.
+      behaviour = (line) => (isNoteRequest(line) ? 'slow-answer' : 'answer');
+      const first = await dm('one');
+      await settle();
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      await new ConversationStore(join(home, '.opinr', 'conversations.json')).setNoting(key, true);
+      make();
+      await runtime.send(session.id, 'Opinr: this conversation has gone quiet (old request)');
+      await dm('two', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+      expect(stored()[key]?.noting).toBeUndefined();
+    });
+
+    it('stops the session when a note turn gave no answer, before the next message goes in', async () => {
+      behaviour = (line) => (isNoteRequest(line) ? 'silent' : 'answer');
+      const first = await dm('one');
+      await settle();
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      await manager.sweepNotes(later());
+      await settle();
+      expect(stored()[key]?.noting).toBe(true);
+      await dm('two', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+      expect(stored()[key]?.noting).toBeUndefined();
     });
 
     it('loads the page about the person and the brief into the instructions', async () => {
