@@ -212,13 +212,16 @@ export class ConversationManager {
     }
 
     if (session) await this.options.runtime.remove(session.id).catch(() => undefined);
-    const started = await this.startSession(
-      key,
-      binding,
-      event,
-      sessionName,
-      existing !== undefined,
-    );
+    const engine = this.options.engine(this.chiefOfStaff(binding).definition.engine);
+    // An engine that chooses its own ids can only resume once its id has been found.
+    const engineId = engine.findSession ? (existing?.engineSessionId ?? null) : uuidFor(key);
+    const resume = existing !== undefined && engineId !== null;
+    if (existing !== undefined && !resume) {
+      this.options.log(
+        `Conversation ${key}: the engine's session id was never found, so it starts afresh`,
+      );
+    }
+    const started = await this.startSession(key, binding, event, sessionName, resume, engineId);
     await this.options.store.set(key, {
       workspace: binding.workspace.id,
       connection: binding.connection,
@@ -229,7 +232,10 @@ export class ConversationManager {
       createdAt: existing?.createdAt ?? now.toISOString(),
       lastActiveAt: now.toISOString(),
       // A conversation that starts here has had no answers posted yet.
-      lastAnswerId: existing ? existing.lastAnswerId : '',
+      lastAnswerId: resume ? existing.lastAnswerId : '',
+      ...(resume && { engineSessionId: engineId }),
+      startedAt: now.toISOString(),
+      firstTask: event.text,
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
     this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
@@ -271,6 +277,7 @@ export class ConversationManager {
     event: InboundEvent & { type: 'message' },
     sessionName: string,
     resume: boolean,
+    engineId: string | null,
   ): Promise<SessionInfo> {
     const workspace = binding.workspace;
     const agent = this.chiefOfStaff(binding);
@@ -282,7 +289,7 @@ export class ConversationManager {
         workspace: { id: workspace.id, dir: workspace.dir },
         sessionDir: workspace.dir,
         account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
-        session: { id: uuidFor(key), resume, task: event.text },
+        session: { id: uuidFor(key), resume, task: event.text, engineId },
       },
     );
     await this.writePlanFiles(plan);
@@ -437,13 +444,17 @@ export class ConversationManager {
   private async postAnswers(key: string, watch: Watch): Promise<boolean> {
     const engine = watch.engine;
     if (!engine.answers) return false;
-    const conversation = await this.options.store.get(key);
-    const cursor = conversation?.lastAnswerId;
+    const cursor = (await this.options.store.get(key))?.lastAnswerId;
     // The engine may still be writing its record when the turn ends; give it a moment.
     let fresh: FinalMessage[] = [];
     for (let attempt = 0; attempt < 5 && fresh.length === 0; attempt++) {
       if (attempt > 0) await sleep(Math.max(50, this.options.pollMs));
-      const found = await engine.answers(watch.conversation, cursor ? cursor : null);
+      const id = await this.engineSessionId(key, engine, watch);
+      if (id === null) continue;
+      const found = await engine.answers(
+        { id, dir: watch.conversation.dir },
+        cursor ? cursor : null,
+      );
       // Without a known position (a conversation from before positions were kept), only
       // the latest answer can be new.
       fresh = cursor === undefined ? found.slice(-1) : found;
@@ -457,6 +468,28 @@ export class ConversationManager {
     }
     await this.options.store.setLastAnswer(key, fresh[fresh.length - 1]?.id ?? '');
     return true;
+  }
+
+  /**
+   * The id to read answers by: Opinr's own for engines that take it, else the engine's
+   * own, found once after the session's first turn and kept with the conversation.
+   */
+  private async engineSessionId(
+    key: string,
+    engine: EngineDriver,
+    watch: Watch,
+  ): Promise<string | null> {
+    if (!engine.findSession) return watch.conversation.id;
+    const conversation = await this.options.store.get(key);
+    if (conversation?.engineSessionId !== undefined) return conversation.engineSessionId;
+    if (conversation?.startedAt === undefined || conversation.firstTask === undefined) return null;
+    const found = await engine.findSession({
+      dir: watch.conversation.dir,
+      startedAt: new Date(conversation.startedAt),
+      task: conversation.firstTask,
+    });
+    if (found !== null) await this.options.store.setEngineSession(key, found);
+    return found;
   }
 
   /** Stops the least recently used idle sessions beyond the workspace's limit. */

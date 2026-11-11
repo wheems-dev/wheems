@@ -251,6 +251,41 @@ describe('conversations', () => {
     ]);
   });
 
+  it('finds the session id of an engine that picks its own, and resumes by it', async () => {
+    behaviour = () => 'answer';
+    await manager.stop();
+    const engine = new StubEngine({ command: ['fake-agent'], answers, ownIds: true });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      sessionEnv: { OPINR_HOME: home },
+      pollMs: 5,
+      startupSeconds: 2,
+      followUpSeconds: 0.5,
+    });
+    const first = await dm('first question');
+    await settle();
+    const key = conversationKey('personal', 'slack', 'D1', first);
+    const stored = JSON.parse(
+      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+    ) as Record<string, { engineSessionId?: string }>;
+    expect(stored[key]?.engineSessionId).toBe('own-1');
+    expect(posts()).toEqual([{ thread: first, text: 'answer: first question' }]);
+
+    // The session ends; the next message resumes the engine's own session.
+    const [session] = await runtime.list({ labels: { opinr: 'conversation' } });
+    await runtime.stop(session!.id);
+    await dm('second question', first);
+    await settle();
+    const [next] = await runtime.list({ labels: { opinr: 'conversation' } });
+    expect(next?.command).toEqual(['fake-agent', '--resume']);
+    expect(posts().at(-1)).toEqual({ thread: first, text: 'answer: second question' });
+  });
+
   it('says so when the agent finishes without replying', async () => {
     behaviour = () => 'silent';
     const first = await dm('hello');

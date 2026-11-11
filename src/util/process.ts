@@ -17,7 +17,7 @@ export interface RunResult {
 export function runCommand(
   command: string,
   args: string[],
-  options: { timeoutMs?: number; env?: NodeJS.ProcessEnv; input?: string } = {},
+  options: { timeoutMs?: number; env?: NodeJS.ProcessEnv; input?: string; cwd?: string } = {},
 ): Promise<RunResult> {
   return new Promise((resolve) => {
     const child = execFile(
@@ -25,6 +25,7 @@ export function runCommand(
       args,
       {
         env: options.env ?? process.env,
+        ...(options.cwd !== undefined && { cwd: options.cwd }),
         timeout: options.timeoutMs ?? 30_000,
         maxBuffer: 16 * 1024 * 1024,
         encoding: 'utf8',

@@ -30,6 +30,15 @@ export interface EngineDriver extends Driver<'engine'> {
    * for the agent; without it, agents answer only through \`opinr reply\`.
    */
   answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
+
+  /**
+   * Optional, for engines that choose their own session ids (Codex, opencode): finds the
+   * session this engine started in \`dir\` at \`startedAt\` with \`task\` as its first message,
+   * and returns its id, or null when it can't be found yet. The service keeps the id with
+   * the conversation, passes it back as \`session.engineId\` to resume, and uses it as the
+   * session id for \`answers\`. Engines that take Opinr's id (Claude Code) don't need it.
+   */
+  findSession?(session: { dir: string; startedAt: Date; task: string }): Promise<string | null>;
 }
 
 /** An agent's answer: its final message of a turn. */
@@ -89,6 +98,11 @@ export interface EngineContext {
     resume: boolean;
     /** The first thing to say to the agent, or null to start it idle. */
     task: string | null;
+    /**
+     * The engine's own id for this conversation, for engines that choose their own ids
+     * (see `findSession`), once found. Null for a new conversation.
+     */
+    engineId: string | null;
   };
 }
 

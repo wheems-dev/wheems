@@ -31,7 +31,12 @@ const context: EngineContext = {
   workspace: { id: 'personal', dir: '/home/me/opinr/workspaces/personal' },
   sessionDir: '/home/me/opinr/workspaces/personal',
   account: { name: 'claude-subscription', driver: 'claude' },
-  session: { id: '11111111-2222-5333-8444-555555555555', resume: false, task: '-v hello' },
+  session: {
+    id: '11111111-2222-5333-8444-555555555555',
+    resume: false,
+    task: '-v hello',
+    engineId: null,
+  },
 };
 
 describe('claude-code engine', () => {

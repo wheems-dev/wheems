@@ -40,7 +40,12 @@ export function engineContract(label: string, options: EngineContractOptions): v
       workspace: { id: 'contract', dir: `${root}/workspaces/contract` },
       sessionDir: `${root}/workspaces/contract/sessions/contract-agent`,
       account: { name: 'contract-account', driver: options.accountDriver },
-      session: { id: '6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f', resume: false, task: null },
+      session: {
+        id: '6f1c2a4e-8b3d-4c5e-9f70-1a2b3c4d5e6f',
+        resume: false,
+        task: null,
+        engineId: null,
+      },
     };
 
     beforeAll(async () => {
@@ -109,18 +114,20 @@ export function engineContract(label: string, options: EngineContractOptions): v
       expect(await driver.prepare(agent, context)).toEqual(await driver.prepare(agent, context));
     });
 
-    it('names the conversation by its session id, and carries it on when resuming', async (ctx) => {
+    it('names the conversation, and carries it on when resuming', async (ctx) => {
       const fresh = await driver.prepare(agent, context);
-      expect(JSON.stringify(fresh)).toContain(context.session.id);
+      // An engine that chooses its own ids finds them later (findSession); others take Opinr's.
+      if (!driver.findSession) expect(JSON.stringify(fresh)).toContain(context.session.id);
       if (!driver.capabilities.resume) {
         ctx.skip();
         return;
       }
+      const engineId = driver.findSession ? 'contract-engine-session' : context.session.id;
       const resumed = await driver.prepare(agent, {
         ...context,
-        session: { ...context.session, resume: true },
+        session: { ...context.session, resume: true, engineId },
       });
-      expect(JSON.stringify(resumed)).toContain(context.session.id);
+      expect(JSON.stringify(resumed)).toContain(engineId);
       expect(resumed.command).not.toEqual(fresh.command);
     });
 
