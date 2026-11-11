@@ -1,9 +1,10 @@
 name: CI
 
+# Every push, which covers pull requests from branches in this repository.
+# Add pull_request when the repository is public and takes pull requests from forks.
 on:
   push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
