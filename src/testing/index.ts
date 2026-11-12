@@ -21,5 +21,9 @@ export {
   type ProgramFactory,
   type ProgramIo,
 } from './memory-runtime.js';
+export { embeddingsContract, type EmbeddingsContractOptions } from './embeddings-contract.js';
+export { vectorStoreContract, type VectorStoreContractOptions } from './vector-store-contract.js';
 export { MemoryChannel } from './memory-channel.js';
+export { HashEmbeddings, type HashEmbeddingsOptions } from './memory-embeddings.js';
+export { MemoryVectorStore } from './memory-vector-store.js';
 export { StubEngine } from './stub-engine.js';

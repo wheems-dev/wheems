@@ -10,7 +10,10 @@ import { fakeHc, type FakeHc } from './helpers/hc.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { installYaml } from '../src/cli/templates.js';
 import { writeSecret } from '../src/secrets.js';
-import { MemoryChannel, StubEngine } from '../src/testing/index.js';
+import { loadInstall } from '../src/config/load.js';
+import { SqliteVectorStore } from '../src/drivers/vector-store/sqlite.js';
+import { KnowledgeSearch } from '../src/knowledge/search.js';
+import { HashEmbeddings, MemoryChannel, StubEngine } from '../src/testing/index.js';
 
 const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 
@@ -59,7 +62,7 @@ describe('doctor', () => {
       ...probes,
       home,
       registry: registryWith().registry,
-      nodeVersion: '22.12.0',
+      nodeVersion: '22.13.0',
       platform: 'linux',
     });
     expect(report.ok).toBe(true);
@@ -172,6 +175,68 @@ describe('doctor', () => {
     ]);
     expect(statuses(after).Service).toEqual(['pass service']);
     expect(after.ok).toBe(true);
+  });
+
+  it("checks the embeddings driver and each workspace's search index", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    const { registry } = registryWith();
+    const embeddings = new HashEmbeddings();
+    registry
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
+      .register('embeddings', 'hash', () => embeddings)
+      .register(
+        'vector-store',
+        'sqlite',
+        (options) => new SqliteVectorStore({ dir: String(options.dir) }),
+      );
+    const knowledge = async () => {
+      const report = await runDoctor({ ...probes, home, registry, quick: true });
+      return report.sections.find((s) => s.title === 'Knowledge')?.checks ?? [];
+    };
+
+    expect((await knowledge()).map((c) => `${c.status} ${c.name}: ${c.message}`)).toEqual([
+      'skip embeddings: Search is keyword-only',
+      'warn personal index: Not built yet',
+    ]);
+
+    const install = await loadInstall(home);
+    const search = () =>
+      new KnowledgeSearch({
+        install: install.config!,
+        workspaces: install.workspaces,
+        registry,
+        indexDir: join(home, '.opinr', 'index'),
+      });
+    const keyword = search();
+    await keyword.syncAll();
+    await keyword.close();
+    expect((await knowledge()).map((c) => `${c.status} ${c.name}: ${c.message}`)).toEqual([
+      'skip embeddings: Search is keyword-only',
+      'pass personal index: 0 files, keyword search',
+    ]);
+
+    writeFileSync(
+      join(home, 'install.yaml'),
+      `${installYaml()}knowledge:\n  embeddings:\n    driver: hash\n`,
+    );
+    expect((await knowledge()).map((c) => `${c.status} ${c.name}`)).toEqual([
+      'pass hash embeddings',
+      'warn personal index',
+    ]);
+    expect((await knowledge())[1]?.message).toMatch(/not the model in install.yaml/);
+
+    writeFileSync(
+      join(home, 'install.yaml'),
+      `${installYaml()}knowledge:\n  embeddings:\n    driver: nowhere\n`,
+    );
+    const broken = await knowledge();
+    expect(broken[0]).toMatchObject({ name: 'embeddings', status: 'fail' });
+    expect(broken[0]?.message).toMatch(/No embeddings driver named "nowhere"/);
   });
 
   it('counts a folder as trusted when Claude Code trusted it or a folder around it', () => {

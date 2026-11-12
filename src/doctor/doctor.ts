@@ -14,10 +14,11 @@ import type { HealthCheck } from '../contracts/driver.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import type { RuntimeDriver } from '../contracts/runtime.js';
 import { HERDR_MINIMUM_VERSION } from '../drivers/runtime/herdr/herdr-runtime.js';
+import { KnowledgeSearch, type IndexStatus } from '../knowledge/search.js';
 import { compareVersions, isAtLeast } from '../util/version.js';
 export { defaultHome } from '../home.js';
 
-export const NODE_MINIMUM_VERSION = '22.12.0';
+export const NODE_MINIMUM_VERSION = '22.13.0';
 
 export interface DoctorOptions {
   /** The install folder. */
@@ -102,6 +103,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   if (install?.config) {
     sections.push({ title: 'Agents', checks: await agentChecks(install, options) });
     sections.push({ title: 'Channels', checks: await channelChecks(install, options) });
+    sections.push({ title: 'Knowledge', checks: await knowledgeChecks(install, options) });
     sections.push({ title: 'Service', checks: [await serviceCheck(options)] });
   }
 
@@ -215,6 +217,106 @@ async function channelChecks(
   return checks;
 }
 
+async function knowledgeChecks(
+  install: LoadedInstall,
+  options: DoctorOptions,
+): Promise<HealthCheck[]> {
+  const config = install.config;
+  if (!config) return [];
+  const checks: HealthCheck[] = [];
+  const settings = config.knowledge.embeddings;
+  let search: KnowledgeSearch;
+  const indexDir = paths(options.home, options.env).index;
+  try {
+    search = new KnowledgeSearch({
+      install: config,
+      workspaces: install.workspaces,
+      registry: options.registry,
+      indexDir,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'embeddings',
+      status: 'fail',
+      message: `Can't use knowledge.embeddings in install.yaml: ${error instanceof Error ? error.message : String(error)}`,
+      hint: 'Fix it, or run opinr setup (Knowledge). Until then the service searches by keyword only.',
+    });
+    search = new KnowledgeSearch({
+      install: { ...config, knowledge: {} },
+      workspaces: install.workspaces,
+      registry: options.registry,
+      indexDir,
+    });
+  }
+  try {
+    if (search.embeddings) {
+      checks.push(...(await search.embeddings.check()));
+    } else if (settings === undefined) {
+      checks.push({
+        name: 'embeddings',
+        status: 'skip',
+        message: 'Search is keyword-only',
+        hint: 'Run opinr setup (Knowledge) to search by meaning too, with a free local model.',
+      });
+    }
+    for (const workspace of install.workspaces) {
+      if (!workspace.config) continue;
+      const status = await search
+        .index(workspace.id)
+        .status()
+        .catch((error: unknown) => error);
+      checks.push(indexCheck(workspace.id, status));
+    }
+  } finally {
+    await search.close();
+  }
+  return checks;
+}
+
+function indexCheck(workspace: string, status: unknown): HealthCheck {
+  const name = `${workspace} index`;
+  if (status instanceof Error || typeof status !== 'object' || status === null) {
+    return {
+      name,
+      status: 'warn',
+      message: `Can't read it: ${status instanceof Error ? status.message : String(status)}`,
+      hint: 'Run opinr kb reindex.',
+    };
+  }
+  const index = status as IndexStatus;
+  if (!index.built) {
+    return {
+      name,
+      status: 'warn',
+      message: 'Not built yet',
+      hint: 'The service builds it when it starts, or run opinr kb reindex.',
+    };
+  }
+  const files = `${String(index.documents)} ${index.documents === 1 ? 'file' : 'files'}`;
+  if (index.stale) {
+    return {
+      name,
+      status: 'warn',
+      message: `${files}, built ${index.embeddings ? `with ${index.embeddings.model}` : 'for keyword search'}, not the model in install.yaml`,
+      hint: 'The service rebuilds it when it next syncs, or run opinr kb reindex.',
+    };
+  }
+  const missing = index.chunks - index.embedded;
+  if (index.embeddings !== null && missing > 0) {
+    return {
+      name,
+      status: 'warn',
+      message: `${files}; ${String(missing)} of ${String(index.chunks)} passages have no vector yet, so they're found by keyword only`,
+      hint: 'The service adds them once the embeddings driver answers.',
+    };
+  }
+  return {
+    name,
+    status: 'pass',
+    message: `${files}${index.embeddings ? `, searched by meaning with ${index.embeddings.model}` : ', keyword search'}`,
+  };
+}
+
 async function serviceCheck(options: DoctorOptions): Promise<HealthCheck> {
   const probe = options.service ?? probeService;
   const { installed, answering } = await probe(options.home);
@@ -251,7 +353,7 @@ function systemChecks(options: DoctorOptions): HealthCheck[] {
           name: 'Node.js',
           status: 'fail',
           message: `${nodeVersion} is older than the minimum ${NODE_MINIMUM_VERSION}`,
-          hint: 'Install Node.js 22 or later.',
+          hint: `Install Node.js ${NODE_MINIMUM_VERSION} or later.`,
         },
   );
   checks.push(

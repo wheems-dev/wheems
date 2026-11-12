@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -164,6 +164,50 @@ describe('the service', () => {
     );
     // Notes are never posted to the thread.
     expect(channel.sent).toHaveLength(1);
+  });
+
+  it('builds the search index when it starts, and rebuilds it when asked', async () => {
+    const kb = async (args: string[]) => {
+      let out = '';
+      let err = '';
+      const previous = process.exitCode;
+      process.exitCode = undefined;
+      try {
+        const code = await run(['kb', ...args], {
+          ...defaultIo(),
+          out: (t) => (out += t),
+          err: (t) => (err += t),
+          env: { ...env, OPINR_WORKSPACE: 'personal' },
+          color: false,
+        });
+        return { code, out, err };
+      } finally {
+        process.exitCode = previous;
+      }
+    };
+    const current = join(paths(home, env).index, 'personal', 'current.json');
+    await waitFor(() => existsSync(current));
+    expect(await kb(['search', 'Halcyon'])).toMatchObject({
+      code: 0,
+      out: 'Nothing in the knowledge base matches.\n',
+    });
+
+    const pages = join(home, 'workspaces', 'personal', 'knowledge', 'pages');
+    writeFileSync(
+      join(pages, 'boat-name.md'),
+      '---\ntitle: Boat name\n---\n\nThe boat is Halcyon.\n',
+    );
+    // The service owns the index, so the command asks it to rebuild.
+    expect(await kb(['reindex'])).toMatchObject({
+      code: 0,
+      out: 'Rebuilding in the service…\npersonal: indexed 1 file, keyword search only\n',
+    });
+    const found = await kb(['search', 'what', 'is', 'Halcyon']);
+    expect(found.code).toBe(0);
+    expect(found.out).toContain(
+      `Boat name\n  ${join(pages, 'boat-name.md')} (page)\n  The boat is Halcyon.`,
+    );
+    expect(await kb(['search', 'x', '--workspace', 'nope'])).toMatchObject({ code: 1 });
   });
 
   it('refuses opinr reply outside a conversation, or for one it does not know', async () => {

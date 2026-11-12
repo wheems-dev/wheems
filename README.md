@@ -24,7 +24,7 @@ opinr doctor
 
 ## Try it
 
-Requires Node.js 22.12 or later, and Herdr core 0.1.20 or later (`hc`) for the runtime checks.
+Requires Node.js 22.13 or later, and Herdr core 0.1.20 or later (`hc`) for the runtime checks.
 
 ```bash
 npm install
@@ -36,7 +36,7 @@ node dist/cli/main.js doctor --home examples/install  # both
 
 `doctor` starts a tiny test session in Herdr core and removes it again; `--quick` skips that.
 
-If `node --version` is older than 22.12, run these with a newer Node.js instead, such as
+If `node --version` is older than 22.13, run these with a newer Node.js instead, such as
 Homebrew's (`brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node dist/cli/main.js
 doctor`). Doctor fails with the version it found when Node.js is too old.
 

@@ -3,6 +3,8 @@ export * from './contracts/driver.js';
 export * from './contracts/runtime.js';
 export * from './contracts/engine.js';
 export * from './contracts/channel.js';
+export * from './contracts/embeddings.js';
+export * from './contracts/vector-store.js';
 export * from './contracts/registry.js';
 export * from './config/schemas.js';
 export {

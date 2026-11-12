@@ -40,7 +40,7 @@ export interface SetupOptions {
   actions: SetupActions;
 }
 
-type Section = 'engines' | 'channels' | 'workspaces' | 'service' | 'doctor' | 'done';
+type Section = 'engines' | 'channels' | 'workspaces' | 'knowledge' | 'service' | 'doctor' | 'done';
 
 /**
  * Interactive setup: makes the install folder if there is none, then offers what can be
@@ -64,6 +64,7 @@ export async function setup(options: SetupOptions): Promise<void> {
     const connected = await connectedChannels(options);
     const engineNames = (await installedEngines(options)).map((e) => e.label);
     const running = await options.actions.serviceRunning();
+    const embeddings = install.config?.knowledge.embeddings;
     const section = await ui.select<Section>({
       message: 'What do you want to set up?',
       initial: next,
@@ -93,6 +94,14 @@ export async function setup(options: SetupOptions): Promise<void> {
               : 'create one with its chief of staff',
         },
         {
+          value: 'knowledge',
+          label: 'Knowledge',
+          hint:
+            embeddings !== undefined
+              ? `searching by meaning with ${embeddings.model ?? embeddings.driver}`
+              : 'search by meaning with a free local model',
+        },
+        {
           value: 'service',
           label: 'Service',
           hint: running ? 'running' : 'run Opinr in the background',
@@ -107,7 +116,9 @@ export async function setup(options: SetupOptions): Promise<void> {
       if (section === 'channels')
         next = (await channels(options, where)) ? 'workspaces' : 'channels';
       if (section === 'workspaces')
-        next = (await workspaces(options, install)) ? 'service' : 'workspaces';
+        next = (await workspaces(options, install)) ? 'knowledge' : 'workspaces';
+      if (section === 'knowledge')
+        next = (await knowledge(options, where)) ? 'service' : 'knowledge';
       if (section === 'service') next = (await service(options)) ? 'doctor' : 'service';
       if (section === 'doctor') {
         const { ok, report } = await ui.task(
@@ -192,6 +203,103 @@ async function channels(options: SetupOptions, where: Paths): Promise<boolean> {
   await writeFile(where.install, doc.toString());
   ui.success(`${entry.label} is connected. Its tokens are saved privately in ${where.secrets}`);
   return true;
+}
+
+/**
+ * Turns searching by meaning on or off: picks an embeddings driver, makes sure it has a model
+ * (offering to download one), and records it in install.yaml.
+ */
+async function knowledge(options: SetupOptions, where: Paths): Promise<boolean> {
+  const { ui, registry } = options;
+  const doc = parseDocument(await readFile(where.install, 'utf8'));
+  const current = (
+    doc.getIn(['knowledge', 'embeddings']) as { toJSON(): unknown } | undefined
+  )?.toJSON() as { driver?: string; model?: string } | undefined;
+  const catalog = registry.catalog('embeddings');
+  ui.note(
+    [
+      'Agents search the knowledge base before answering about past work.',
+      'Keyword search always works. With an embedding model it also searches by meaning,',
+      'so "what is the boat called" finds a page that only says "the vessel is Halcyon".',
+    ].join('\n'),
+    'Knowledge',
+  );
+  const choice = await ui.select({
+    message: 'How should agents search the knowledge base?',
+    initial: current?.driver ?? catalog.find((e) => e.available)?.name ?? 'keyword',
+    choices: [
+      ...catalog.map((entry): Choice<string> => ({
+        value: entry.name,
+        label: `By meaning, with ${entry.label}`,
+        hint: entry.available
+          ? current?.driver === entry.name
+            ? `on${current.model !== undefined ? `, ${current.model}` : ''}`
+            : entry.description
+          : 'coming in a later version',
+        ...(!entry.available && { disabled: true }),
+      })),
+      { value: 'keyword', label: 'Keyword search only', hint: 'needs nothing installed' },
+    ],
+  });
+  if (choice === 'keyword') {
+    if (doc.hasIn(['knowledge', 'embeddings'])) {
+      doc.deleteIn(['knowledge', 'embeddings']);
+      await writeFile(where.install, doc.toString());
+    }
+    ui.success('Search is keyword-only. Restart the service (Service) for it to take effect.');
+    return true;
+  }
+  const entry = catalog.find((e) => e.name === choice);
+  const setup = entry?.embeddings;
+  if (!entry || !setup) {
+    ui.warn(`${entry?.label ?? choice} has nothing to set up yet.`);
+    return false;
+  }
+  let models = await ui.task(
+    `Looking for ${entry.label}`,
+    () => setup.models(),
+    (found) =>
+      found === null ? `${entry.label} isn't answering` : `${String(found.length)} models found`,
+  );
+  if (models === null) {
+    ui.warn(setup.installHint);
+    return false;
+  }
+  const wanted =
+    current?.driver === entry.name ? (current.model ?? setup.defaultModel) : setup.defaultModel;
+  let model = pickModel(models, wanted);
+  if (model === null) {
+    if (setup.pull === null) {
+      ui.warn(`${entry.label} doesn't have ${wanted}.`);
+      return false;
+    }
+    const command = setup.pull(wanted);
+    if (!(await ui.confirm(`Download ${wanted} with: ${command.join(' ')}?`, true))) return false;
+    await options.actions.run(command);
+    models = (await setup.models()) ?? [];
+    model = pickModel(models, wanted);
+    if (model === null) {
+      ui.warn(`${entry.label} still doesn't have ${wanted}. Check the output above.`);
+      return false;
+    }
+  }
+  if (!doc.hasIn(['knowledge'])) doc.set('knowledge', doc.createNode({}));
+  doc.setIn(['knowledge', 'embeddings'], doc.createNode({ driver: entry.name, model }));
+  await writeFile(where.install, doc.toString());
+  ui.success(
+    `Agents search by meaning with ${model}. Restart the service (Service) to build the index with it.`,
+  );
+  return true;
+}
+
+/** The model to use from those available: the one wanted, or the same model under another tag. */
+function pickModel(models: string[], wanted: string): string | null {
+  const bare = (name: string) => name.replace(/:latest$/, '');
+  return (
+    models.find((m) => bare(m) === bare(wanted)) ??
+    (wanted.includes(':') ? undefined : models.find((m) => m.startsWith(`${wanted}:`))) ??
+    null
+  );
 }
 
 async function workspaces(options: SetupOptions, install: LoadedInstall): Promise<boolean> {

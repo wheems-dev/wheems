@@ -7,16 +7,18 @@ import { chmod, mkdir, rm } from 'node:fs/promises';
 import { createConnection, createServer, type Server } from 'node:net';
 import { dirname } from 'node:path';
 import { z } from 'zod';
+import type { IndexStatus } from '../knowledge/search.js';
 
 export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('ping') }),
   z.object({ op: z.literal('reply'), conversation: z.string().min(1), text: z.string().min(1) }),
   z.object({ op: z.literal('note'), conversation: z.string().min(1), text: z.string().min(1) }),
+  z.object({ op: z.literal('reindex'), workspace: z.string().min(1) }),
 ]);
 
 export type ControlRequest = z.infer<typeof requestSchema>;
 export type ControlResponse =
-  { ok: true; version?: string; path?: string } | { ok: false; error: string };
+  { ok: true; version?: string; path?: string; index?: IndexStatus } | { ok: false; error: string };
 
 export type ControlHandler = (request: ControlRequest) => Promise<ControlResponse>;
 

@@ -60,7 +60,28 @@ describe('install.yaml', () => {
       machines: { mac: { local: true, always_on: false, reach: 'inbound' } },
       accounts: {},
       connections: {},
+      knowledge: {},
     });
+  });
+
+  it("takes the knowledge base's embeddings with the driver's own options", () => {
+    const problems: Problem[] = [];
+    const config = parseYaml(
+      'install.yaml',
+      'knowledge:\n  embeddings:\n    driver: ollama\n    model: nomic-embed-text:v1.5\n    url: http://10.0.0.2:11434\n',
+      installSchema,
+      problems,
+    );
+    expect(problems).toEqual([]);
+    expect(config?.knowledge).toEqual({
+      embeddings: {
+        driver: 'ollama',
+        model: 'nomic-embed-text:v1.5',
+        url: 'http://10.0.0.2:11434',
+      },
+    });
+    parseYaml('install.yaml', 'knowledge:\n  embeddings: { model: x }\n', installSchema, problems);
+    expect(problems.map((p) => p.message)).toEqual([expect.stringMatching(/driver/)]);
   });
 
   it('reports schema problems with the line they are on', () => {

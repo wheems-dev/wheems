@@ -133,6 +133,51 @@
         ],
         "additionalProperties": false
       }
+    },
+    "knowledge": {
+      "default": {},
+      "description": "How the knowledge base is searched, for every workspace.",
+      "type": "object",
+      "properties": {
+        "embeddings": {
+          "description": "Searches the knowledge base by meaning as well as by keyword. Other keys are the driver's own options, such as Ollama's `url`. Leave it out for keyword search only.",
+          "type": "object",
+          "properties": {
+            "driver": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "description": "The embeddings driver, such as `ollama`."
+            },
+            "model": {
+              "description": "The driver's model, such as `nomic-embed-text`. Defaults to its usual one.",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "driver"
+          ],
+          "additionalProperties": {}
+        },
+        "vector_store": {
+          "description": "Where vectors are kept. Defaults to SQLite files in `.opinr/index/`.",
+          "type": "object",
+          "properties": {
+            "driver": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9-]*$",
+              "description": "The vector store driver. Defaults to `sqlite`."
+            }
+          },
+          "required": [
+            "driver"
+          ],
+          "additionalProperties": {}
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false,

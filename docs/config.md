@@ -50,6 +50,19 @@ connections: # channels and integrations, connected once, shared by every worksp
   github: { driver: github, secret: github-token }
 ```
 
+```yaml
+knowledge: # how every workspace's knowledge base is searched
+  embeddings: # leave out for keyword search only
+    driver: ollama
+    model: nomic-embed-text # default: the driver's usual model
+    url: http://127.0.0.1:11434 # Ollama's own option; other drivers take their own
+  vector_store: { driver: sqlite } # the default: SQLite files in .opinr/index/
+```
+
+`knowledge.embeddings` turns on searching by meaning. Keys besides `driver` and `model` are the
+driver's own options. `opinr setup` (Knowledge) writes it, using the model Ollama already has when
+it can. Changing the driver or model rebuilds every index the next time the service syncs it.
+
 `secret` names a credential in the secrets file, `~/.config/opinr/secrets.json` (mode 600; an
 encrypted store comes later). Credentials never appear in config. `opinr setup` writes the Slack
 tokens there and your Slack member id into `allowed_users`.

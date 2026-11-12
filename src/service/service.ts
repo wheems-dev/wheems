@@ -2,7 +2,8 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:net';
 import { join } from 'node:path';
 import { crossCheck } from '../config/check.js';
-import { loadInstall } from '../config/load.js';
+import { loadInstall, type LoadedWorkspace } from '../config/load.js';
+import type { InstallConfig } from '../config/schemas.js';
 import type { ChannelDriver } from '../contracts/channel.js';
 import type { EngineDriver } from '../contracts/engine.js';
 import type { DriverRegistry } from '../contracts/registry.js';
@@ -10,6 +11,7 @@ import { paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { ConversationManager, type Binding } from './conversations.js';
 import { listen, type ControlRequest, type ControlResponse } from './control.js';
+import { KnowledgeSearch } from '../knowledge/search.js';
 import { FilingQueue } from './filing.js';
 import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
@@ -30,6 +32,8 @@ export interface ServiceOptions {
   noteSweepMs?: number;
   /** How long the filer gets for one note, in seconds. */
   filingSeconds?: number;
+  /** How often to bring the search indexes up to date with hand edits; 0 turns it off. */
+  indexSyncMs?: number;
 }
 
 export interface RunningService {
@@ -125,6 +129,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     OPINR_HOME: options.home,
     PATH: `${where.bin}:${env.PATH ?? '/usr/bin:/bin'}`,
   };
+  const search = knowledgeSearch(config, install.workspaces, options.registry, where.index, log);
   const filing = new FilingQueue({
     home: options.home,
     install: config,
@@ -139,6 +144,14 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     aboutYouFile: where.aboutYou,
     sessionEnv,
     log,
+    onFiled: (workspace) => {
+      search
+        .index(workspace)
+        .sync()
+        .catch((error: unknown) => {
+          log(`Search in ${workspace}: ${error instanceof Error ? error.message : String(error)}`);
+        });
+    },
     ...(options.filingSeconds !== undefined && { timeoutSeconds: options.filingSeconds }),
   });
   const manager = new ConversationManager({
@@ -179,20 +192,32 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             return { ok: true };
           case 'note':
             return { ok: true, path: await manager.note(request.conversation, request.text) };
+          case 'reindex':
+            return { ok: true, index: await search.index(request.workspace).rebuild() };
         }
       },
     );
   } catch (error) {
     for (const channel of started) await channel.stop().catch(() => undefined);
     await manager.stop();
+    await search.close();
     throw error;
   }
   const listening = server;
   log(`Opinr ${options.version} is running from ${options.home}`);
   await manager.recover();
   manager.startNotes();
-  // Notes that landed while the service was away.
+  // Files edited, and notes that landed, while the service was away.
+  void search.syncAll();
   void filing.fileAll();
+  const indexSyncMs = options.indexSyncMs ?? 10 * 60_000;
+  const syncTimer =
+    indexSyncMs > 0
+      ? setInterval(() => {
+          void search.syncAll();
+        }, indexSyncMs)
+      : undefined;
+  syncTimer?.unref();
 
   return {
     async stop() {
@@ -201,11 +226,40 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
           resolve();
         }),
       );
+      clearInterval(syncTimer);
       for (const channel of channels.values()) await channel.stop().catch(() => undefined);
       await manager.stop();
       filing.stop();
+      await search.close();
     },
   };
+}
+
+/**
+ * The install's search indexes. If the embeddings driver can't be made from install.yaml,
+ * search runs on keywords alone rather than stopping the service; doctor says why.
+ */
+function knowledgeSearch(
+  config: InstallConfig,
+  workspaces: LoadedWorkspace[],
+  registry: DriverRegistry,
+  indexDir: string,
+  log: (message: string) => void,
+): KnowledgeSearch {
+  try {
+    return new KnowledgeSearch({ install: config, workspaces, registry, indexDir, log });
+  } catch (error) {
+    log(
+      `Search is keyword-only: ${error instanceof Error ? error.message : String(error)}. Run opinr doctor.`,
+    );
+    return new KnowledgeSearch({
+      install: { ...config, knowledge: {} },
+      workspaces,
+      registry,
+      indexDir,
+      log,
+    });
+  }
 }
 
 function shellQuote(value: string): string {

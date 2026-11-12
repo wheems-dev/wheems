@@ -4,10 +4,12 @@ import { DriverRegistry } from '../contracts/registry.js';
 import { slackConnectFlow } from './channel/slack/connect.js';
 import { SlackChannel } from './channel/slack/slack-channel.js';
 import { SocketModeTransport } from './channel/slack/transport.js';
+import { OllamaEmbeddings, ollamaSetup } from './embeddings/ollama.js';
 import { ClaudeCodeEngine, claudeCodeSetup } from './engine/claude-code.js';
 import { CodexEngine, codexSetup } from './engine/codex.js';
 import { OpencodeEngine, opencodeSetup } from './engine/opencode.js';
 import { HerdrRuntime } from './runtime/herdr/herdr-runtime.js';
+import { SqliteVectorStore } from './vector-store/sqlite.js';
 
 const herdrOptions = z.strictObject({
   binary: z.string().min(1).optional(),
@@ -17,6 +19,15 @@ const herdrOptions = z.strictObject({
 const slackOptions = z.object({
   bot_token: z.string().startsWith('xoxb-', 'The bot token starts with xoxb-'),
   app_token: z.string().startsWith('xapp-', 'The app-level token starts with xapp-'),
+});
+
+const ollamaOptions = z.strictObject({
+  model: z.string().min(1).optional(),
+  url: z.url().optional(),
+});
+
+const sqliteOptions = z.object({
+  dir: z.string().min(1),
 });
 
 function parse<T>(driver: string, schema: z.ZodType<T>, options: Record<string, unknown>): T {
@@ -74,6 +85,34 @@ export function createDriverRegistry(): DriverRegistry {
         connect: slackConnectFlow(),
       },
     )
+    .register(
+      'embeddings',
+      'ollama',
+      (options) => {
+        const { model, url } = parse('ollama', ollamaOptions, options);
+        return new OllamaEmbeddings({
+          ...(model !== undefined && { model }),
+          ...(url !== undefined && { url }),
+        });
+      },
+      {
+        label: 'Ollama',
+        description: 'runs an embedding model on this machine, free',
+        embeddings: ollamaSetup(),
+      },
+    )
+    .register('vector-store', 'sqlite', (options) => {
+      const { dir } = parse('sqlite', sqliteOptions, options);
+      return new SqliteVectorStore({ dir });
+    })
+    .plan('embeddings', 'openai', {
+      label: 'OpenAI',
+      description: "OpenAI's embedding models, with an API key",
+    })
+    .plan('vector-store', 'pgvector', {
+      label: 'pgvector',
+      description: 'vectors in Postgres',
+    })
     .plan('channel', 'telegram', {
       label: 'Telegram',
       description: 'chat with your agents in Telegram',

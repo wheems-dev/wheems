@@ -72,6 +72,9 @@ and never pass through an agent.
             └── reports/      nightly: contradictions and stale pages
 ```
 
+Running state, never committed, lives in `.opinr/`: the control socket, logs, conversations, the
+filer's working copies and the search indexes (`.opinr/index/`).
+
 Agents never write into `knowledge/` or `about-you.md` themselves. They write notes with
 `opinr note`, and the service saves each note to its workspace's inbox with where it came from:
 workspace, agent, engine, conversation and time. When a conversation has been quiet for
@@ -103,6 +106,43 @@ tried again; after three failed tries, it waits until the service restarts.
 Nothing that looks like a password, token or key is kept: `opinr note` refuses such a note, a
 note that reaches the inbox anyway is moved to `.opinr/quarantine/<workspace>/` and never filed or
 committed, and pages and the brief that hold one are not kept.
+
+### Searching the knowledge base
+
+Agents search before answering about past work: `opinr kb search "what did we decide about the
+boat name"`, run in their session, searches their own workspace's pages and notes (filed and in
+the inbox). Their built-in instructions tell them to.
+
+- **By keyword**, always: SQLite's full-text search, built into Node.js, so it needs nothing
+  installed.
+- **By meaning** too, when install.yaml names an embeddings driver (`knowledge.embeddings`), such
+  as Ollama with `nomic-embed-text`, which runs on the machine for free. `opinr setup`
+  (Knowledge) sets it up and offers to download the model.
+- The two rankings are combined by reciprocal rank fusion, and each file is represented by its
+  best passage. A match by meaning alone is kept only if it is close to the best one and above
+  the model's floor, so a question the knowledge base can't answer doesn't come back with its
+  least unrelated pages.
+- Notes from automated jobs (`origin: automated`) rank at half the score of people's own work,
+  and so do pages built only from such notes.
+
+Files are split into passages of whole paragraphs, up to 1,200 characters, starting afresh at a
+heading. Each passage is indexed for keywords, and embedded with its file's title in front.
+
+The index is running state in `.opinr/index/`, never committed and rebuildable from the files at
+any time. Each workspace has its own, built in generations: `<generation>.sqlite` holds the text,
+a vector collection named `<workspace>.<generation>` holds the vectors (with the built-in SQLite
+store, in `.opinr/index/_vectors/`), and `current.json` says which generation is in use and what
+model built it. The service brings it up to date when it starts, after each note is filed, and
+every ten minutes for edits by hand; only files whose size, time or content changed are read
+again, and only their passages embedded again.
+
+`opinr kb reindex` builds a new generation from the files and swaps it in when it's done, so
+search keeps working meanwhile. If the service is running, it does the rebuild, so the two never
+write at once. The index rebuilds itself the same way when the embeddings driver or model
+changes, because vectors from different models can't be compared. If the embeddings driver can't
+be reached, such as when Ollama isn't running, new passages are found by keyword until it can
+be, a search says it fell back to keywords, and a rebuild keeps the index it has rather than
+lose its vectors. `opinr doctor` checks the driver and each workspace's index.
 
 `OPINR_HOME` moves the install folder.
 

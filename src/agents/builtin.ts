@@ -55,6 +55,24 @@ This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never
   not sent to the person.
 `;
 
+export const SEARCH_INSTRUCTIONS = `## Searching the knowledge base (built into Opinr)
+
+The brief below is a short summary. The knowledge base holds the detail: a page per topic, and
+every note it was built from.
+
+- Before you answer about past work, decisions, people, plans or anything from an earlier
+  conversation, search it. Search before saying you don't know.
+
+  \`\`\`sh
+  opinr kb search "what did we decide about the boat name"
+  \`\`\`
+
+- Ask in plain words: it searches by meaning as well as by keyword. Try other words if the first
+  search finds nothing useful.
+- Each result gives a file. Read the file before relying on it; the passage shown is only part
+  of it. Pages say what's true now; notes say what was true when they were written.
+`;
+
 /** What an agent knows when it starts: the page about the person and the workspace's brief. */
 export interface Knowledge {
   aboutYou: string | null;
@@ -74,7 +92,7 @@ export function withBuiltins(
     known.length === 0
       ? ''
       : `\n## What you know (from Opinr)\n\nKept up to date by Opinr from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
-  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}${knows}`;
+  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}${knows}`;
 }
 
 /** The message Opinr sends when it asks an agent for its note. */
