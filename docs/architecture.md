@@ -127,6 +127,9 @@ the inbox). Their built-in instructions tell them to.
 
 Files are split into passages of whole paragraphs, up to 1,200 characters, starting afresh at a
 heading. Each passage is indexed for keywords, and embedded with its file's title in front.
+Three kinds of file are left out, and logged once: links, which could point anywhere on the
+machine; files over 1 MB; and anything that looks like it holds a credential, which is never
+stored in the index or sent to an embeddings service.
 
 The index is running state in `.opinr/index/`, never committed and rebuildable from the files at
 any time. Each workspace has its own, built in generations: `<generation>.sqlite` holds the text,

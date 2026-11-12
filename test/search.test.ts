@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +16,7 @@ import { DriverError } from '../src/contracts/driver.js';
 import { OllamaEmbeddings, hasModel } from '../src/drivers/embeddings/ollama.js';
 import { SqliteVectorStore } from '../src/drivers/vector-store/sqlite.js';
 import { knowledgePaths, writeNote } from '../src/knowledge/notes.js';
-import { chunkText, ftsQuery, SearchIndex } from '../src/knowledge/search.js';
+import { chunkText, ftsQuery, MAX_FILE_SIZE, SearchIndex } from '../src/knowledge/search.js';
 import {
   embeddingsContract,
   HashEmbeddings,
@@ -298,6 +306,42 @@ describe('the search index', () => {
     // The removed page's vectors went with it.
     const collection = await vectors.open('personal.1');
     expect(await collection.count()).toBe(status.chunks);
+  });
+
+  it('leaves out links, very large files and anything that looks like a credential', async () => {
+    const pages = knowledgePaths(workspace).pages;
+    const outside = join(workspace, '..', 'private.md');
+    writeFileSync(outside, '# Private\n\nThe safe code is Zanzibar.\n');
+    symlinkSync(outside, join(pages, 'linked.md'));
+    writeFileSync(
+      join(pages, 'huge.md'),
+      `# Huge\n\nZanzibar ${'word '.repeat(MAX_FILE_SIZE / 4)}`,
+    );
+    writeFileSync(
+      join(pages, 'tokens.md'),
+      page('Tokens', [], 'The Zanzibar bot token is xoxb-1234567890-abcdefghij.'),
+    );
+    await index.sync();
+    await index.sync();
+    expect((await index.search('Zanzibar', 10)).results).toEqual([]);
+    expect(embeddings.calls.flatMap((c) => c.texts).join('\n')).not.toContain('xoxb-');
+    expect(logs.filter((l) => l.includes('left'))).toEqual([
+      'Search in personal: left pages/huge.md out, because it is larger than 1 MB',
+      'Search in personal: left pages/linked.md out, because it is a link',
+      'Search in personal: left pages/tokens.md out, because it looks like it holds a credential',
+    ]);
+  });
+
+  it('forgets a file once it starts to look like it holds a credential', async () => {
+    await index.sync();
+    const pages = knowledgePaths(workspace).pages;
+    writeFileSync(
+      join(pages, 'invoices.md'),
+      page('Invoices', ['b.md'], 'Invoices go out Fridays. Key: sk-abcdefghijklmnopqrstuvwxyz.'),
+    );
+    await index.sync();
+    expect((await index.search('Invoices Fridays')).results.map((r) => r.file)).toEqual([]);
+    expect((await index.status()).documents).toBe(1);
   });
 
   it('embeds only what changed', async () => {

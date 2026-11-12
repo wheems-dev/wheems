@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, join, relative, sep } from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { parseDocument } from 'yaml';
@@ -9,7 +9,7 @@ import type { EmbeddingsDriver } from '../contracts/embeddings.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import type { VectorCollection, VectorStoreDriver } from '../contracts/vector-store.js';
 import { openDatabase } from '../util/sqlite.js';
-import { knowledgePaths, noteTitle } from './notes.js';
+import { knowledgePaths, looksLikeSecret, noteTitle } from './notes.js';
 
 /**
  * Searching a workspace's knowledge base: its pages and notes, by keyword with SQLite's
@@ -22,6 +22,9 @@ import { knowledgePaths, noteTitle } from './notes.js';
  * rewriting `current.json`, so search keeps working while it runs, and a failed rebuild
  * leaves the old one in place.
  */
+
+/** Files larger than this aren't indexed: notes are capped at 32 KB, and pages are short. */
+export const MAX_FILE_SIZE = 1024 * 1024;
 
 /** The most text in one chunk: a few paragraphs, well inside an embedding model's limit. */
 export const CHUNK_SIZE = 1200;
@@ -111,6 +114,8 @@ export class SearchIndex {
   private connection: Connection | null = null;
   /** The last embedding failure logged, so a stopped Ollama is reported once, not every sync. */
   private lastEmbedError: string | null = null;
+  /** Files left out of the index and already logged, by path, size and time. */
+  private readonly skipped = new Set<string>();
 
   constructor(private readonly options: SearchIndexOptions) {
     this.workspace = options.workspace;
@@ -440,13 +445,38 @@ export class SearchIndex {
     const removedChunks: string[] = [];
     for (const [file, kind] of files) {
       const full = join(this.knowledge, ...file.split('/'));
-      const info = await stat(full).catch(() => null);
+      // Never follows a link: it could point anywhere on the machine.
+      const info = await lstat(full).catch(() => null);
       if (!info) continue;
+      const leaveOut = (reason: string) => {
+        const key = `${file}:${String(info.size)}:${String(info.mtimeMs)}`;
+        if (!this.skipped.has(key)) {
+          this.skipped.add(key);
+          this.log(`Search in ${this.workspace}: left ${file} out, because ${reason}`);
+        }
+      };
+      // A file left out stays in `known`, so whatever the index had of it is forgotten.
+      if (!info.isFile()) {
+        if (info.isSymbolicLink()) leaveOut('it is a link');
+        continue;
+      }
+      if (info.size > MAX_FILE_SIZE) {
+        leaveOut(`it is larger than ${String(MAX_FILE_SIZE / 1024 / 1024)} MB`);
+        continue;
+      }
       const seen = known.get(file);
-      known.delete(file);
-      if (seen && seen.mtime === info.mtimeMs && seen.size === info.size) continue;
+      if (seen && seen.mtime === info.mtimeMs && seen.size === info.size) {
+        known.delete(file);
+        continue;
+      }
       const text = await readFile(full, 'utf8').catch(() => null);
       if (text === null) continue;
+      // Never stored in the index, nor sent to an embeddings service.
+      if (looksLikeSecret(text)) {
+        leaveOut('it looks like it holds a credential');
+        continue;
+      }
+      known.delete(file);
       const hash = createHash('sha1').update(text).digest('hex');
       if (seen?.hash === hash) {
         db.prepare('UPDATE docs SET mtime = ?, size = ? WHERE path = ?').run(
