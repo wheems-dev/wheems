@@ -175,6 +175,16 @@ export const workspaceSchema = z.strictObject({
         .describe(
           'Minutes a conversation stays quiet, after new work, before Opinr asks its agent for a note. 0 turns this off.',
         ),
+      filer: z
+        .strictObject({
+          engine: nameSchema.optional().describe("Defaults to the chief of staff's engine."),
+          model: nonEmpty
+            .optional()
+            .describe("Defaults to Claude Sonnet on Claude Code, else the chief of staff's model."),
+          account: nameSchema.optional().describe("Defaults to the chief of staff's account."),
+        })
+        .optional()
+        .describe('The agent that files notes into the knowledge base.'),
     })
     .default({ note_after_idle: 30 })
     .describe("How the workspace's knowledge loop runs."),

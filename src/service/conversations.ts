@@ -68,6 +68,8 @@ export interface ConversationManagerOptions {
   noteSweepMs?: number;
   /** How long an agent gets to write a note it was asked for. */
   noteTurnSeconds?: number;
+  /** Called when a note lands in a workspace's inbox, to file it. */
+  onNote?: (workspace: string) => void;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -105,9 +107,10 @@ interface Watch {
  */
 export class ConversationManager {
   private readonly options: Required<
-    Omit<ConversationManagerOptions, 'writeFile' | 'log' | 'aboutYouFile'>
+    Omit<ConversationManagerOptions, 'writeFile' | 'log' | 'aboutYouFile' | 'onNote'>
   > & {
     aboutYouFile: string | undefined;
+    onNote: ((workspace: string) => void) | undefined;
     writeFile: (path: string, content: string) => Promise<void>;
     log: (message: string) => void;
   };
@@ -133,6 +136,7 @@ export class ConversationManager {
       noteSweepMs: 0,
       noteTurnSeconds: 600,
       aboutYouFile: undefined,
+      onNote: undefined,
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -210,6 +214,7 @@ export class ConversationManager {
     );
     await this.options.store.setNoted(key, new Date());
     this.options.log(`Note from ${key}: ${file}`);
+    this.options.onNote?.(binding.workspace.id);
     return file;
   }
 

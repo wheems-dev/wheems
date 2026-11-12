@@ -64,6 +64,12 @@ describe('notes', () => {
     ]);
   });
 
+  it('refuses a note that looks like it holds a credential', async () => {
+    await expect(writeNote(dir, source, 'The token is xoxb-1234567890-abcdefghij')).rejects.toThrow(
+      'password, token or key',
+    );
+  });
+
   it('refuses empty and overlong notes', async () => {
     await expect(writeNote(dir, source, '  \n')).rejects.toThrow('empty');
     await expect(writeNote(dir, source, 'x'.repeat(40_000))).rejects.toThrow('short summary');
