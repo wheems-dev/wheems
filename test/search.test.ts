@@ -422,6 +422,67 @@ describe('the search index', () => {
     expect(logs.some((l) => l.includes('embedding model changed'))).toBe(true);
   });
 
+  it('finishes a search that a rebuild overtakes, here or in another process', async () => {
+    await index.sync();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const slow = new HashEmbeddings({
+      synonyms: { boat: 'vessel', named: 'name', called: 'name' },
+    });
+    const embed = slow.embed.bind(slow);
+    slow.embed = async (texts, purpose) => {
+      if (purpose === 'query') await held;
+      return embed(texts, purpose);
+    };
+    await index.close();
+    index = make({ embeddings: slow });
+    const reader = make({ embeddings: slow });
+    const here = index.search('boat named');
+    const there = reader.search('boat named');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Both searches are waiting on their query's embedding when generation 2 replaces 1.
+    await index.rebuild();
+    release();
+    for (const answer of await Promise.all([here, there])) {
+      expect(answer.mode).toBe('hybrid');
+      expect(answer.results[0]?.file).toBe('pages/boat-name.md');
+    }
+    // Once the search here finished, the old generation went.
+    expect(existsSync(join(indexDir, 'personal', '1.sqlite'))).toBe(false);
+    expect(vectors.names()).toEqual(['personal.2']);
+    expect((await reader.search('Kestrel')).results[0]?.file).toBe('pages/boat-name.md');
+    await reader.close();
+  });
+
+  it('searches by keyword only while an index built with another model waits for its rebuild', async () => {
+    await index.sync();
+    await index.close();
+    embeddings = new HashEmbeddings({ model: 'hash-32', dimensions: 32 });
+    index = make();
+    const answer = await index.search('Kestrel');
+    expect(answer.mode).toBe('keyword');
+    expect(answer.warning).toBe(
+      'Searched by keyword only: the index was built with hash-64 and is being rebuilt with hash-32',
+    );
+    expect(answer.results[0]?.file).toBe('pages/boat-name.md');
+    expect(embeddings.calls).toEqual([]);
+  });
+
+  it('embeds everything again when the vector store has lost its vectors', async () => {
+    await index.sync();
+    const chunks = (await index.status()).chunks;
+    // As after a restart with the vector files gone, or vector_store moved somewhere new.
+    await index.close();
+    await vectors.drop('personal.1');
+    index = make();
+    expect((await index.status()).embedded).toBe(0);
+    await index.sync();
+    expect(logs).toContain('Search in personal: the vector store lost vectors, so embedding again');
+    expect(await (await vectors.open('personal.1')).count()).toBe(chunks);
+    expect((await index.status()).embedded).toBe(chunks);
+    expect((await index.search('boat named')).results[0]?.matched).toContain('meaning');
+  });
+
   it('a second index on the same files sees a rebuild by the first', async () => {
     await index.sync();
     const reader = make();

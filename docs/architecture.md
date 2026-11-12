@@ -140,7 +140,10 @@ every ten minutes for edits by hand; only files whose size, time or content chan
 again, and only their passages embedded again.
 
 `opinr kb reindex` builds a new generation from the files and swaps it in when it's done, so
-search keeps working meanwhile. If the service is running, it does the rebuild, so the two never
+search keeps working meanwhile. A search already running keeps the old generation until it finishes,
+and one that finds it gone tries again on the new one. Until an index built with another model
+is rebuilt, search uses keywords only. If the vector store holds fewer vectors than the index
+expects, such as after its files were lost, the next sync embeds everything again. If the service is running, it does the rebuild, so the two never
 write at once. The index rebuilds itself the same way when the embeddings driver or model
 changes, because vectors from different models can't be compared. If the embeddings driver can't
 be reached, such as when Ollama isn't running, new passages are found by keyword until it can

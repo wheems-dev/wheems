@@ -102,6 +102,10 @@ interface Connection {
   generation: number;
   db: DatabaseSync;
   collection: VectorCollection | null;
+  /** Searches and writes using it now. It is closed only once none are. */
+  users: number;
+  /** Set once a newer generation replaces it: what to do when the last user is done. */
+  retired: (() => Promise<void>) | null;
 }
 
 /** One workspace's search index. Writes run one at a time; searches can run alongside. */
@@ -141,9 +145,11 @@ export class SearchIndex {
         await this.build(current);
         return;
       }
-      const connection = await this.connect(current);
-      await this.update(connection);
-      await this.embedMissing(connection);
+      await this.using(current, async (connection) => {
+        await this.update(connection);
+        await this.checkVectors(connection);
+        await this.embedMissing(connection);
+      });
     });
   }
 
@@ -156,13 +162,31 @@ export class SearchIndex {
   }
 
   async search(query: string, limit = 5): Promise<SearchAnswer> {
-    const current = await this.readCurrent();
-    if (current === null) {
-      throw new Error(
-        `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: opinr kb reindex`,
-      );
+    for (let attempt = 0; ; attempt++) {
+      const current = await this.readCurrent();
+      if (current === null) {
+        throw new Error(
+          `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: opinr kb reindex`,
+        );
+      }
+      try {
+        return await this.using(current, (connection) =>
+          this.searchIn(current, connection, query, limit),
+        );
+      } catch (error) {
+        // A rebuild, here or in another process, swapped in a new generation meanwhile.
+        const now = await this.readCurrent();
+        if (attempt >= 2 || now === null || now.generation === current.generation) throw error;
+      }
     }
-    const connection = await this.connect(current);
+  }
+
+  private async searchIn(
+    current: Current,
+    connection: Connection,
+    query: string,
+    limit: number,
+  ): Promise<SearchAnswer> {
     const { db } = connection;
     const scores = new Map<number, { score: number; keyword: boolean; meaning: boolean }>();
     const add = (id: number, rank: number, how: 'keyword' | 'meaning') => {
@@ -189,7 +213,11 @@ export class SearchIndex {
     let mode: SearchAnswer['mode'] = 'keyword';
     let warning: string | undefined;
     const embeddings = this.options.embeddings;
-    if (embeddings && connection.collection) {
+    const built = current.embeddings;
+    if (embeddings && !sameEmbeddings(built, this.configured())) {
+      // Vectors from another model can't be compared with this one's.
+      warning = `Searched by keyword only: the index was built ${built ? `with ${built.model}` : 'for keyword search'} and is being rebuilt with ${embeddings.model}`;
+    } else if (embeddings && connection.collection) {
       try {
         const [vector] = await embeddings.embed([query], 'query');
         if (vector) {
@@ -281,10 +309,55 @@ export class SearchIndex {
     return this.statusNow();
   }
 
-  /** Waits for any write in progress, then lets go of the index files. */
+  /** Waits for any write in progress, then lets go of the index files once searches finish. */
   async close(): Promise<void> {
     await this.chain.catch(() => undefined);
     await this.disconnect();
+  }
+
+  /** Runs work on a generation's connection, keeping it open until the work is done. */
+  private async using<T>(
+    current: Current,
+    work: (connection: Connection) => Promise<T>,
+  ): Promise<T> {
+    const connection = await this.connect(current);
+    connection.users++;
+    try {
+      return await work(connection);
+    } finally {
+      connection.users--;
+      if (connection.users === 0 && connection.retired) {
+        const cleanup = connection.retired;
+        connection.retired = null;
+        await cleanup();
+      }
+    }
+  }
+
+  /**
+   * Stops handing out a connection, and runs \`cleanup\` (which should close it) now or, if
+   * a search is still using it, once it finishes.
+   */
+  private async retire(connection: Connection, cleanup: () => Promise<void>): Promise<void> {
+    if (this.connection === connection) this.connection = null;
+    if (connection.users === 0) await cleanup();
+    else connection.retired = cleanup;
+  }
+
+  /**
+   * Starts the vectors afresh when the store holds fewer than the index says it embedded, as
+   * when its files were lost or \`knowledge.vector_store\` now points somewhere new.
+   */
+  private async checkVectors(connection: Connection): Promise<void> {
+    const { db, collection } = connection;
+    if (!collection) return;
+    const embedded = Number(
+      db.prepare('SELECT count(*) AS n FROM chunks WHERE embedded = 1').get()?.n ?? 0,
+    );
+    if ((await collection.count()) >= embedded) return;
+    this.log(`Search in ${this.workspace}: the vector store lost vectors, so embedding again`);
+    await collection.clear();
+    db.exec('UPDATE chunks SET embedded = 0');
   }
 
   private async statusNow(): Promise<IndexStatus> {
@@ -301,17 +374,20 @@ export class SearchIndex {
         stale: false,
       };
     }
-    const { db } = await this.connect(current);
-    const count = (sql: string) => Number(db.prepare(sql).get()?.n ?? 0);
-    return {
-      built: true,
-      generation: current.generation,
-      documents: count('SELECT count(*) AS n FROM docs'),
-      chunks: count('SELECT count(*) AS n FROM chunks'),
-      embedded: count('SELECT count(*) AS n FROM chunks WHERE embedded = 1'),
-      embeddings: current.embeddings,
-      stale: !sameEmbeddings(current.embeddings, configured),
-    };
+    return this.using(current, async ({ db, collection }) => {
+      const count = (sql: string) => Number(db.prepare(sql).get()?.n ?? 0);
+      const flagged = count('SELECT count(*) AS n FROM chunks WHERE embedded = 1');
+      return {
+        built: true,
+        generation: current.generation,
+        documents: count('SELECT count(*) AS n FROM docs'),
+        chunks: count('SELECT count(*) AS n FROM chunks'),
+        // What the vector store really holds, if it has lost some.
+        embedded: collection ? Math.min(flagged, await collection.count()) : flagged,
+        embeddings: current.embeddings,
+        stale: !sameEmbeddings(current.embeddings, configured),
+      };
+    });
   }
 
   private configured(): Current['embeddings'] {
@@ -357,16 +433,14 @@ export class SearchIndex {
       current.embeddings !== null && this.options.vectors
         ? await this.options.vectors.open(this.collectionName(current.generation))
         : null;
-    this.connection = { generation: current.generation, db, collection };
+    this.connection = { generation: current.generation, db, collection, users: 0, retired: null };
     return this.connection;
   }
 
+  /** Lets go of the current connection, once nothing is using it. */
   private async disconnect(): Promise<void> {
     const connection = this.connection;
-    this.connection = null;
-    if (!connection) return;
-    await connection.collection?.close();
-    if (connection.db.isOpen) connection.db.close();
+    if (connection) await this.retire(connection, () => closeConnection(connection));
   }
 
   private async build(previous: Current | null): Promise<void> {
@@ -384,6 +458,8 @@ export class SearchIndex {
       generation,
       db,
       collection: vectors ? await vectors.open(this.collectionName(generation)) : null,
+      users: 0,
+      retired: null,
     };
     const discard = async () => {
       await connection.collection?.close();
@@ -411,10 +487,11 @@ export class SearchIndex {
     const temporary = join(this.dir, 'current.json.tmp');
     await writeFile(temporary, `${JSON.stringify(current, null, 2)}\n`);
     await rename(temporary, join(this.dir, 'current.json'));
-    await this.disconnect();
-    this.connection = connection;
 
-    if (previous !== null) {
+    // The old generation goes once no search here is using it. A search in another process
+    // that has it open keeps reading it; one about to open it retries on the new one.
+    const removeOld = async () => {
+      if (previous === null) return;
       await removeDatabase(this.dbFile(previous.generation));
       if (previous.embeddings !== null && this.options.vectors)
         await this.options.vectors
@@ -422,6 +499,17 @@ export class SearchIndex {
           .catch((error: unknown) => {
             this.log(`Search in ${this.workspace}: couldn't drop old vectors: ${describe(error)}`);
           });
+    };
+    const old = this.connection;
+    this.connection = connection;
+    if (old) {
+      await this.retire(old, async () => {
+        await closeConnection(old);
+        if (old.generation === previous?.generation) await removeOld();
+      });
+      if (old.generation !== previous?.generation) await removeOld();
+    } else {
+      await removeOld();
     }
     const docs = Number(db.prepare('SELECT count(*) AS n FROM docs').get()?.n ?? 0);
     this.log(
@@ -856,6 +944,11 @@ function transaction<T>(db: DatabaseSync, work: () => T): T {
     db.exec('ROLLBACK');
     throw error;
   }
+}
+
+async function closeConnection(connection: Connection): Promise<void> {
+  await connection.collection?.close();
+  if (connection.db.isOpen) connection.db.close();
 }
 
 async function exists(path: string): Promise<boolean> {
