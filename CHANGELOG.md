@@ -3,6 +3,18 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Fixed**
+
+- Search needs SQLite full-text search (FTS5), which Node only bundles from 22.16 in the 22
+  line and from 24; no Node 23 release has it. `engines` is now `^22.16.0 || >=24`, the CLI and
+  `wheems service install` refuse other versions with a plain message, `wheems doctor` checks
+  that this Node's SQLite has full-text search, and search says so instead of failing with
+  "no such module: fts5".
+- `npm run build` now marks `dist/cli/main.js` executable, so a `wheems` linked with `npm link`
+  runs instead of failing with "Permission denied".
+
 ## 0.0.1
 
 The first preview: milestones 0 to 2 of the [roadmap](docs/roadmap.md). Not ready for real use.

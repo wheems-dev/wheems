@@ -5,7 +5,8 @@ most of it in Slack's app settings.
 
 You need:
 
-- Node.js 22.13 or later
+- Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
+  search, which Wheems needs)
 - Herdr core 0.1.20 or later (`hc`)
 - A Slack workspace where you can add apps
 
@@ -25,9 +26,9 @@ npm install
 npm run build
 ```
 
-If your default `node` is older than 22.13, run Wheems with a newer one, such as Homebrew's:
+If your default `node` isn't one of those (Homebrew's `node` may be 23), run Wheems with one that is, such as Homebrew's 22:
 `brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node /path/to/wheems/dist/cli/main.js`.
-`wheems doctor` says which Node.js it is running on.
+`wheems doctor` says which Node.js it is running on, and checks its SQLite has full-text search.
 
 ## 2. Run setup
 

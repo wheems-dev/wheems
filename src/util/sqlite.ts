@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { NODE_SUPPORTED } from './node-support.js';
 
 type Sqlite = typeof import('node:sqlite');
 
@@ -45,4 +46,46 @@ export async function openDatabase(
   db.exec('PRAGMA busy_timeout = 5000');
   if (options.readOnly !== true) db.exec('PRAGMA journal_mode = WAL');
   return db;
+}
+
+/** Something that runs SQL, as `DatabaseSync` does; tests pass a stand-in. */
+export interface SqlRunner {
+  exec(sql: string): void;
+  close(): void;
+}
+
+/**
+ * Why this SQLite can't do full-text search (FTS5), which search needs, or null when it can.
+ * `open` makes a scratch database; by default an in-memory one from `node:sqlite`.
+ */
+export async function fullTextSearchProblem(
+  open?: () => Promise<SqlRunner>,
+): Promise<string | null> {
+  let db: SqlRunner;
+  try {
+    db = open ? await open() : new (await sqlite()).DatabaseSync(':memory:');
+  } catch (error) {
+    return `Node's SQLite isn't available: ${describe(error)}. Use ${NODE_SUPPORTED}.`;
+  }
+  try {
+    db.exec('CREATE VIRTUAL TABLE probe USING fts5(text)');
+    return null;
+  } catch (error) {
+    return `This Node.js (${process.versions.node}, ${process.execPath}) has SQLite without full-text search (FTS5), which Wheems's search needs (${describe(error)}). Use ${NODE_SUPPORTED}, from nodejs.org or a package that bundles Node's own SQLite.`;
+  } finally {
+    db.close();
+  }
+}
+
+let checked: Promise<string | null> | undefined;
+
+/** Throws a plain explanation when this Node's SQLite has no full-text search. Checks once. */
+export async function requireFullTextSearch(): Promise<void> {
+  checked ??= fullTextSearchProblem();
+  const problem = await checked;
+  if (problem !== null) throw new Error(problem);
+}
+
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

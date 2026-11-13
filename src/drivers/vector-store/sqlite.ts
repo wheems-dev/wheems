@@ -9,6 +9,7 @@ import {
   type VectorMatch,
   type VectorStoreDriver,
 } from '../../contracts/vector-store.js';
+import { NODE_SUPPORTED } from '../../util/node-support.js';
 import { openDatabase, sqlite } from '../../util/sqlite.js';
 
 export interface SqliteVectorStoreOptions {
@@ -54,7 +55,7 @@ export class SqliteVectorStore implements VectorStoreDriver {
           name: 'vector store',
           status: 'fail',
           message: `Node's SQLite isn't available: ${error instanceof Error ? error.message : String(error)}`,
-          hint: 'Use Node.js 22.13 or later.',
+          hint: `Use ${NODE_SUPPORTED}.`,
         },
       ];
     }

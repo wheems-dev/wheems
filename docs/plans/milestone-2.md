@@ -144,6 +144,8 @@ Then the live test: a day of real use, then the next morning a new thread asking
   built-in guidance also goes into every agent's instructions file, so it works whatever skills
   support an engine has.
 - **Node's SQLite** prints an "experimental" warning. Wheems hides that warning, and the minimum
-  Node version rises to 22.13, the first version where it works without a flag.
+  Node version rises to 22.13, the first version where it works without a flag. (Later raised to
+  22.16, or 24 and up: Node bundles SQLite with full-text search only from those, and Node 23
+  never does.)
 - **Subscription usage.** Each note and filing run uses your Claude subscription. That's why the
   filer defaults to Sonnet and runs once per note, with no reviewer firing every few turns.
