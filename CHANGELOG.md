@@ -5,6 +5,12 @@ change anything, including commands and config formats, without a migration path
 
 ## Unreleased
 
+**Added**
+
+- `wheems` on its own shows a welcome screen: the cloud from the brand kit, in blue, beside the
+  name and "Your crew, ready for work.", then how the install is doing (workspaces and agents,
+  the service, search, and anything waiting for review). `wheems setup` opens with the cloud too.
+
 **Fixed**
 
 - Search needs SQLite full-text search (FTS5), which Node only bundles from 22.16 in the 22
