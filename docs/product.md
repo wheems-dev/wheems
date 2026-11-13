@@ -1,12 +1,28 @@
 # Wheems: the product
 
 Wheems is an open-source, opinionated framework for running teams of AI agents, with
-Herdr core (`hc`) as the runtime. The name means "one who opines", and
-its dropped vowel pairs it with Herdr.
+Herdr core (`hc`) as the runtime.
+
+**A harness first, workflows when you want them.** You get a front-facing agent harness you can
+simply talk to, and it can build fixed workflows (DAGs) when a job needs them or you ask for one.
+Talking to a chief always works; nothing requires a workflow.
+
+- **Hardening is a path, not a switch.** You ask for something in chat. When the chief notices a
+  job repeating, it offers to save it as a routine or a workflow. That runs in shadow mode,
+  proposing each outside action for your approval, and its steps graduate to acting on their own
+  as their results earn it.
+- **Both directions use the task.** A workflow step hands work to an agent as a task, and an agent
+  can start a saved workflow and wait for its result.
+- **Determinism is chosen per step:** fixed steps, gates and checks where the job is known, and an
+  agent's judgement only where it's needed.
+
+**It's for business work, not only code.** Watching an inbox and acting on each email, replying to
+reviews pulled in from a reviews service, finding and following up sales leads, bookkeeping,
+growing a website: coding is one case among many.
 
 You install it once, create a workspace per business or area of life, and talk to each
-workspace's chief of staff from Slack or Telegram. Each workspace has its own agents, skills,
-workflows, rules and knowledge base, and none of them can see another workspace.
+workspace's chief of staff from Slack or Telegram. Each workspace has its own agents, projects,
+skills, routines, workflows, rules and knowledge base, and none of them can see another workspace.
 
 ## The problem it solves
 
@@ -44,8 +60,13 @@ library of agent templates, skills and workflow templates.
 
 Each business or area of life is a **workspace** inside the install, cut off from the others.
 A workspace is an entity with its own people, knowledge and confidentiality. A **project** is
-a body of work inside one. Make something a separate workspace when it has different people,
-should keep its knowledge private, or may be handed to someone else one day.
+any body of work inside one, such as "Customer support", "Reviews", "Sales leads" or a website,
+with an optional lead you can talk to in its own channel and a knowledge base of its own.
+Projects keep context clean; they aren't walls, because only workspaces are. Make something a
+separate workspace when it has different people, should keep its knowledge private, or may be
+handed to someone else one day.
+
+How the pieces work, and which are built, is in [architecture.md](architecture.md).
 
 ## The opinions
 
@@ -59,10 +80,11 @@ Wheems decides these so users don't have to. Each can be renamed or tuned, but n
 - Built-in skills every agent gets: post to a channel, ask for approval, write a note, read
   the knowledge base. This is how agents learn to use the framework.
 
-**Optional, switched on from templates.** Roles such as reviewer, developer, servers
-engineer, DNS specialist, site lead and marketer, plus custom agents written in the same
-format. A workspace starts with the chief of staff alone and adds roles when needed. Starter
-sets, such as "software business" or "content site", give a recommended team.
+**Optional, switched on from templates.** Business roles such as support, reviews, sales,
+bookkeeping, researcher, writer and marketer, and code roles such as developer and reviewer,
+plus custom agents written in the same format. A workspace starts with the chief of staff alone
+and adds roles when needed. Starter sets, such as "lead-generation site", "online shop" or
+"software business", give a recommended team.
 
 **The knowledge loop is the only way in**
 
@@ -89,30 +111,46 @@ sets, such as "software business" or "content site", give a recommended team.
 - `wheems doctor` warns when a workspace or agent goes past a budget, around 15 to 20 skills.
 - Outside skills go into the library first, never straight into a workspace.
 
-**Workflows: a fixed outline, with agents doing the steps.** An agent is who does the work,
-a skill is how to do a task, and a workflow is what happens when: a trigger, then steps. The
-sequence is a readable file, so it runs the same way every time and can be checked afterwards.
-Each step can be fully agentic. Schedules are simply workflows triggered by a time. To create
-one, you ask the chief of staff. It writes the file, explains it in plain English, and saves
-it once you approve.
+**Three tiers for a job that repeats, chosen per job.** An agent is who does the work, a skill
+is how to do a task, and the tier is how firmly it's held:
+
+- a **routine** is a trigger, one agent and one skill, run as a single task, such as a morning
+  brief: you know when it runs, who runs it and what it may touch;
+- a **skill procedure** is a routine whose skill lists steps; the steps the agent marks and the
+  calls it makes are checked afterwards, which detects drift but can't prevent it;
+- a **workflow** is a fixed outline in a readable file (a DAG), with agents doing the steps: the
+  order, the approvals and the checks between steps never vary, and only the judgement inside a
+  step does.
+
+A single output for you to read is a routine. Several touchpoints, anything sent, published or
+paid for, approvals in the middle, or hand-offs between agents make a workflow. Triggers include
+a time, a message and an event in an outside service, such as a new email or a new review. A
+**classify, then act** step sorts each item with a small, fast model and maps each label to an
+action. To create a routine or a workflow, you ask the chief of staff, or it offers when it
+notices a request coming back. It writes the file, explains it in plain English, and saves it
+once you approve.
 
 ```yaml
-# workflows/morning-brief.yaml
-trigger: { schedule: '0 7 * * 1-5' }
+# workflows/support-inbox.yaml (planned format)
+trigger: { integration: { name: support-email, event: message.received } }
 steps:
-  - agent: chief-of-staff
-    task: Summarise yesterday's notes, open work and anything waiting on me.
-  - post: { channel: briefs }
+  - id: sort
+    classify: { labels: [refund, how-to, complaint, spam] }
+  - id: act
+    needs: [sort]
+    on:
+      how-to: { task: { agent: support, skill: how-to-reply }, mode: shadow }
+      complaint: { ask: { channel: approvals } }
+      spam: { call: { integration: support-email, action: archive }, mode: auto }
 ```
 
-Steps can name the steps they need, so independent steps run in parallel and the file reads as
-a graph, as in GitHub Actions. The order never varies; only the work inside a step that runs an
-agent does. To keep that work in check:
-
-- a step can declare the shape of its output, and a result of the wrong shape fails the step;
-- every run records each step's input and output, so it can be inspected and replayed;
-- **evals** run a workflow or an agent against a set of example inputs with checks (`wheems
-eval`). Where a check needs judgement, the judge comes from a different provider.
+**Every task is evaluated.** Each hand-off says what "done" means. Wheems checks what code can
+(the shape, allowed labels, sources, that the CRM row exists, the tests), a judge from another
+provider grades what code can't (tone, accuracy, policy), and your feedback, edits and approvals
+are recorded with it. Anything new that acts on the outside world starts in **shadow mode**,
+proposing each action for your approval, until its approval rate earns acting alone. **Evals**
+re-run saved cases with known-good outcomes whenever an agent, skill, model or prompt changes, and
+say when quality drops.
 
 **Blueprints: headless apps an agent can adapt.** A blueprint is a small app with no screens,
 such as a CRM: tables in the workspace's database, tools that let agents use them, and skills
@@ -127,8 +165,11 @@ workspace pins the blueprint versions it uses.
 
 | Level              | How                                                                                                                                       | When                                        |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| Enforced (default) | Its own folder, its own Claude Code config folder, permission rules that deny other workspaces, its own secrets, its own provider account | Your own projects                           |
+| Enforced (default) | Its own folder, its own Claude Code config folder, permission rules that deny other workspaces, its own secrets, its own provider account | Your own work                               |
 | Hard               | A separate machine, VM or user account                                                                                                    | Client data, or installs at another company |
+
+Projects inside a workspace aren't walls: they keep context clean, and only workspaces keep
+secrets apart.
 
 Isolation by instructions alone isn't offered. On one machine every agent runs as the same
 user with shell access, so instructions don't enforce anything.

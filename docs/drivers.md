@@ -4,21 +4,23 @@ Every extension point is a driver, as in Laravel: a small, documented contract w
 drivers behind it. Adding Discord, Gemini CLI or Notion means writing one driver, not changing
 the core.
 
-| Driver type  | What it does                                                | Version one ships                    | Later or by plugin                         |
-| ------------ | ----------------------------------------------------------- | ------------------------------------ | ------------------------------------------ |
-| Runtime      | Starts, sends to, reads and waits on agent sessions         | Herdr core                           | Plain sessions without Herdr               |
-| Engine       | Runs an agent in a given CLI                                | Claude Code, Codex, opencode         | Gemini CLI, others                         |
-| Channel      | Sends and receives messages, buttons and threads            | Slack, Telegram, email               | Teams, Discord                             |
-| Integration  | Connects an outside service: MCP, CLI, skills, connect flow | GitHub                               | Google, Linear, Stripe, Notion, X          |
-| Account      | Pays for models                                             | Claude, ChatGPT, OpenRouter          | Direct provider API keys                   |
-| Trigger      | Starts a workflow                                           | Time, channel message, file landing  | Webhook, email received                    |
-| Step         | Does one thing in a workflow                                | Run an agent, ask for approval, post | Wait for an event, call an integration     |
-| Isolation    | Separates workspaces                                        | Separate settings                    | Container, separate user, separate machine |
-| Secret store | Holds credentials                                           | An encrypted file                    | macOS Keychain, 1Password                  |
-| Embeddings   | Turns text into vectors for searching by meaning            | A model run locally                  | OpenAI, Voyage and other hosted services   |
-| Vector store | Keeps vectors and finds the nearest                         | SQLite                               | Postgres with pgvector, Pinecone           |
-| Database     | Holds blueprint data                                        | SQLite, Postgres                     | MySQL                                      |
-| Voice        | Holds a phone call with an agent                            | None                                 | Phone and voice providers                  |
+| Driver type  | What it does                                                        | Version one ships                                                                           | Later or by plugin                         |
+| ------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Runtime      | Starts, sends to, reads and waits on agent sessions                 | Herdr core                                                                                  | Plain sessions without Herdr               |
+| Engine       | Runs an agent in a given CLI                                        | Claude Code, Codex, opencode                                                                | Gemini CLI, others                         |
+| Channel      | Sends and receives messages, buttons and threads                    | Slack, Telegram, email                                                                      | Teams, Discord                             |
+| Integration  | Connects an outside service: MCP, CLI, skills, connect flow, events | Email, a reviews service, search analytics, GitHub                                          | Google, Linear, Stripe, Notion, X          |
+| Account      | Pays for models; API-key accounts also serve model steps            | Claude, ChatGPT, OpenRouter, Anthropic's API                                                | Other provider API keys                    |
+| Trigger      | Starts a routine or a workflow                                      | Time, channel message, file landing, integration event (polled, or a webhook where offered) | Others by plugin                           |
+| Step         | Does one thing in a workflow                                        | Agent task, model step, classify, call an integration, ask for approval, post               | Shell and HTTP steps                       |
+| Isolation    | Separates workspaces                                                | Separate settings                                                                           | Container, separate user, separate machine |
+| Secret store | Holds credentials; agents never see their values                    | macOS Keychain, Linux secret service, an encrypted file for headless servers                | 1Password                                  |
+| Embeddings   | Turns text into vectors for searching by meaning                    | A model run locally                                                                         | OpenAI, Voyage and other hosted services   |
+| Vector store | Keeps vectors and finds the nearest                                 | SQLite                                                                                      | Postgres with pgvector, Pinecone           |
+| Database     | Holds blueprint data                                                | SQLite, Postgres                                                                            | MySQL                                      |
+| Voice        | Holds a phone call with an agent                                    | None                                                                                        | Phone and voice providers                  |
+| Desktop      | Gives an agent a GUI machine to use (computer use)                  | None                                                                                        | X11 on Linux, first after version one      |
+| Card issuer  | Mints single-use cards for one merchant and amount                  | None (you pay, or billing APIs)                                                             | Issuers with an API                        |
 
 Email is a channel like any other, with a driver per mail provider (such as AgentMail, Resend,
 or IMAP and SMTP), so an agent can have its own address. A phone call is live and an agent
@@ -26,8 +28,14 @@ takes minutes to answer, so voice needs its own contract: a fast voice model hol
 hands work to the agent.
 
 Milestone 0 defines the **runtime**, **engine** and **channel** contracts and ships the Herdr
-runtime driver. Milestone 2 adds **embeddings** and **vector store**. The other contracts arrive
-with the milestones that need them.
+runtime driver. Milestone 2 adds **embeddings** and **vector store** (built). The rest arrive with
+the milestones that need them: API-key accounts in 5; triggers, steps and the first business
+integrations in 7; the database in 8; integrations in general and the secret store in 9; desktop
+after version one ([roadmap](roadmap.md)).
+
+**Not a new engine.** Computer use is a tool given to an existing engine through the broker, and
+a lightweight model step is a call on an account, not an agent: an engine is only for a different
+agent program.
 
 ## The contracts
 
