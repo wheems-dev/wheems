@@ -104,7 +104,47 @@ export class ClaudeCodeEngine implements EngineDriver {
       ];
     }
     const version = extractVersion(result.stdout) ?? result.stdout.trim();
-    return [{ name: 'Claude Code', status: 'pass', message: `claude ${version}` }];
+    return [
+      { name: 'Claude Code', status: 'pass', message: `claude ${version}` },
+      await this.signInCheck(),
+    ];
+  }
+
+  /** Whether Claude Code is signed in, from `claude auth status`. Never shows the account. */
+  private async signInCheck(): Promise<HealthCheck> {
+    const status = await runCommand(this.binary, ['auth', 'status', '--json'], {
+      timeoutMs: 15_000,
+    });
+    let loggedIn: boolean | null = null;
+    let method: string | null = null;
+    try {
+      const parsed = JSON.parse(status.stdout) as { loggedIn?: unknown; authMethod?: unknown };
+      if (typeof parsed.loggedIn === 'boolean') loggedIn = parsed.loggedIn;
+      if (typeof parsed.authMethod === 'string') method = parsed.authMethod;
+    } catch {
+      // An older Claude Code without `auth status`, or output it doesn't recognise.
+    }
+    if (loggedIn === true) {
+      return {
+        name: 'Claude Code sign-in',
+        status: 'pass',
+        message: method !== null ? `Signed in (${method})` : 'Signed in',
+      };
+    }
+    if (loggedIn === false) {
+      return {
+        name: 'Claude Code sign-in',
+        status: 'fail',
+        message: 'Claude Code is not signed in, so agents on it cannot answer',
+        hint: 'Run claude auth login, or wheems setup and choose Engines.',
+      };
+    }
+    return {
+      name: 'Claude Code sign-in',
+      status: 'warn',
+      message: "Couldn't tell whether Claude Code is signed in (claude auth status didn't say)",
+      hint: 'Update Claude Code, or check by running claude yourself.',
+    };
   }
 
   prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan> {

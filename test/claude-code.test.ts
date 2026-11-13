@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -78,6 +78,37 @@ describe('claude-code engine', () => {
     expect(await flags('ask')).toEqual([]);
     expect(await flags('auto')).toEqual(['--permission-mode', 'auto']);
     expect(await flags('skip')).toEqual(['--dangerously-skip-permissions']);
+  });
+
+  it('checks that Claude Code is signed in, without showing the account', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wheems-fake-claude-'));
+    try {
+      const fake = (auth: string) => {
+        const file = join(dir, 'claude');
+        writeFileSync(
+          file,
+          `#!/bin/sh\nif [ "$1" = "--version" ]; then echo "2.1.0 (Claude Code)"; exit 0; fi\n${auth}\n`,
+        );
+        chmodSync(file, 0o755);
+        return new ClaudeCodeEngine({ binary: file });
+      };
+      const signIn = async (auth: string) => (await fake(auth).check())[1];
+      expect(
+        await signIn(
+          `echo '{"loggedIn":true,"authMethod":"claude.ai","email":"someone@example.com"}'`,
+        ),
+      ).toEqual({ name: 'Claude Code sign-in', status: 'pass', message: 'Signed in (claude.ai)' });
+      expect(await signIn(`echo '{"loggedIn":false}'; exit 1`)).toMatchObject({
+        status: 'fail',
+        hint: expect.stringMatching(/claude auth login/) as string,
+      });
+      // An older Claude Code without `auth status`.
+      expect(await signIn(`echo "error: unknown command 'auth'" >&2; exit 1`)).toMatchObject({
+        status: 'warn',
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails its health check when claude is missing', async () => {
