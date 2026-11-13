@@ -854,6 +854,13 @@ const STOPWORDS = new Set(
   ).split(' '),
 );
 
+/** The words that say what a text is about: lowercase, each once, without stopwords. */
+export function contentWords(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => !STOPWORDS.has(w)),
+  );
+}
+
 /** A full-text query that matches any of the words, or null when there are none. */
 export function ftsQuery(query: string): string | null {
   const words = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])];

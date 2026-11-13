@@ -22,6 +22,13 @@ export interface EmbeddingsDriver extends Driver<'embeddings'> {
   readonly minimumSimilarity?: number;
 
   /**
+   * Optional: the similarity between two documents above which they say the same thing, used
+   * to warn about a skill that duplicates another. nomic-embed-text scores near-duplicates
+   * 0.84 and up and different tasks 0.75 and below. Without it, the check compares words.
+   */
+  readonly nearDuplicate?: number;
+
+  /**
    * One vector per text, in the same order. `purpose` says whether the texts are documents
    * being stored or a query being searched for; models that embed the two differently (such
    * as nomic-embed-text) need to know. Every vector from one model has the same length.

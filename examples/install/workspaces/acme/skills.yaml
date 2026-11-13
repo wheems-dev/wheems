@@ -1,4 +1,4 @@
 # yaml-language-server: $schema=../../../../schemas/skills.schema.json
 skills:
-  release-notes: 1.2.0
-  code-review: 0.4.1
+  release-notes: 2
+  code-review: 1

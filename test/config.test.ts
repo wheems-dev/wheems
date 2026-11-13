@@ -30,7 +30,7 @@ describe('the example install', () => {
       'reviewer',
     ]);
     expect(acme.workflows.map((w) => w.name)).toEqual(['morning-brief']);
-    expect(acme.skills?.skills).toEqual({ 'release-notes': '1.2.0', 'code-review': '0.4.1' });
+    expect(acme.skills?.skills).toEqual({ 'release-notes': 2, 'code-review': 1 });
   });
 
   it('warns about engines that have no driver yet', async () => {
@@ -235,8 +235,8 @@ describe('agent files', () => {
 describe('skills.yaml', () => {
   it('maps skills to pinned versions', () => {
     const problems: Problem[] = [];
-    expect(parseYaml('skills.yaml', 'skills:\n  notes: 1.0.0\n', skillsSchema, problems)).toEqual({
-      skills: { notes: '1.0.0' },
+    expect(parseYaml('skills.yaml', 'skills:\n  notes: 3\n', skillsSchema, problems)).toEqual({
+      skills: { notes: 3 },
     });
     parseYaml('skills.yaml', 'skills:\n  notes: ""\n', skillsSchema, problems);
     expect(problems.length).toBe(1);

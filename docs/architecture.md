@@ -56,6 +56,7 @@ and never pass through an agent.
 ├── install.yaml          machines, connections, accounts, Herdr version
 ├── about-you.md          about you; every agent in every workspace reads it
 ├── library/              agent templates, skills, workflow templates (never loaded directly)
+│   └── skills/<name>/<n>/SKILL.md   every version of every skill
 └── workspaces/
     └── acme/
         ├── workspace.yaml    chief of staff, channels, rules, accounts
@@ -73,7 +74,8 @@ and never pass through an agent.
 ```
 
 Running state, never committed, lives in `.wheems/`: the control socket, logs, conversations, the
-filer's working copies and the search indexes (`.wheems/index/`).
+filer's working copies, the search indexes (`.wheems/index/`) and what waits for review
+(`.wheems/review/`).
 
 Agents never write into `knowledge/` or `about-you.md` themselves. They write notes with
 `wheems note`, and the service saves each note to its workspace's inbox with where it came from:
@@ -149,6 +151,54 @@ changes, because vectors from different models can't be compared. If the embeddi
 be reached, such as when Ollama isn't running, new passages are found by keyword until it can
 be, a search says it fell back to keywords, and a rebuild keeps the index it has rather than
 lose its vectors. `wheems doctor` checks the driver and each workspace's index.
+
+### The nightly tidy
+
+Once a night, at `knowledge.tidy_at` in workspace.yaml (03:00 local time by default), the filer
+reads the whole knowledge base and writes two reports: `reports/contradictions.md`, where pages
+disagree with each other or with the brief, and `reports/stale.md`, pages that look out of date.
+It refreshes the brief from the pages as they are. It changes no page: Wheems keeps only the
+reports and the brief, checks them as it checks filing (the brief under its cap, nothing that
+looks like a credential), and commits them. A service that was stopped at that time tidies when it
+starts. A night when no page or the brief changed since the last tidy is skipped, as is a
+workspace with no pages, so it costs nothing when there's nothing new. The tidy waits for any
+note being filed in the workspace, and a page edited meanwhile means nothing is applied that
+night.
+
+### Skills and review
+
+A skill is how to do a task that comes up again, in the [Agent Skills](https://agentskills.io)
+`SKILL.md` format. The install's library holds every skill at every version
+(`library/skills/<name>/<n>/SKILL.md`). A workspace pins the versions it uses in `skills.yaml`,
+and each agent lists the skills it uses, so a skill reaches only the agents it was given to.
+
+Agents learn to propose skills from their built-in instructions:
+
+- `wheems skill list` and `wheems skill show <name>` show the library, so an agent improves an
+  existing skill rather than adding another, and reads it before changing it.
+- `wheems skill propose <name>` takes the whole SKILL.md on standard input. The service checks
+  it (front matter with a name and description, instructions, at most 64 KB, nothing that looks
+  like a credential) and saves it to `.wheems/review/skills/`, with the workspace, agent and
+  conversation it came from. It never reaches the library without you.
+- Each proposal is compared with every skill in the library and every other proposal. With an
+  embeddings driver that says what a near-duplicate scores (0.8 for `nomic-embed-text`), the
+  comparison is by meaning; otherwise, by the share of words they have in common. The agent is
+  told which skills it may repeat, and so are you when you review it.
+- A skill whose latest version a person wrote can't be changed by an agent: the proposal is
+  refused, and the agent is told to tell you what it would change instead.
+
+`wheems review` goes through what waits for you: skill proposals and suggested changes to
+`about-you.md`. It shows a new skill in full, and a change as a diff against the version it
+changes. For each, you approve it, edit it in your editor (`$VISUAL` or `$EDITOR`) and approve
+that, turn it down, or leave it for later. Approving a skill adds it to the library as the next
+version, pins that version in the proposing workspace's `skills.yaml`, and asks which of its
+agents get it (the agent that proposed it is ticked to begin with); then it commits. Approving
+a change to `about-you.md` writes it and commits. Outside a terminal, `wheems review` only lists
+what waits, and `wheems doctor` says how much does.
+
+For now, approved skills are recorded and pinned but not yet written into agents' sessions:
+how a skill reaches only its agents, when every agent in a workspace shares one folder, is still
+being decided.
 
 `WHEEMS_HOME` moves the install folder.
 

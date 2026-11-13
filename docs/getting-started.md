@@ -85,5 +85,10 @@ When a conversation has been quiet for half an hour, Wheems asks its agent to wr
 which lands in `workspaces/<id>/knowledge/inbox/`. You won't see that in Slack. Fill in
 `~/wheems/about-you.md` with what you'd tell anyone working for you: every agent reads it.
 
+Now and then, run `wheems review`. It shows what waits for you: skills agents proposed, and
+changes to `about-you.md` suggested from their notes. Nothing changes until you approve it.
+Overnight, Wheems writes `knowledge/reports/contradictions.md` and `knowledge/reports/stale.md`,
+pages that disagree and pages that look out of date.
+
 If something isn't right, run `wheems doctor`. It checks Node.js, Herdr core, Claude Code, the
 folder trust, Slack and the service.

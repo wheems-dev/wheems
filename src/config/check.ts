@@ -83,6 +83,15 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
     }
 
     const pinned = new Set(Object.keys(workspace.skills?.skills ?? {}));
+    if (install.library) {
+      for (const [skill, version] of Object.entries(workspace.skills?.skills ?? {})) {
+        const versions = install.library.get(skill);
+        const where = `${rel(install, workspace)}/skills.yaml`;
+        if (!versions) error(`Skill "${skill}" is not in the library`, where);
+        else if (!versions.includes(version))
+          error(`Skill "${skill}" has no version ${String(version)} in the library`, where);
+      }
+    }
     if (pinned.size > config.skill_budget) {
       warn(
         `${pinned.size} skills is over the budget of ${config.skill_budget}`,

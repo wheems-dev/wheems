@@ -15,6 +15,8 @@ import type { DriverRegistry } from '../contracts/registry.js';
 import type { RuntimeDriver } from '../contracts/runtime.js';
 import { HERDR_MINIMUM_VERSION } from '../drivers/runtime/herdr/herdr-runtime.js';
 import { KnowledgeSearch, type IndexStatus } from '../knowledge/search.js';
+import { listAboutYou } from '../review/review.js';
+import { listProposals } from '../skills/proposals.js';
 import { compareVersions, isAtLeast } from '../util/version.js';
 export { defaultHome } from '../home.js';
 
@@ -104,6 +106,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     sections.push({ title: 'Agents', checks: await agentChecks(install, options) });
     sections.push({ title: 'Channels', checks: await channelChecks(install, options) });
     sections.push({ title: 'Knowledge', checks: await knowledgeChecks(install, options) });
+    sections.push({ title: 'Review', checks: [await reviewCheck(options)] });
     sections.push({ title: 'Service', checks: [await serviceCheck(options)] });
   }
 
@@ -215,6 +218,26 @@ async function channelChecks(
     }
   }
   return checks;
+}
+
+/** What waits for the person in `wheems review`. Never a failure: it's for their attention. */
+async function reviewCheck(options: DoctorOptions): Promise<HealthCheck> {
+  const state = paths(options.home, options.env).state;
+  const skills = (await listProposals(state)).length;
+  const aboutYou = (await listAboutYou(state)).length;
+  if (skills + aboutYou === 0) {
+    return { name: 'review', status: 'pass', message: 'Nothing waits for review' };
+  }
+  const parts = [
+    skills > 0 && `${String(skills)} ${skills === 1 ? 'skill proposal' : 'skill proposals'}`,
+    aboutYou > 0 && `${String(aboutYou)} ${aboutYou === 1 ? 'change' : 'changes'} to about-you.md`,
+  ].filter((part): part is string => part !== false);
+  return {
+    name: 'review',
+    status: 'warn',
+    message: `${parts.join(' and ')} ${skills + aboutYou === 1 ? 'waits' : 'wait'} for review`,
+    hint: 'Run: wheems review',
+  };
 }
 
 async function knowledgeChecks(

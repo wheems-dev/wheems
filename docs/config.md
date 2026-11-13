@@ -88,6 +88,7 @@ knowledge:
     engine: claude-code # the chief of staff's engine
     model: claude-sonnet-5-5 # Sonnet on Claude Code, else the chief of staff's model
     account: claude-subscription # the chief of staff's account
+  tidy_at: '03:00' # local time of the nightly tidy (reports and the brief); false is off
 
 identity: { name: Acme chief of staff, icon: ':office:' } # how its posts appear, where supported
 
@@ -156,14 +157,47 @@ the chat thread for it, and `wheems reply "..."` sends a progress note during lo
 
 ## workspaces/&lt;id&gt;/skills.yaml
 
-The skills this workspace uses, each pinned to a library version, so library edits never
-silently change a live workspace. Agents pick from this list.
+The skills this workspace uses, each pinned to a version in the install's library, so library
+changes never silently change a live workspace. Versions are whole numbers. Each agent lists the
+skills it uses in its own `skills:`, picked from this list.
 
 ```yaml
 skills:
-  release-notes: 1.2.0
-  code-review: 0.4.1
+  release-notes: 2
+  code-review: 1
 ```
+
+`wheems review` adds the pin when you approve a skill an agent proposed. `wheems validate` and
+doctor report a pin with no such skill or version in the library.
+
+## library/skills/
+
+Every skill, at every version, in a numbered folder. A workspace pins the versions it uses; the
+library itself is never loaded into an agent.
+
+```text
+library/skills/release-notes/
+├── skill.yaml       who wrote each version
+├── 1/SKILL.md
+└── 2/SKILL.md
+```
+
+`SKILL.md` is the [Agent Skills](https://agentskills.io) format: front matter with `name` (the
+folder's name) and `description` (what it does and when to use it), then the instructions.
+
+```markdown
+---
+name: release-notes
+description: Writes release notes for a new version. Use when a release is being tagged.
+---
+
+1. List the pull requests merged since the last tag.
+2. Group them into features, fixes and everything else.
+```
+
+`skill.yaml` lists the versions agents proposed, with who proposed them and when they were
+approved. A version it doesn't list was written by a person: add one by hand by creating its
+numbered folder. Agents can't propose changes to a skill whose latest version a person wrote.
 
 ## workspaces/&lt;id&gt;/workflows/&lt;name&gt;.yaml
 
