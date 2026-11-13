@@ -1,0 +1,171 @@
+name: Release
+
+# Publishes to npm when a new version lands on main: merging a pull request that changes
+# "version" in package.json (and adds its section to CHANGELOG.md) is the whole release.
+# npm trusts this file through trusted publishing (OIDC), so no npm token is stored anywhere.
+# The tag v<version> and a GitHub release with the changelog section follow the publish.
+# A push to main whose version is already on npm and tagged does nothing.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Is this a new version?
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.find.outputs.version }}
+      publish: ${{ steps.find.outputs.publish }}
+      tag: ${{ steps.find.outputs.tag }}
+      release: ${{ steps.find.outputs.release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # npm view prints nothing (and fails) for a version that isn't published.
+          if npm view "$name@$version" version 2>/dev/null | grep -qx "$version"; then
+            publish=false
+          else
+            publish=true
+          fi
+
+          # The tag is pushed only after a successful publish, so a tag means npm has this
+          # version, even if npm doesn't show it yet (it can take a minute or two).
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            if [ "$publish" = true ]; then
+              echo "::warning::$tag exists but npm doesn't show $name@$version yet."
+            fi
+            publish=false
+            needs_tag=false
+          else
+            needs_tag=true
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            needs_release=false
+          else
+            needs_release=true
+          fi
+
+          if [ "$publish" = true ] || [ "$needs_tag" = true ] || [ "$needs_release" = true ]; then
+            if ! grep -qx "## $version" CHANGELOG.md; then
+              echo "::error::CHANGELOG.md has no '## $version' section."
+              exit 1
+            fi
+          fi
+
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "tag=$needs_tag" >> "$GITHUB_OUTPUT"
+          echo "release=$needs_release" >> "$GITHUB_OUTPUT"
+          echo "$name@$version: publish=$publish, tag=$needs_tag, release=$needs_release"
+
+  check:
+    name: check (${{ matrix.os }})
+    needs: version
+    if: needs.version.outputs.publish == 'true'
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  publish:
+    name: Publish v${{ needs.version.outputs.version }}
+    needs: [version, check]
+    # Runs whenever any of the three is outstanding, and each step checks again before acting,
+    # so re-running the workflow, or only this job, finishes whatever a failed run left undone.
+    if: >-
+      always() && needs.version.result == 'success' &&
+      (needs.check.result == 'success' || needs.check.result == 'skipped') &&
+      (needs.version.outputs.publish == 'true' || needs.version.outputs.tag == 'true' ||
+       needs.version.outputs.release == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the tag and the GitHub release
+      id-token: write # npm trusted publishing
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      TAG: v${{ needs.version.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Publish to npm
+        if: needs.version.outputs.publish == 'true'
+        run: |
+          name=$(node -p "require('./package.json').name")
+          if npm view "$name@$VERSION" version 2>/dev/null | grep -qx "$VERSION"; then
+            echo "$name@$VERSION is already on npm."
+            exit 0
+          fi
+          # Trusted publishing needs npm 11.5.1 or later; Node 22 comes with npm 10.
+          npm install -g npm@^11.5.1
+          npm ci
+          # prepublishOnly runs clean and the full check again before anything is uploaded.
+          npm publish
+
+      - name: Tag
+        if: needs.version.outputs.tag == 'true'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "$TAG is already on GitHub."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$GITHUB_SHA" -m "Wheems $VERSION"
+          git push origin "$TAG"
+
+      - name: Release on GitHub
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "The $TAG release is already on GitHub."
+            exit 0
+          fi
+          awk -v heading="## $VERSION" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+
+          # 0.x versions are early previews.
+          prerelease=""
+          case "$VERSION" in 0.*|*-*) prerelease="--prerelease" ;; esac
+          gh release create "$TAG" --verify-tag $prerelease \
+            --title "Wheems $VERSION" --notes-file "$RUNNER_TEMP/notes.md"

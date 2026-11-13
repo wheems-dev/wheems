@@ -798,6 +798,23 @@ also run it against a fake `hc`, which is what CI uses. Set `WHEEMS_TEST_OLLAMA_
 | `examples/install/` | A complete example install                                                       |
 | `docs/`             | Design documents                                                                 |
 
+### Releasing
+
+GitHub publishes each release. To release, merge a pull request to `main` that:
+
+1. changes `version` in `package.json` (and `package-lock.json`);
+2. adds a `## <version>` section to `CHANGELOG.md`.
+
+The [release workflow](.github/workflows/release.yml) then runs the full check on Linux and
+macOS and publishes to npm. It then tags the commit `v<version>` and creates a GitHub release
+with that changelog section as its notes. A push to `main` whose version is already published and
+tagged does nothing.
+
+npm trusts the workflow through
+[trusted publishing](https://docs.npmjs.com/trusted-publishers), so no npm token is stored
+anywhere. The package's settings on npmjs.com name this repository and `release.yml` as its
+trusted publisher.
+
 ## More documentation
 
 The documents in [`docs/`](docs/) go deeper, and some describe the design of milestones not built
