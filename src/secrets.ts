@@ -20,7 +20,7 @@ export async function readSecrets(file: string): Promise<Secrets> {
     throw error;
   }
   const parsed = secretsSchema.safeParse(JSON.parse(text));
-  if (!parsed.success) throw new Error(`${file} is not a secrets file Opinr can read`);
+  if (!parsed.success) throw new Error(`${file} is not a secrets file Wheems can read`);
   return parsed.data;
 }
 

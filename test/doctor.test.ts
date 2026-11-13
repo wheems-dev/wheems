@@ -54,7 +54,7 @@ describe('doctor', () => {
     );
 
   it('passes with a current hc and no install yet', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
@@ -95,7 +95,7 @@ describe('doctor', () => {
   });
 
   it('fails on an old Node.js, an old hc and config errors', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
@@ -118,7 +118,7 @@ describe('doctor', () => {
   });
 
   it('applies the Herdr version pinned in install.yaml', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
@@ -129,7 +129,7 @@ describe('doctor', () => {
   });
 
   it('checks engines, folder trust, chat connections and the service once there is an install', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
@@ -142,7 +142,7 @@ describe('doctor', () => {
         if (options.bot_token === undefined) throw new Error('Invalid slack options: no bot_token');
         return new MemoryChannel();
       });
-    const env = { OPINR_SECRETS: join(home, 'secrets.json') };
+    const env = { WHEEMS_SECRETS: join(home, 'secrets.json') };
     const before = await runDoctor({
       home,
       registry,
@@ -159,7 +159,7 @@ describe('doctor', () => {
     expect(statuses(before).Service).toEqual(['warn service']);
     expect(before.ok).toBe(false);
 
-    await writeSecret(env.OPINR_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
+    await writeSecret(env.WHEEMS_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
     const after = await runDoctor({
       home,
       registry,
@@ -178,7 +178,7 @@ describe('doctor', () => {
   });
 
   it("checks the embeddings driver and each workspace's search index", async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-home-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
     });
@@ -210,7 +210,7 @@ describe('doctor', () => {
         install: install.config!,
         workspaces: install.workspaces,
         registry,
-        indexDir: join(home, '.opinr', 'index'),
+        indexDir: join(home, '.wheems', 'index'),
       });
     const keyword = search();
     await keyword.syncAll();
@@ -241,17 +241,17 @@ describe('doctor', () => {
 
   it('counts a folder as trusted when Claude Code trusted it or a folder around it', () => {
     const projects = {
-      '/Users/me/opinr': { hasTrustDialogAccepted: true },
+      '/Users/me/wheems': { hasTrustDialogAccepted: true },
       '/Users/me/other': { hasTrustDialogAccepted: false },
     };
-    expect(trustedIn(projects, '/Users/me/opinr/workspaces/personal')).toBe(true);
-    expect(trustedIn(projects, '/Users/me/opinr')).toBe(true);
+    expect(trustedIn(projects, '/Users/me/wheems/workspaces/personal')).toBe(true);
+    expect(trustedIn(projects, '/Users/me/wheems')).toBe(true);
     expect(trustedIn(projects, '/Users/me/other/x')).toBe(false);
     expect(trustedIn(projects, '/Users/me')).toBe(false);
   });
 
-  it('uses OPINR_HOME, then ~/opinr', () => {
-    expect(defaultHome({ OPINR_HOME: '/srv/opinr' })).toBe('/srv/opinr');
-    expect(defaultHome({})).toMatch(/opinr$/);
+  it('uses WHEEMS_HOME, then ~/wheems', () => {
+    expect(defaultHome({ WHEEMS_HOME: '/srv/wheems' })).toBe('/srv/wheems');
+    expect(defaultHome({})).toMatch(/wheems$/);
   });
 });

@@ -68,7 +68,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     runtimeChecks.push({
       name: 'pinned version',
       status: 'warn',
-      message: `install.yaml pins Herdr core ${herdr.version}, below Opinr's minimum ${HERDR_MINIMUM_VERSION}, so ${HERDR_MINIMUM_VERSION} applies`,
+      message: `install.yaml pins Herdr core ${herdr.version}, below Wheems's minimum ${HERDR_MINIMUM_VERSION}, so ${HERDR_MINIMUM_VERSION} applies`,
       hint: `Set herdr.version to ${HERDR_MINIMUM_VERSION} or later.`,
     });
   }
@@ -80,7 +80,7 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
       name: 'install',
       status: 'skip',
       message: `No install at ${options.home} yet`,
-      hint: 'opinr setup creates one. Set OPINR_HOME or --home to check another folder.',
+      hint: 'wheems setup creates one. Set WHEEMS_HOME or --home to check another folder.',
     });
   } else {
     const problems = [
@@ -146,7 +146,7 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
         name: `${workspace.id} folder`,
         status: 'warn',
         message: `${label} hasn't been told to trust the workspace folder, so its first session will wait for that answer at the Mac`,
-        hint: 'Open the engine in that folder once and say yes, or run opinr setup.',
+        hint: 'Open the engine in that folder once and say yes, or run wheems setup.',
       });
     }
   }
@@ -187,7 +187,7 @@ async function channelChecks(
         name: `${connection} allowed users`,
         status: 'warn',
         message: 'Nobody is allowed to talk to agents yet, so every message is ignored',
-        hint: 'Run opinr setup, or add Slack member ids to allowed_users in install.yaml.',
+        hint: 'Run wheems setup, or add Slack member ids to allowed_users in install.yaml.',
       });
     }
     const secret = secrets[settings.secret ?? connection];
@@ -196,7 +196,7 @@ async function channelChecks(
         name: connection,
         status: 'fail',
         message: 'Not connected yet: no credentials saved for it',
-        hint: 'Run opinr setup to connect it.',
+        hint: 'Run wheems setup to connect it.',
       });
       continue;
     }
@@ -210,7 +210,7 @@ async function channelChecks(
         name: connection,
         status: 'fail',
         message: error instanceof Error ? error.message : String(error),
-        hint: 'Run opinr setup to connect it.',
+        hint: 'Run wheems setup to connect it.',
       });
     }
   }
@@ -239,7 +239,7 @@ async function knowledgeChecks(
       name: 'embeddings',
       status: 'fail',
       message: `Can't use knowledge.embeddings in install.yaml: ${error instanceof Error ? error.message : String(error)}`,
-      hint: 'Fix it, or run opinr setup (Knowledge). Until then the service searches by keyword only.',
+      hint: 'Fix it, or run wheems setup (Knowledge). Until then the service searches by keyword only.',
     });
     search = new KnowledgeSearch({
       install: { ...config, knowledge: {} },
@@ -256,7 +256,7 @@ async function knowledgeChecks(
         name: 'embeddings',
         status: 'skip',
         message: 'Search is keyword-only',
-        hint: 'Run opinr setup (Knowledge) to search by meaning too, with a free local model.',
+        hint: 'Run wheems setup (Knowledge) to search by meaning too, with a free local model.',
       });
     }
     for (const workspace of install.workspaces) {
@@ -280,7 +280,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: `Can't read it: ${status instanceof Error ? status.message : String(status)}`,
-      hint: 'Run opinr kb reindex.',
+      hint: 'Run wheems kb reindex.',
     };
   }
   const index = status as IndexStatus;
@@ -289,7 +289,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: 'Not built yet',
-      hint: 'The service builds it when it starts, or run opinr kb reindex.',
+      hint: 'The service builds it when it starts, or run wheems kb reindex.',
     };
   }
   const files = `${String(index.documents)} ${index.documents === 1 ? 'file' : 'files'}`;
@@ -298,7 +298,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: `${files}, built ${index.embeddings ? `with ${index.embeddings.model}` : 'for keyword search'}, not the model in install.yaml`,
-      hint: 'The service rebuilds it when it next syncs, or run opinr kb reindex.',
+      hint: 'The service rebuilds it when it next syncs, or run wheems kb reindex.',
     };
   }
   const missing = index.chunks - index.embedded;
@@ -325,7 +325,7 @@ async function serviceCheck(options: DoctorOptions): Promise<HealthCheck> {
     name: 'service',
     status: 'warn',
     message: installed ? 'Installed, but not answering' : 'Not running, so nothing answers in chat',
-    hint: installed ? 'See opinr service logs.' : 'Run opinr service install.',
+    hint: installed ? 'See wheems service logs.' : 'Run wheems service install.',
   };
 }
 
@@ -362,7 +362,7 @@ function systemChecks(options: DoctorOptions): HealthCheck[] {
       : {
           name: 'platform',
           status: 'warn',
-          message: `${platform} is not supported yet; Opinr runs on macOS and Linux`,
+          message: `${platform} is not supported yet; Wheems runs on macOS and Linux`,
         },
   );
   return checks;
@@ -370,20 +370,20 @@ function systemChecks(options: DoctorOptions): HealthCheck[] {
 
 /** Starts a tiny session, sends it a line, waits, reads it back and removes it. */
 async function roundTrip(runtime: RuntimeDriver): Promise<HealthCheck> {
-  const name = `opinr-doctor-${randomBytes(3).toString('hex')}`;
+  const name = `wheems-doctor-${randomBytes(3).toString('hex')}`;
   let id: string | undefined;
   try {
     const session = await runtime.start({
       name,
-      command: ['sh', '-c', 'read line; echo "opinr-doctor:$line"'],
+      command: ['sh', '-c', 'read line; echo "wheems-doctor:$line"'],
       cwd: homedir(),
-      labels: { opinr: 'doctor' },
+      labels: { wheems: 'doctor' },
     });
     id = session.id;
     await runtime.send(id, 'ping');
     const waited = await runtime.wait(id, { timeoutSeconds: 15 });
     const read = await runtime.read(id);
-    if (!waited.ended || waited.exitCode !== 0 || !read.text.includes('opinr-doctor:ping')) {
+    if (!waited.ended || waited.exitCode !== 0 || !read.text.includes('wheems-doctor:ping')) {
       return {
         name: 'round trip',
         status: 'fail',
@@ -408,7 +408,7 @@ async function roundTrip(runtime: RuntimeDriver): Promise<HealthCheck> {
         if (session?.state === 'live') await runtime.stop(id);
         if (session) await runtime.remove(id);
       } catch {
-        // Leave it; hc ls --label opinr=doctor shows any left behind.
+        // Leave it; hc ls --label wheems=doctor shows any left behind.
       }
     }
   }

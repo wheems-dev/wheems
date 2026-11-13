@@ -27,7 +27,7 @@ export interface EngineDriver extends Driver<'engine'> {
    * the turn has finished. Returns the answers after the one with id \`after\`: all of them
    * when \`after\` is null, and only the latest when no answer has that id, so history is
    * never posted again. Use \`answersAfter\` for this. With it, the service posts each answer
-   * for the agent; without it, agents answer only through \`opinr reply\`.
+   * for the agent; without it, agents answer only through \`wheems reply\`.
    */
   answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
 
@@ -38,7 +38,7 @@ export interface EngineDriver extends Driver<'engine'> {
    * more than one session matches. The tag is unique to each launch, so two conversations
    * never claim the same session. The
    * service keeps the id with the conversation, passes it back as \`session.engineId\` to
-   * resume, and uses it as the session id for \`answers\`. Engines that take Opinr's id
+   * resume, and uses it as the session id for \`answers\`. Engines that take Wheems's id
    * (Claude Code) don't need it.
    */
   findSession?(session: { dir: string; startedAt: Date; tag: string }): Promise<string | null>;
@@ -150,5 +150,5 @@ export function answersAfter(all: FinalMessage[], after: string | null): FinalMe
  * conversation's session.
  */
 export function conversationTag(conversationId: string, launch: string): string {
-  return `<opinr conversation="${conversationId}" launch="${launch}"/>`;
+  return `<wheems conversation="${conversationId}" launch="${launch}"/>`;
 }

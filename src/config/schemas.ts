@@ -1,7 +1,7 @@
 /**
  * The config formats. Config is YAML and Markdown in a git folder:
  *
- *   ~/opinr/
+ *   ~/wheems/
  *   ├── install.yaml            machines, connections, accounts, Herdr version
  *   ├── library/                agent templates, skills, workflow templates
  *   └── workspaces/<id>/
@@ -98,7 +98,7 @@ export const installSchema = z
             driver: nameSchema.describe('The vector store driver. Defaults to `sqlite`.'),
           })
           .optional()
-          .describe('Where vectors are kept. Defaults to SQLite files in `.opinr/index/`.'),
+          .describe('Where vectors are kept. Defaults to SQLite files in `.wheems/index/`.'),
       })
       .default({})
       .describe('How the knowledge base is searched, for every workspace.'),
@@ -197,7 +197,7 @@ export const workspaceSchema = z.strictObject({
         .nonnegative()
         .default(30)
         .describe(
-          'Minutes a conversation stays quiet, after new work, before Opinr asks its agent for a note. 0 turns this off.',
+          'Minutes a conversation stays quiet, after new work, before Wheems asks its agent for a note. 0 turns this off.',
         ),
       filer: z
         .strictObject({

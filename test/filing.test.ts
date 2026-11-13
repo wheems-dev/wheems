@@ -42,7 +42,7 @@ describe('checking what the filer changed', () => {
   let note: string;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-filing-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-filing-'));
     workspace = join(dir, 'ws');
     folder = join(dir, 'filing');
     const knowledge = knowledgePaths(workspace);
@@ -189,7 +189,7 @@ describe('checking what the filer changed', () => {
       'Filed a note',
     );
     expect(result).toEqual({ ok: true });
-    expect(git(dir, 'log', '--format=%an: %s')).toBe('Opinr: Filed a note');
+    expect(git(dir, 'log', '--format=%an: %s')).toBe('Wheems: Filed a note');
     expect(git(dir, 'show', '--name-only', '--format=')).toBe(
       ['ws/knowledge/notes/2026/11/' + noteName(), 'ws/knowledge/pages/sailing.md'].join('\n'),
     );
@@ -203,7 +203,7 @@ describe('the task runner', () => {
   let answers: Map<string, FinalMessage[]>;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-runner-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-runner-'));
     answers = new Map();
   });
   afterEach(() => {
@@ -235,11 +235,11 @@ describe('the task runner', () => {
       dir,
       task: 'Write hello.txt',
       name: 'filer-ws',
-      labels: { opinr: 'filer' },
+      labels: { wheems: 'filer' },
       env: {},
       timeoutSeconds,
     });
-    return { result, live: await runtime.list({ labels: { opinr: 'filer' } }) };
+    return { result, live: await runtime.list({ labels: { wheems: 'filer' } }) };
   };
   const writesHello = (cwd: string) => {
     writeFileSync(join(cwd, 'hello.txt'), 'hi');
@@ -280,7 +280,7 @@ describe('the task runner', () => {
       command: ['other'],
       cwd: dir,
       env: {},
-      labels: { opinr: 'filer', workspace: 'other' },
+      labels: { wheems: 'filer', workspace: 'other' },
     });
     const runner = new TaskRunner({ runtime, pollMs: 5, startupSeconds: 1 });
     const result = await runner.run({
@@ -301,7 +301,7 @@ describe('the task runner', () => {
       dir,
       task: 'Write hello.txt',
       name: 'filer-ws',
-      labels: { opinr: 'filer', workspace: 'ws' },
+      labels: { wheems: 'filer', workspace: 'ws' },
       env: {},
       timeoutSeconds: 5,
     });
@@ -335,7 +335,7 @@ describe('the filing queue', () => {
   let act: (cwd: string) => string | null;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'opinr-queue-'));
+    home = mkdtempSync(join(tmpdir(), 'wheems-queue-'));
     writeFileSync(join(home, 'install.yaml'), installYaml());
     await initWorkspace({ home, id: 'personal' });
     git(home, 'init', '--quiet');
@@ -367,7 +367,7 @@ describe('the filing queue', () => {
         return new StubEngine({ command: ['filer'], answers });
       },
       runner: new TaskRunner({ runtime, pollMs: 5, startupSeconds: 1 }),
-      stateDir: join(home, '.opinr'),
+      stateDir: join(home, '.wheems'),
       aboutYouFile: join(home, 'about-you.md'),
       sessionEnv: {},
       log: (m) => logs.push(m),
@@ -408,7 +408,7 @@ describe('the filing queue', () => {
     );
     await (await queue()).file('personal');
     expect(readdirSync(inbox)).toEqual([]);
-    expect(readdirSync(join(home, '.opinr', 'quarantine', 'personal'))).toEqual([
+    expect(readdirSync(join(home, '.wheems', 'quarantine', 'personal'))).toEqual([
       '2026-11-11-000000-x-keys.md',
     ]);
     expect(() => git(home, 'log')).toThrow();
@@ -460,7 +460,7 @@ describe('the filing queue', () => {
     await addNote('# Two');
     await (await queue()).fileAll();
     expect(readdirSync(knowledgePaths(join(home, 'workspaces', 'personal')).inbox)).toEqual([]);
-    expect(readdirSync(join(home, '.opinr', 'review', 'about-you'))).toHaveLength(2);
+    expect(readdirSync(join(home, '.wheems', 'review', 'about-you'))).toHaveLength(2);
     expect(git(home, 'log', '--format=%s').split('\n')).toHaveLength(2);
   });
 });

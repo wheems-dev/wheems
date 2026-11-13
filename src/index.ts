@@ -1,4 +1,4 @@
-/** Opinr's public API: driver contracts, config formats and built-in drivers. */
+/** Wheems's public API: driver contracts, config formats and built-in drivers. */
 export * from './contracts/driver.js';
 export * from './contracts/runtime.js';
 export * from './contracts/engine.js';

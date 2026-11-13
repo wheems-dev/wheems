@@ -18,6 +18,6 @@
     }
   },
   "additionalProperties": false,
-  "$id": "https://opinr.dev/schemas/skills.schema.json",
-  "title": "Opinr skills.yaml"
+  "$id": "https://wheems.dev/schemas/skills.schema.json",
+  "title": "Wheems skills.yaml"
 }

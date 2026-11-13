@@ -318,7 +318,7 @@ describe('links between files', () => {
   });
 
   it('finds names that point nowhere', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-config-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-config-'));
     cpSync(EXAMPLE, dir, { recursive: true });
     const acme = join(dir, 'workspaces/acme');
     writeFileSync(
@@ -367,7 +367,7 @@ describe('links between files', () => {
   });
 
   it('does not take inherited object properties for granted integrations or channels', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-config-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-config-'));
     cpSync(EXAMPLE, dir, { recursive: true });
     const personal = join(dir, 'workspaces/personal');
     writeFileSync(
@@ -409,7 +409,7 @@ describe('links between files', () => {
   });
 
   it('reports a missing install.yaml and badly named workspace folders', async () => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-config-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-config-'));
     cpSync(join(EXAMPLE, 'workspaces/personal'), join(dir, 'workspaces/Bad Name'), {
       recursive: true,
     });

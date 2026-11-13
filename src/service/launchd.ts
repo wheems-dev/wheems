@@ -7,7 +7,7 @@ import { homedir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { runCommand } from '../util/process.js';
 
-export const LABEL = 'dev.opinr.service';
+export const LABEL = 'dev.wheems.service';
 
 export interface ServiceSpec {
   node: string;
@@ -50,7 +50,7 @@ ${args.map((a) => `    <string>${xml(a)}</string>`).join('\n')}
   <dict>
     <key>PATH</key>
     <string>${xml(servicePath(spec.node))}</string>
-    <key>OPINR_HOME</key>
+    <key>WHEEMS_HOME</key>
     <string>${xml(spec.home)}</string>
   </dict>
   <key>WorkingDirectory</key>

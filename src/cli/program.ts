@@ -42,9 +42,9 @@ export function defaultIo(): Pick<Io, 'registry' | 'stdin'> {
   };
 }
 
-/** Builds the `opinr` command. */
+/** Builds the `wheems` command. */
 export function createProgram(io: Io): Command {
-  const program = new Command('opinr')
+  const program = new Command('wheems')
     .description('An opinionated framework for running teams of AI agents, on Herdr core')
     .version(packageVersion(), '-v, --version')
     .configureOutput({ writeOut: io.out, writeErr: io.err })
@@ -54,7 +54,7 @@ export function createProgram(io: Io): Command {
   program
     .command('doctor')
     .description('Check that this machine, Herdr core and the install are healthy')
-    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .option('--quick', 'skip starting a test session in Herdr core')
     .option('--json', 'print the report as JSON')
     .action(async (options: { home?: string; quick?: boolean; json?: boolean }) => {
@@ -75,7 +75,7 @@ export function createProgram(io: Io): Command {
       'Validate config files, or a whole install folder with the links between its files',
     )
     .argument('[paths...]', 'files or install folders (default: the install folder)')
-    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (paths: string[], options: { home?: string }) => {
       const targets = paths.length > 0 ? paths : [options.home ?? defaultHome(io.env)];
       const problems: Problem[] = [];
@@ -101,17 +101,17 @@ export function createProgram(io: Io): Command {
 
   program
     .command('setup')
-    .description('Set up Opinr: connect channels, create workspaces, run the service')
-    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .description('Set up Wheems: connect channels, create workspaces, run the service')
+    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (options: { home?: string }) => {
       if (!process.stdin.isTTY || !process.stdout.isTTY) {
-        throw new Error('opinr setup asks questions, so it needs a terminal.');
+        throw new Error('wheems setup asks questions, so it needs a terminal.');
       }
       const home = resolve(options.home ?? defaultHome(io.env));
       const where = paths(home, io.env);
       const registry = io.registry();
       const ui = clackUi();
-      ui.intro(' Opinr setup ');
+      ui.intro(' Wheems setup ');
       try {
         await setup({
           home,
@@ -137,7 +137,7 @@ export function createProgram(io: Io): Command {
             },
           },
         });
-        ui.outro('All set. Run opinr setup again any time to change things.');
+        ui.outro('All set. Run wheems setup again any time to change things.');
       } catch (error) {
         if (error instanceof SetupCancelled) {
           ui.cancel('Setup stopped. Everything you finished is saved.');
@@ -159,7 +159,7 @@ export function createProgram(io: Io): Command {
       'claude-code',
     )
     .option('--model <model>', "the engine's model (default: the engine's usual one)")
-    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(
       async (
         id: string,
@@ -207,8 +207,8 @@ export function createProgram(io: Io): Command {
                 ]
               : []),
             options.channel !== undefined
-              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: opinr service restart`
-              : 'Then message the bot in Slack. If the service is already running, restart it first: opinr service restart',
+              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: wheems service restart`
+              : 'Then message the bot in Slack. If the service is already running, restart it first: wheems service restart',
             '',
           ].join('\n'),
         );

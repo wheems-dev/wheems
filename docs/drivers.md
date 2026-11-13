@@ -32,7 +32,7 @@ with the milestones that need them.
 ## The contracts
 
 The contracts are TypeScript interfaces in [`src/contracts/`](../src/contracts/). Every driver
-has a `kind` and a `name`, reports `check()` health checks for `opinr doctor`, and throws
+has a `kind` and a `name`, reports `check()` health checks for `wheems doctor`, and throws
 `DriverError` with one of a fixed set of kinds (`not_found`, `unsupported`, `unavailable`,
 `version`, `blocked`, `invalid`, `failed`) so callers can react the same way whatever the
 driver.
@@ -117,12 +117,12 @@ code: a few milliseconds for thousands of pages, with nothing to install.
 ## Contract tests
 
 Each driver type ships a test suite that any driver of that type must pass, published as
-`@opinr/hq/testing`. A plugin written by an agent, by you or by a stranger is checked against the
+`wheems/testing`. A plugin written by an agent, by you or by a stranger is checked against the
 same contract before it's switched on. The suites use [Vitest](https://vitest.dev).
 
 ```ts
 // my-runtime.test.ts
-import { runtimeContract } from '@opinr/hq/testing';
+import { runtimeContract } from 'wheems/testing';
 import { MyRuntime } from './my-runtime.js';
 
 runtimeContract('my-runtime', { create: () => new MyRuntime() });
@@ -134,7 +134,7 @@ import {
   embeddingsContract,
   engineContract,
   vectorStoreContract,
-} from '@opinr/hq/testing';
+} from 'wheems/testing';
 
 engineContract('gemini', {
   create: () => new GeminiEngine(),
@@ -153,7 +153,7 @@ channelContract('discord', {
 });
 ```
 
-`@opinr/hq/testing` also exports in-memory reference drivers: `MemoryRuntime` (simulated programs),
+`wheems/testing` also exports in-memory reference drivers: `MemoryRuntime` (simulated programs),
 `MemoryChannel` (messages kept in memory), `StubEngine`, `HashEmbeddings` (words hashed into a
 small vector, with synonyms to stand in for meaning) and `MemoryVectorStore`. The suites run against them in this
 repository's own tests, and later milestones use them to test the service without Herdr or
@@ -162,20 +162,20 @@ Slack.
 ## Plugins
 
 A plugin is a package of drivers and content: any mix of drivers, skills, agent templates and
-workflow templates. It's distributed through npm. `opinr plugin add <package>` installs it, and
-Opinr discovers what's inside automatically. Each plugin has a manifest declaring what it adds
+workflow templates. It's distributed through npm. `wheems plugin add <package>` installs it, and
+Wheems discovers what's inside automatically. Each plugin has a manifest declaring what it adds
 and what it needs: credentials, network access and which commands it runs. That makes it
 reviewable before it's switched on.
 
-**Opinr knows itself.** Every chief of staff gets a built-in skill describing the framework: its
+**Wheems knows itself.** Every chief of staff gets a built-in skill describing the framework: its
 concepts, its CLI, the driver contracts and how a plugin is laid out. Scaffolding commands work
 like Laravel's `artisan make:`:
 
 ```bash
-opinr make:plugin linear
-opinr make:driver channel discord
-opinr make:skill weekly-report
-opinr make:workflow invoice-chase
+wheems make:plugin linear
+wheems make:driver channel discord
+wheems make:skill weekly-report
+wheems make:workflow invoice-chase
 ```
 
 So "Can you make a plugin for Linear?" works the way "create me a workflow" does: the chief of

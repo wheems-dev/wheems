@@ -40,7 +40,7 @@ export class StubEngine implements EngineDriver {
   private readonly typeOnResume: boolean;
 
   /**
-   * With `ownIds`, the engine behaves like Codex or opencode: it ignores Opinr's session id,
+   * With `ownIds`, the engine behaves like Codex or opencode: it ignores Wheems's session id,
    * picks its own (`own-1`, `own-2`, …) and offers `findSession` to find it.
    */
   constructor(
@@ -98,9 +98,9 @@ export class StubEngine implements EngineDriver {
       command: [...this.command, ...(context.session.resume ? ['--resume'] : [])],
       cwd: join(context.sessionDir),
       env: {
-        OPINR_AGENT: agent.name,
-        OPINR_MODEL: agent.model,
-        OPINR_WORKSPACE: context.workspace.id,
+        WHEEMS_AGENT: agent.name,
+        WHEEMS_MODEL: agent.model,
+        WHEEMS_WORKSPACE: context.workspace.id,
         STUB_SESSION: sessionId,
         STUB_RESUME: context.session.resume ? '1' : '0',
         STUB_PERMISSIONS: agent.permissions,

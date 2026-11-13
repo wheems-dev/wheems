@@ -146,7 +146,7 @@ export function hasModel(models: string[], model: string): boolean {
   return models.some((m) => full(m) === full(model));
 }
 
-/** What `opinr setup` needs to offer Ollama. */
+/** What `wheems setup` needs to offer Ollama. */
 export function ollamaSetup(url?: string): EmbeddingsSetup {
   return {
     defaultModel: OLLAMA_DEFAULT_MODEL,

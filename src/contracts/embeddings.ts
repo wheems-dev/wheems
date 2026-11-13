@@ -35,7 +35,7 @@ export interface EmbeddingsDriver extends Driver<'embeddings'> {
 
 export type EmbeddingPurpose = 'document' | 'query';
 
-/** How an embeddings driver appears in `opinr setup`. */
+/** How an embeddings driver appears in `wheems setup`. */
 export interface EmbeddingsSetup {
   /** The model setup suggests. */
   defaultModel: string;

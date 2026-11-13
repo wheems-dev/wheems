@@ -9,12 +9,12 @@ export function registerReply(program: Command, io: Io): void {
     .command('reply')
     .description('Reply to the person in the current conversation (agents run this)')
     .argument('[text...]', 'the reply; "-" or nothing reads it from standard input')
-    .option('--home <dir>', 'the install folder (default: $OPINR_HOME or ~/opinr)')
+    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (words: string[], options: { home?: string }) => {
-      const conversation = io.env.OPINR_CONVERSATION;
+      const conversation = io.env.WHEEMS_CONVERSATION;
       if (conversation === undefined || conversation === '') {
         throw new Error(
-          'opinr reply works inside a conversation started by Opinr (OPINR_CONVERSATION is not set).',
+          'wheems reply works inside a conversation started by Wheems (WHEEMS_CONVERSATION is not set).',
         );
       }
       const text = (

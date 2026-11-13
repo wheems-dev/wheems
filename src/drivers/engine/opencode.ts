@@ -64,7 +64,7 @@ export class OpencodeEngine implements EngineDriver {
           message: version.missing
             ? 'opencode is not installed or not on PATH'
             : version.stderr.trim(),
-          hint: 'Run opinr setup and choose Engines to install it.',
+          hint: 'Run wheems setup and choose Engines to install it.',
         },
       ];
     }
@@ -97,7 +97,7 @@ export class OpencodeEngine implements EngineDriver {
       files: [
         {
           path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Opinr from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
+          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
         },
       ],
     });
@@ -210,7 +210,7 @@ export function opencodeAnswers(exported: OpencodeExport): FinalMessage[] {
   return answers;
 }
 
-/** How `opinr setup` installs opencode and signs in. */
+/** How `wheems setup` installs opencode and signs in. */
 export function opencodeSetup(binary = 'opencode'): EngineSetup {
   return {
     version: async () => {

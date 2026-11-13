@@ -6,7 +6,7 @@ import type { Driver, HealthCheck } from './driver.js';
  * compares them in code: fast enough for thousands of pages. pgvector and Pinecone come
  * later as drivers of their own.
  *
- * A store holds named collections. Opinr uses one per workspace and index build, so a
+ * A store holds named collections. Wheems uses one per workspace and index build, so a
  * rebuild fills a new collection and drops the old one only once the new one is in use.
  */
 export interface VectorStoreDriver extends Driver<'vector-store'> {

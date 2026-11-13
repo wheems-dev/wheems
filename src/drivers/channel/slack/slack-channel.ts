@@ -51,7 +51,7 @@ export class SlackChannel implements ChannelDriver {
           name: 'Slack',
           status: 'fail',
           message: `Slack refused the bot token: ${slackError(error)}`,
-          hint: 'Run opinr setup to enter the Slack tokens again.',
+          hint: 'Run wheems setup to enter the Slack tokens again.',
         },
       ];
     }

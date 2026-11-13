@@ -40,8 +40,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: options.startupSeconds ?? 2,
       followUpSeconds: 0.5,
@@ -54,7 +54,7 @@ describe('conversations', () => {
   };
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'opinr-conv-'));
+    home = mkdtempSync(join(tmpdir(), 'wheems-conv-'));
     writeFileSync(
       join(home, 'install.yaml'),
       installYaml().replace('allowed_users: []', `allowed_users: [${ME}]`),
@@ -108,7 +108,7 @@ describe('conversations', () => {
     await settle();
     expect(posts()).toEqual([{ thread: first, text: 'echo: hello' }]);
     const sessions = await runtime.list({
-      labels: { opinr: 'conversation', workspace: 'personal' },
+      labels: { wheems: 'conversation', workspace: 'personal' },
     });
     expect(sessions).toHaveLength(1);
     const key = conversationKey('personal', 'slack', 'D1', first);
@@ -119,9 +119,9 @@ describe('conversations', () => {
     expect([...(channel.reactions.get(`D1/${first}`) ?? [])]).toEqual([]);
     // The engine wrote its instructions file, with the built-in chat instructions.
     const claudeMd = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
-    expect(claudeMd).toContain('opinr reply');
+    expect(claudeMd).toContain('wheems reply');
     expect(
-      JSON.parse(readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8')),
+      JSON.parse(readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8')),
     ).toMatchObject({
       [key]: { workspace: 'personal', channel: 'D1', thread: first, sessionId: uuidFor(key) },
     });
@@ -134,7 +134,7 @@ describe('conversations', () => {
     await settle();
     await dm('three', first);
     await settle();
-    const sessions = await runtime.list({ labels: { opinr: 'conversation' } });
+    const sessions = await runtime.list({ labels: { wheems: 'conversation' } });
     expect(sessions).toHaveLength(1);
     expect(received.get(sessions[0]!.id)).toEqual(['one', 'two', 'three']);
     expect(posts().map((p) => p.thread)).toEqual([first, first, first]);
@@ -144,17 +144,17 @@ describe('conversations', () => {
     await dm('one');
     await dm('another topic');
     await settle();
-    expect(await runtime.list({ labels: { opinr: 'conversation' } })).toHaveLength(2);
+    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toHaveLength(2);
   });
 
   it('resumes the conversation in a new session when the old one has ended', async () => {
     const first = await dm('one');
     await settle();
-    const [session] = await runtime.list({ labels: { opinr: 'conversation' } });
+    const [session] = await runtime.list({ labels: { wheems: 'conversation' } });
     await runtime.stop(session!.id);
     await dm('two', first);
     await settle();
-    const [next] = await runtime.list({ labels: { opinr: 'conversation' } });
+    const [next] = await runtime.list({ labels: { wheems: 'conversation' } });
     expect(next!.id).not.toBe(session!.id);
     // The stub engine reports resume and the same conversation id.
     expect(next!.command).toEqual(['fake-agent', '--resume']);
@@ -184,7 +184,7 @@ describe('conversations', () => {
     expect(channel.sent[0]?.identity).toEqual({ name: 'Personal chief of staff' });
   });
 
-  it('posts progress notes from opinr reply and then the final answer, without repeating a reply', async () => {
+  it('posts progress notes from wheems reply and then the final answer, without repeating a reply', async () => {
     behaviour = () => 'progress-and-answer';
     const first = await dm('do the thing');
     await settle();
@@ -272,8 +272,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: 2,
       followUpSeconds: 0.5,
@@ -282,17 +282,17 @@ describe('conversations', () => {
     await settle();
     const key = conversationKey('personal', 'slack', 'D1', first);
     const stored = JSON.parse(
-      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
     ) as Record<string, { engineSessionId?: string }>;
     expect(stored[key]?.engineSessionId).toBe('own-1');
     expect(posts()).toEqual([{ thread: first, text: 'answer: first question' }]);
 
     // The session ends; the next message resumes the engine's own session.
-    const [session] = await runtime.list({ labels: { opinr: 'conversation' } });
+    const [session] = await runtime.list({ labels: { wheems: 'conversation' } });
     await runtime.stop(session!.id);
     await dm('second question', first);
     await settle();
-    const [next] = await runtime.list({ labels: { opinr: 'conversation' } });
+    const [next] = await runtime.list({ labels: { wheems: 'conversation' } });
     expect(next?.command).toEqual(['fake-agent', '--resume']);
     expect(posts().at(-1)).toEqual({ thread: first, text: 'answer: second question' });
   });
@@ -320,8 +320,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
       startupSeconds: 2,
@@ -347,8 +347,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: 2,
     });
@@ -356,7 +356,7 @@ describe('conversations', () => {
     const b = await dm('Hello');
     await settle();
     const stored = JSON.parse(
-      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
     ) as Record<string, { engineSessionId?: string }>;
     const ids = [a, b].map(
       (thread) => stored[conversationKey('personal', 'slack', 'D1', thread)]?.engineSessionId,
@@ -389,8 +389,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
       startupSeconds: 2,
@@ -430,8 +430,8 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-        sessionEnv: { OPINR_HOME: home },
+        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
         startupSeconds: 2,
@@ -478,8 +478,8 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-        sessionEnv: { OPINR_HOME: home },
+        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
         typeDelayMs: 30,
@@ -497,7 +497,7 @@ describe('conversations', () => {
     await settle();
     expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
     const stored = JSON.parse(
-      readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8'),
+      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
     ) as Record<string, { pending?: number }>;
     expect(stored[conversationKey('personal', 'slack', 'D1', first)]?.pending).toBe(0);
   });
@@ -526,8 +526,8 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-        sessionEnv: { OPINR_HOME: home },
+        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
         typeDelayMs: 10,
@@ -572,8 +572,8 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
-      sessionEnv: { OPINR_HOME: home },
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
       typeDelayMs: 20,
@@ -581,11 +581,11 @@ describe('conversations', () => {
     });
     const first = await dm('one');
     await settle();
-    const [session] = await quiet.list({ labels: { opinr: 'conversation' } });
+    const [session] = await quiet.list({ labels: { wheems: 'conversation' } });
     await quiet.stop(session!.id);
     await dm('two', first);
     await settle();
-    const [next] = await quiet.list({ labels: { opinr: 'conversation' } });
+    const [next] = await quiet.list({ labels: { wheems: 'conversation' } });
     expect(next?.command).toEqual(['fake-agent', '--resume']);
     expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
   });
@@ -633,7 +633,7 @@ describe('conversations', () => {
       await dm(text);
       await settle();
     }
-    const live = await runtime.list({ labels: { opinr: 'conversation' } });
+    const live = await runtime.list({ labels: { wheems: 'conversation' } });
     expect(live).toHaveLength(2);
     expect(live.map((s) => received.get(s.id)?.[0])).toEqual(['b', 'c']);
   });
@@ -644,10 +644,10 @@ describe('conversations', () => {
 
   describe('notes', () => {
     const isNoteRequest = (line: string) =>
-      line.startsWith('Opinr: this conversation has gone quiet');
+      line.startsWith('Wheems: this conversation has gone quiet');
     const later = () => Date.now() + 31 * 60_000;
     const stored = () =>
-      JSON.parse(readFileSync(join(home, '.opinr', 'conversations.json'), 'utf8')) as Record<
+      JSON.parse(readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8')) as Record<
         string,
         { notedAt?: string; noting?: boolean; lastAnswerId?: string }
       >;
@@ -665,7 +665,7 @@ describe('conversations', () => {
       // Noted, so a quiet spell asks for nothing.
       await manager.sweepNotes(later());
       await settle();
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       expect(received.get(session.id)).toEqual(['hello']);
     });
 
@@ -683,7 +683,7 @@ describe('conversations', () => {
       const key = conversationKey('personal', 'slack', 'D1', first);
       // Not quiet for long enough yet.
       await manager.sweepNotes(Date.now() + 60_000);
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       expect(received.get(session.id)).toEqual(['plan the week']);
 
       await manager.sweepNotes(later());
@@ -717,7 +717,7 @@ describe('conversations', () => {
       await settle();
       await manager.sweepNotes(later());
       await settle();
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       expect(received.get(session.id)).toEqual(['hello']);
     });
 
@@ -727,10 +727,10 @@ describe('conversations', () => {
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
       // A note turn whose answer arrived after the service stopped following it.
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
-      await new ConversationStore(join(home, '.opinr', 'conversations.json')).setNoting(key, true);
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      await new ConversationStore(join(home, '.wheems', 'conversations.json')).setNoting(key, true);
       make();
-      await runtime.send(session.id, 'Opinr: this conversation has gone quiet (old request)');
+      await runtime.send(session.id, 'Wheems: this conversation has gone quiet (old request)');
       await new Promise((r) => setTimeout(r, 50));
       await dm('two', first);
       await settle();
@@ -743,11 +743,11 @@ describe('conversations', () => {
       behaviour = () => 'answer';
       const first = await dm('one');
       await settle();
-      const oldSession = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const oldSession = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       await dm('two');
       await settle();
       expect(received.get(oldSession.id)?.map((l) => isNoteRequest(l))).toEqual([false, true]);
-      const live = await runtime.list({ labels: { opinr: 'conversation' } });
+      const live = await runtime.list({ labels: { wheems: 'conversation' } });
       expect(live.map((s) => s.id)).not.toContain(oldSession.id);
       expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
       expect(stored()[conversationKey('personal', 'slack', 'D1', first)]?.notedAt).toBeDefined();
@@ -758,7 +758,7 @@ describe('conversations', () => {
       behaviour = (line) => (isNoteRequest(line) ? 'slow-answer' : 'answer');
       const first = await dm('one');
       await settle();
-      const oldSession = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const oldSession = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       await manager.sweepNotes(later());
       expect((await runtime.get(oldSession.id))?.state).not.toBe('live');
       await dm('two', first);
@@ -773,10 +773,10 @@ describe('conversations', () => {
       const first = await dm('one');
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
-      await new ConversationStore(join(home, '.opinr', 'conversations.json')).setNoting(key, true);
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      await new ConversationStore(join(home, '.wheems', 'conversations.json')).setNoting(key, true);
       make();
-      await runtime.send(session.id, 'Opinr: this conversation has gone quiet (old request)');
+      await runtime.send(session.id, 'Wheems: this conversation has gone quiet (old request)');
       await dm('two', first);
       await settle();
       expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
@@ -802,7 +802,7 @@ describe('conversations', () => {
       const first = await dm('one');
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
-      const session = (await runtime.list({ labels: { opinr: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
       await manager.sweepNotes(later());
       await settle();
       const stop = runtime.stop.bind(runtime);

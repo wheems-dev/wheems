@@ -238,8 +238,8 @@ export class Hc {
     if (!result.success) {
       throw new HcError(
         'bad_output',
-        `hc ${command ?? ''} printed JSON in a shape this version of Opinr does not know: ${z.prettifyError(result.error)}`,
-        'Check that hc is a version Opinr supports (opinr doctor).',
+        `hc ${command ?? ''} printed JSON in a shape this version of Wheems does not know: ${z.prettifyError(result.error)}`,
+        'Check that hc is a version Wheems supports (wheems doctor).',
         0,
       );
     }

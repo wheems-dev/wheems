@@ -65,6 +65,6 @@
     "account"
   ],
   "additionalProperties": false,
-  "$id": "https://opinr.dev/schemas/agent.schema.json",
-  "title": "Opinr agent front matter (agents/<name>.md)"
+  "$id": "https://wheems.dev/schemas/agent.schema.json",
+  "title": "Wheems agent front matter (agents/<name>.md)"
 }

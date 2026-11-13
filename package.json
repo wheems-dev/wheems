@@ -1,5 +1,5 @@
 {
-  "name": "@opinr/hq",
+  "name": "wheems",
   "version": "0.0.0",
   "private": true,
   "description": "An opinionated framework for running teams of AI agents, on Herdr core",
@@ -9,7 +9,7 @@
     "node": ">=22.13.0"
   },
   "bin": {
-    "opinr": "dist/cli/main.js"
+    "wheems": "dist/cli/main.js"
   },
   "exports": {
     ".": {
@@ -35,12 +35,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "schemas": "tsx scripts/write-schemas.ts",
-    "opinr": "tsx src/cli/main.ts",
+    "wheems": "tsx src/cli/main.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/opinr-dev/opinr.git"
+    "url": "git+https://github.com/wheems-dev/wheems.git"
   },
   "dependencies": {
     "@clack/prompts": "^1.9.0",

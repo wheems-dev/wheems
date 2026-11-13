@@ -17,13 +17,13 @@ describe('notes', () => {
   };
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-notes-'));
+    dir = mkdtempSync(join(tmpdir(), 'wheems-notes-'));
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('saves a note to the inbox with what Opinr knows about where it came from', async () => {
+  it('saves a note to the inbox with what Wheems knows about where it came from', async () => {
     const file = await writeNote(
       dir,
       source,
@@ -91,7 +91,7 @@ describe('notes', () => {
 
   it("gives agents the notes instructions, and what they know when there's something to know", () => {
     const bare = withBuiltins('# Agent');
-    expect(bare).toContain('opinr note');
+    expect(bare).toContain('wheems note');
     expect(bare).not.toContain('What you know');
     const known = withBuiltins('# Agent', { aboutYou: 'Prefers short answers.', brief: null });
     expect(known).toContain('### About the person\n\nPrefers short answers.');

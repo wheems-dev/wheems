@@ -19,8 +19,8 @@ describe('conversation store', () => {
   let dir: string;
   let file: string;
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'opinr-store-'));
-    file = join(dir, '.opinr', 'conversations.json');
+    dir = mkdtempSync(join(tmpdir(), 'wheems-store-'));
+    file = join(dir, '.wheems', 'conversations.json');
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });

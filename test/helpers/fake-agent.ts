@@ -16,7 +16,7 @@ export type Behaviour =
 export interface FakeAgentOptions {
   /** What the agent does with each message. Defaults to `reply`. */
   behaviour?: (line: string) => Behaviour;
-  /** How the agent replies: with `opinr reply`, in effect. */
+  /** How the agent replies: with `wheems reply`, in effect. */
   reply: (conversation: string, text: string) => Promise<void>;
   /** Every message each session received, by session id. */
   received?: Map<string, string[]>;
@@ -35,7 +35,7 @@ export interface FakeAgentOptions {
 /**
  * A simulated agent CLI, run by MemoryRuntime: it reports idle on start, works on
  * its first task (from the stub engine's STUB_TASK) and on each later line, and
- * replies "echo: <message>" through `reply`, like an agent running `opinr reply`.
+ * replies "echo: <message>" through `reply`, like an agent running `wheems reply`.
  * Lines typed while it works wait, and it takes each in a turn of its own, as
  * Claude Code does with queued messages.
  */
@@ -50,8 +50,8 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
     };
     let busy = false;
     const handle = (raw: string, io: Io) => {
-      // Like a real agent, it ignores the conversation tag Opinr may add to the first message.
-      const line = raw.replace(/\s*<opinr [^>]*\/>\s*$/, '');
+      // Like a real agent, it ignores the conversation tag Wheems may add to the first message.
+      const line = raw.replace(/\s*<wheems [^>]*\/>\s*$/, '');
       const behaviour = options.behaviour?.(line) ?? 'reply';
       if (behaviour === 'never-start') return;
       if (busy) {
@@ -71,7 +71,7 @@ export function fakeAgent(options: FakeAgentOptions): ProgramFactory {
             io.exit(0);
             return;
           }
-          const conversation = env.OPINR_CONVERSATION ?? '';
+          const conversation = env.WHEEMS_CONVERSATION ?? '';
           const answer = (text: string) => {
             const id = env.STUB_SESSION ?? '';
             const list = options.answers?.get(id) ?? [];

@@ -19,7 +19,7 @@ import { ConversationStore } from './store.js';
 export interface ServiceOptions {
   home: string;
   registry: DriverRegistry;
-  /** The Node.js and script that run the `opinr` command, for the command agents run. */
+  /** The Node.js and script that run the `wheems` command, for the command agents run. */
   node: string;
   cli: string;
   version: string;
@@ -42,7 +42,7 @@ export interface RunningService {
 
 /**
  * The always-running service: connects every chat channel that a workspace
- * binds, routes messages to agents, and answers the `opinr` command on its
+ * binds, routes messages to agents, and answers the `wheems` command on its
  * control socket. Runs in the foreground; launchd keeps it running.
  */
 export async function runService(options: ServiceOptions): Promise<RunningService> {
@@ -58,15 +58,15 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const problems = [...install.problems, ...crossCheck(install)].filter((p) => p.level === 'error');
   if (!install.config || problems.length > 0) {
     throw new Error(
-      `The install has config problems; run opinr doctor:\n${problems.map((p) => `  ${p.file}: ${p.message}`).join('\n')}`,
+      `The install has config problems; run wheems doctor:\n${problems.map((p) => `  ${p.file}: ${p.message}`).join('\n')}`,
     );
   }
   const config = install.config;
   const secrets = await readSecrets(where.secrets);
 
-  // The `opinr` command agents run, pinned to this Node.js and this copy of Opinr.
+  // The `wheems` command agents run, pinned to this Node.js and this copy of Wheems.
   await mkdir(where.bin, { recursive: true });
-  const wrapper = join(where.bin, 'opinr');
+  const wrapper = join(where.bin, 'wheems');
   await writeFile(
     wrapper,
     `#!/bin/sh\nexec ${shellQuote(options.node)} ${shellQuote(options.cli)} "$@"\n`,
@@ -126,7 +126,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     return engine;
   };
   const sessionEnv = {
-    OPINR_HOME: options.home,
+    WHEEMS_HOME: options.home,
     PATH: `${where.bin}:${env.PATH ?? '/usr/bin:/bin'}`,
   };
   const search = knowledgeSearch(config, install.workspaces, options.registry, where.index, log);
@@ -204,7 +204,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     throw error;
   }
   const listening = server;
-  log(`Opinr ${options.version} is running from ${options.home}`);
+  log(`Wheems ${options.version} is running from ${options.home}`);
   await manager.recover();
   manager.startNotes();
   // Files edited, and notes that landed, while the service was away.
@@ -250,7 +250,7 @@ function knowledgeSearch(
     return new KnowledgeSearch({ install: config, workspaces, registry, indexDir, log });
   } catch (error) {
     log(
-      `Search is keyword-only: ${error instanceof Error ? error.message : String(error)}. Run opinr doctor.`,
+      `Search is keyword-only: ${error instanceof Error ? error.message : String(error)}. Run wheems doctor.`,
     );
     return new KnowledgeSearch({
       install: { ...config, knowledge: {} },

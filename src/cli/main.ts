@@ -4,7 +4,7 @@
 const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
 if (major < 22 || (major === 22 && minor < 13)) {
   process.stderr.write(
-    `Opinr needs Node.js 22.13 or later, and this is ${process.versions.node} (${process.execPath}).\n`,
+    `Wheems needs Node.js 22.13 or later, and this is ${process.versions.node} (${process.execPath}).\n`,
   );
   process.exit(1);
 }

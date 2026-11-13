@@ -2,11 +2,11 @@ import { z } from 'zod';
 import { configSchemas } from '../src/config/schemas.js';
 
 const TITLES: Record<keyof typeof configSchemas, string> = {
-  install: 'Opinr install.yaml',
-  workspace: 'Opinr workspace.yaml',
-  agent: 'Opinr agent front matter (agents/<name>.md)',
-  skills: 'Opinr skills.yaml',
-  workflow: 'Opinr workflow (workflows/<name>.yaml)',
+  install: 'Wheems install.yaml',
+  workspace: 'Wheems workspace.yaml',
+  agent: 'Wheems agent front matter (agents/<name>.md)',
+  skills: 'Wheems skills.yaml',
+  workflow: 'Wheems workflow (workflows/<name>.yaml)',
 };
 
 /** The JSON Schema file for each config format, keyed by file name. */
@@ -18,7 +18,7 @@ export function renderSchemas(): Record<string, string> {
   ][]) {
     const json = {
       ...z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }),
-      $id: `https://opinr.dev/schemas/${kind}.schema.json`,
+      $id: `https://wheems.dev/schemas/${kind}.schema.json`,
       title: TITLES[kind],
     };
     files[`${kind}.schema.json`] = `${JSON.stringify(json, null, 2)}\n`;

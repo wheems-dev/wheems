@@ -1,9 +1,9 @@
 /**
  * Built-in instructions every agent gets, appended to its own. This is how agents
- * learn to use the framework: through the `opinr` command, never through tokens
+ * learn to use the framework: through the `wheems` command, never through tokens
  * or hand-written scripts.
  */
-export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Opinr)
+export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Wheems)
 
 Messages from the person reach you from Slack, usually from their phone. They cannot see this
 terminal.
@@ -11,33 +11,33 @@ terminal.
 - Answer normally. When you finish working on a message, your last message is posted to their
   Slack thread for you, in Markdown.
 - If the work will take more than a minute, first send a short note of what you are about to do
-  with \`opinr reply "..."\`, then carry on. Don't repeat that note in your final answer, and
-  don't send your final answer with \`opinr reply\`. For a longer note, pipe Markdown in:
+  with \`wheems reply "..."\`, then carry on. Don't repeat that note in your final answer, and
+  don't send your final answer with \`wheems reply\`. For a longer note, pipe Markdown in:
 
   \`\`\`sh
-  opinr reply - <<'EOF'
+  wheems reply - <<'EOF'
   A longer note, in Markdown.
   EOF
   \`\`\`
 
 - Keep answers short and easy to read on a phone. Lead with the answer.
-- The first message of a conversation may end with a tag like \`<opinr conversation="…"/>\`.
-  It is for Opinr; ignore it and never repeat it.
+- The first message of a conversation may end with a tag like \`<wheems conversation="…"/>\`.
+  It is for Wheems; ignore it and never repeat it.
 - Each Slack thread is its own conversation with you. Later messages in the thread continue it.
 - If you need a decision before going on, ask it in a reply and stop. Their answer arrives as
   the next message.
 `;
 
-export const NOTES_INSTRUCTIONS = `## Notes and the knowledge base (built into Opinr)
+export const NOTES_INSTRUCTIONS = `## Notes and the knowledge base (built into Wheems)
 
 This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never edit anything in
-\`knowledge/\` or \`about-you.md\` yourself: write a note, and Opinr's filing job does the rest.
+\`knowledge/\` or \`about-you.md\` yourself: write a note, and Wheems's filing job does the rest.
 
 - When something worth keeping happens, write a note: a decision and why, something you learned
   about the person or their work, something finished, something blocked, what's next.
 
   \`\`\`sh
-  opinr note - <<'EOF'
+  wheems note - <<'EOF'
   # What this was about
 
   Short paragraphs or bullets, in plain English.
@@ -50,12 +50,12 @@ This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never
 - Never put passwords, tokens or other secrets in a note.
 - If the person tells you something that belongs in "About the person" below, say so in a note.
   They approve every change to it.
-- Opinr may send you a message asking for your note, when a conversation has gone quiet. Write
+- Wheems may send you a message asking for your note, when a conversation has gone quiet. Write
   one if anything since your last note is worth keeping, then answer just "done". That answer is
   not sent to the person.
 `;
 
-export const SEARCH_INSTRUCTIONS = `## Searching the knowledge base (built into Opinr)
+export const SEARCH_INSTRUCTIONS = `## Searching the knowledge base (built into Wheems)
 
 The brief below is a short summary. The knowledge base holds the detail: a page per topic, and
 every note it was built from.
@@ -64,7 +64,7 @@ every note it was built from.
   conversation, search it. Search before saying you don't know.
 
   \`\`\`sh
-  opinr kb search "what did we decide about the boat name"
+  wheems kb search "what did we decide about the boat name"
   \`\`\`
 
 - Ask in plain words: it searches by meaning as well as by keyword. Try other words if the first
@@ -91,10 +91,10 @@ export function withBuiltins(
   const knows =
     known.length === 0
       ? ''
-      : `\n## What you know (from Opinr)\n\nKept up to date by Opinr from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
+      : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
   return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}${knows}`;
 }
 
-/** The message Opinr sends when it asks an agent for its note. */
+/** The message Wheems sends when it asks an agent for its note. */
 export const NOTE_REQUEST =
-  'Opinr: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `opinr note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';
+  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';

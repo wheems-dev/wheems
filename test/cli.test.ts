@@ -27,7 +27,7 @@ async function cli(...args: string[]): Promise<{ code: number; out: string; err:
   }
 }
 
-describe('opinr CLI', () => {
+describe('wheems CLI', () => {
   it('prints its version', async () => {
     const result = await cli('--version');
     expect(result.out.trim()).toBe(packageVersion());
@@ -59,7 +59,7 @@ describe('opinr CLI', () => {
   });
 
   it('rebuilds and searches the knowledge base itself when the service is not running', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'opinr-kb-'));
+    const home = mkdtempSync(join(tmpdir(), 'wheems-kb-'));
     try {
       writeFileSync(join(home, 'install.yaml'), installYaml());
       await initWorkspace({ home, id: 'personal' });

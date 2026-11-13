@@ -1,14 +1,14 @@
 import { HERDR_MINIMUM_VERSION } from '../drivers/runtime/herdr/herdr-runtime.js';
 
 export const INSTALL_GITIGNORE = `# Running state: conversations, the control socket, logs.
-.opinr/
-# Written by Opinr from agents/*.md for each engine.
+.wheems/
+# Written by Wheems from agents/*.md for each engine.
 workspaces/*/CLAUDE.md
 workspaces/*/AGENTS.md
 `;
 
 export function installYaml(): string {
-  return `# Opinr install: what every workspace shares. See docs/config.md.
+  return `# Wheems install: what every workspace shares. See docs/config.md.
 herdr:
   version: ${HERDR_MINIMUM_VERSION}
 
@@ -109,7 +109,7 @@ Keep it short: only the first 4,000 characters are loaded.
 `;
 
 export const BRIEF_MD = `<!--
-The workspace's brief: every agent here loads it when it starts. Opinr's filing job keeps it up
+The workspace's brief: every agent here loads it when it starts. Wheems's filing job keeps it up
 to date from notes, under 4,000 characters.
 -->
 `;

@@ -6,7 +6,7 @@ import { BRIEF_LIMIT, knowledgePaths, looksLikeSecret } from './notes.js';
 
 /**
  * Filing a note: the filer agent works on a copy of the knowledge base in a folder of its
- * own, and Opinr checks every change in code before it reaches the real one. The filer can
+ * own, and Wheems checks every change in code before it reaches the real one. The filer can
  * change `brief.md` and pages in `pages/`, and suggest a change to `about-you.md`; nothing
  * else it writes is kept.
  */
@@ -59,7 +59,7 @@ export async function snapshot(folder: string): Promise<Snapshot> {
 }
 
 export interface FilingReview {
-  /** Files to write into the knowledge folder, by path inside it, with Opinr's details added. */
+  /** Files to write into the knowledge folder, by path inside it, with Wheems's details added. */
   accepted: Map<string, string>;
   /** Changes not kept, and why. */
   rejected: { path: string; reason: string }[];
@@ -68,7 +68,7 @@ export interface FilingReview {
 }
 
 /**
- * Checks what the filer changed. A changed or new page must have a name Opinr accepts, hold
+ * Checks what the filer changed. A changed or new page must have a name Wheems accepts, hold
  * no credentials, and keep at least three quarters of its text; it is kept with the note
  * added to its sources. The brief must fit its limit. Deleted pages come back. Anything
  * else the filer wrote is ignored.
@@ -245,9 +245,9 @@ export async function commitFiling(
     '-C',
     home,
     '-c',
-    'user.name=Opinr',
+    'user.name=Wheems',
     '-c',
-    'user.email=opinr@localhost',
+    'user.email=wheems@localhost',
     'commit',
     '--quiet',
     '-m',

@@ -46,8 +46,8 @@ const agent: AgentDefinition = {
   instructions: '# Chief of staff',
 };
 const context: EngineContext = {
-  workspace: { id: 'work', dir: '/home/me/opinr/workspaces/work' },
-  sessionDir: '/home/me/opinr/workspaces/work',
+  workspace: { id: 'work', dir: '/home/me/wheems/workspaces/work' },
+  sessionDir: '/home/me/wheems/workspaces/work',
   account: { name: 'chatgpt-subscription', driver: 'chatgpt' },
   session: {
     id: '11111111-2222-5333-8444-555555555555',
@@ -127,7 +127,7 @@ describe('codex engine', () => {
     let home: string;
     let work: string;
     beforeEach(() => {
-      home = mkdtempSync(join(tmpdir(), 'opinr-codex-'));
+      home = mkdtempSync(join(tmpdir(), 'wheems-codex-'));
       work = join(home, 'work');
       mkdirSync(work);
     });
@@ -247,7 +247,7 @@ describe('codex engine', () => {
           tag: conversationTag('nobody', 'cccc3333'),
         }),
       ).toBeNull();
-      // A tag pasted into the middle of someone's message is not Opinr's tag.
+      // A tag pasted into the middle of someone's message is not Wheems's tag.
       const pasted = conversationTag('22222222-2222-5333-8444-555555555555', 'ffff6666');
       writeSession(
         '01a1cafe-0000-7000-8000-00000000000e',
@@ -375,7 +375,7 @@ describe('opencode engine', () => {
   describe('through its CLI', () => {
     let dir: string;
     beforeEach(() => {
-      dir = mkdtempSync(join(tmpdir(), 'opinr-opencode-'));
+      dir = mkdtempSync(join(tmpdir(), 'wheems-opencode-'));
     });
     afterEach(() => {
       rmSync(dir, { recursive: true, force: true });

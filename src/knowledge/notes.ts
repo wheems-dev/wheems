@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /**
  * A workspace's knowledge folder. Sessions never write here directly: notes reach the inbox
- * through `opinr note`, and the filing job turns them into pages.
+ * through `wheems note`, and the filing job turns them into pages.
  */
 export interface KnowledgePaths {
   root: string;
@@ -77,7 +77,7 @@ export interface NoteSource {
 }
 
 /**
- * Saves a note in a workspace's inbox, with the details Opinr knows rather than the agent:
+ * Saves a note in a workspace's inbox, with the details Wheems knows rather than the agent:
  * which workspace, agent and conversation, and when. Never overwrites a note. Returns the
  * file's path.
  */

@@ -6,7 +6,7 @@ import { KnowledgeSearch, type IndexStatus, type SearchAnswer } from '../../know
 import { request } from '../../service/control.js';
 import type { Io } from '../program.js';
 
-const homeHelp = 'the install folder (default: $OPINR_HOME or ~/opinr)';
+const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 
 export function registerKb(program: Command, io: Io): void {
   const kb = program
@@ -16,7 +16,7 @@ export function registerKb(program: Command, io: Io): void {
   kb.command('search')
     .description('Search the knowledge base by keyword and by meaning (agents run this)')
     .argument('<query...>', 'what to look for, in plain words')
-    .option('--workspace <id>', 'the workspace (default: $OPINR_WORKSPACE, or the only one)')
+    .option('--workspace <id>', 'the workspace (default: $WHEEMS_WORKSPACE, or the only one)')
     .option('--limit <n>', 'how many results', '5')
     .option('--json', 'print the results as JSON')
     .option('--home <dir>', homeHelp)
@@ -29,7 +29,7 @@ export function registerKb(program: Command, io: Io): void {
         if (!Number.isInteger(limit) || limit < 1) throw new Error('--limit takes a whole number');
         const home = resolve(options.home ?? defaultHome(io.env));
         const install = await loadConfigured(home);
-        const workspace = pickWorkspace(install, options.workspace ?? io.env.OPINR_WORKSPACE);
+        const workspace = pickWorkspace(install, options.workspace ?? io.env.WHEEMS_WORKSPACE);
         const search = new KnowledgeSearch({
           install: install.config,
           workspaces: install.workspaces,
@@ -93,7 +93,7 @@ async function loadConfigured(
 ): Promise<LoadedInstall & { config: NonNullable<LoadedInstall['config']> }> {
   const install = await loadInstall(home);
   const config = install.config;
-  if (!config) throw new Error(`The install at ${home} has config problems; run opinr doctor`);
+  if (!config) throw new Error(`The install at ${home} has config problems; run wheems doctor`);
   return { ...install, config };
 }
 
@@ -107,7 +107,7 @@ function pickWorkspace(install: LoadedInstall, wanted: string | undefined): stri
   if (ids.length === 1 && ids[0] !== undefined) return ids[0];
   throw new Error(
     ids.length === 0
-      ? 'There are no workspaces yet; create one with opinr setup'
+      ? 'There are no workspaces yet; create one with wheems setup'
       : `Say which workspace with --workspace: ${ids.join(', ')}`,
   );
 }

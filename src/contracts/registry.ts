@@ -19,7 +19,7 @@ export type DriverFactory<K extends DriverKind> = (
   options: Record<string, unknown>,
 ) => DriverTypes[K];
 
-/** How a driver appears in `opinr setup`. */
+/** How a driver appears in `wheems setup`. */
 export interface DriverInfo {
   /** Its name for people, such as `Slack`. */
   label: string;
@@ -32,7 +32,7 @@ export interface DriverInfo {
   embeddings?: EmbeddingsSetup;
 }
 
-/** A driver as `opinr setup` lists it: one that works, or one that is coming later. */
+/** A driver as `wheems setup` lists it: one that works, or one that is coming later. */
 export interface CatalogEntry extends DriverInfo {
   name: string;
   available: boolean;
