@@ -8,7 +8,9 @@ import type {
 export class FakeSlack implements SlackTransport {
   readonly calls: { method: string; args: Record<string, unknown> }[] = [];
   readonly reactions = new Set<string>();
-  channels: { id: string; name: string }[] = [{ id: 'C0GENERAL1', name: 'general' }];
+  channels: { id: string; name: string; member?: boolean }[] = [
+    { id: 'C0GENERAL1', name: 'general' },
+  ];
   /** Slack error codes to return for a method, once each. */
   failures = new Map<string, string>();
   private onEvent: ((event: SlackEvent) => Promise<void>) | undefined;
@@ -65,6 +67,14 @@ export class FakeSlack implements SlackTransport {
           ok: true,
           channels: this.channels.slice(half),
           response_metadata: { next_cursor: '' },
+        });
+      }
+      case 'conversations.info': {
+        const channel = this.channels.find((c) => c.id === args.channel);
+        if (!channel) return this.fail('channel_not_found');
+        return Promise.resolve({
+          ok: true,
+          channel: { id: channel.id, name: channel.name, is_member: channel.member ?? true },
         });
       }
       default:

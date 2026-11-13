@@ -105,15 +105,20 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     const channel = channelFor(chat.connection);
     let channelId: string | null = null;
     if ('channel' in chat) {
-      const resolver = (
-        channel as Partial<{ resolveChannel(name: string): Promise<string | null> }>
-      ).resolveChannel;
-      channelId = resolver ? await resolver.call(channel, chat.channel) : chat.channel;
+      channelId = channel.resolveChannel
+        ? await channel.resolveChannel(chat.channel)
+        : chat.channel;
       if (channelId === null) {
         log(
-          `Workspace ${workspace.id}: the bot cannot see channel ${chat.channel}; invite it to the channel`,
+          `Workspace ${workspace.id}: the app can't see channel ${chat.channel}; check the name, invite the app to it, then run wheems service restart`,
         );
         continue;
+      }
+      // Slack lists public channels the app isn't in, and sends no messages from them.
+      if ((await channel.isMember?.(channelId)) === false) {
+        log(
+          `Workspace ${workspace.id}: the app isn't in channel ${chat.channel}, so messages there won't reach the chief of staff. Invite it: in that channel, /invite @ the app's name`,
+        );
       }
     }
     bindings.push({ workspace, connection: chat.connection, channel: channelId });

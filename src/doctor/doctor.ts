@@ -10,6 +10,7 @@ import { serviceStatus } from '../service/launchd.js';
 export { trustedIn } from '../util/trust.js';
 import { crossCheck } from '../config/check.js';
 import { loadInstall, type Problem } from '../config/load.js';
+import type { ChannelDriver } from '../contracts/channel.js';
 import type { HealthCheck } from '../contracts/driver.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import type { RuntimeDriver } from '../contracts/runtime.js';
@@ -207,9 +208,11 @@ async function channelChecks(
     }
     try {
       const driver = options.registry.create('channel', settings.driver, { ...secret });
-      checks.push(
-        ...(await driver.check()).map((c) => ({ ...c, name: `${connection}: ${c.name}` })),
-      );
+      const health = await driver.check();
+      checks.push(...health.map((c) => ({ ...c, name: `${connection}: ${c.name}` })));
+      if (health.every((c) => c.status !== 'fail')) {
+        checks.push(...(await channelMembership(install, connection, driver)));
+      }
     } catch (error) {
       checks.push({
         name: connection,
@@ -218,6 +221,52 @@ async function channelChecks(
         hint: 'Run wheems setup to connect it.',
       });
     }
+  }
+  return checks;
+}
+
+/**
+ * For each workspace that chats in a channel on this connection: can the app see the channel,
+ * and is it a member? Slack lists public channels the app isn't in, and sends no messages from
+ * them, so a workspace can look bound and never hear anything.
+ */
+async function channelMembership(
+  install: LoadedInstall,
+  connection: string,
+  driver: ChannelDriver,
+): Promise<HealthCheck[]> {
+  const checks: HealthCheck[] = [];
+  for (const workspace of install.workspaces) {
+    const chat = workspace.config?.channels.chat;
+    if (!chat || chat.connection !== connection || !('channel' in chat)) continue;
+    const name = `${workspace.id} chat channel`;
+    const id = driver.resolveChannel ? await driver.resolveChannel(chat.channel) : chat.channel;
+    if (id === null) {
+      checks.push({
+        name,
+        status: 'fail',
+        message: `The app can't see ${chat.channel}`,
+        hint: 'Check the name in workspace.yaml, invite the app to the channel, then run wheems service restart.',
+      });
+      continue;
+    }
+    const member = driver.isMember ? await driver.isMember(id) : null;
+    checks.push(
+      member === true
+        ? { name, status: 'pass', message: `The app is in ${chat.channel}` }
+        : member === false
+          ? {
+              name,
+              status: 'warn',
+              message: `The app isn't in ${chat.channel}, so messages there never reach the chief of staff`,
+              hint: `In ${chat.channel}, type /invite and choose the app.`,
+            }
+          : {
+              name,
+              status: 'skip',
+              message: `Couldn't tell whether the app is in ${chat.channel}`,
+            },
+    );
   }
   return checks;
 }

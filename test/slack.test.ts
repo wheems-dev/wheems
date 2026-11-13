@@ -141,6 +141,11 @@ describe('slack channel', () => {
     expect(await driver.resolveChannel('#personal-chat')).toBe('C0CCCCCCC');
     expect(await driver.resolveChannel('C0ZZZZZZZ')).toBe('C0ZZZZZZZ');
     expect(await driver.resolveChannel('missing')).toBeNull();
+    // Slack lists public channels the app isn't in; membership tells them apart.
+    fake.channels.push({ id: 'C0NOTIN01', name: 'not-in', member: false });
+    expect(await driver.isMember('C0CCCCCCC')).toBe(true);
+    expect(await driver.isMember('C0NOTIN01')).toBe(false);
+    expect(await driver.isMember('C0GONE001')).toBeNull();
   });
 
   it('ships a Socket Mode manifest with the scopes the driver uses', () => {

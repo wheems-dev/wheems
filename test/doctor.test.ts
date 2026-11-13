@@ -210,6 +210,42 @@ describe('doctor', () => {
     expect(after.ok).toBe(true);
   });
 
+  it("warns when the app isn't in a workspace's chat channel, and fails when it can't see it", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'team', channel: 'team-chat' });
+    await initWorkspace({ home, id: 'typo', channel: 'no-such-channel' });
+    class SeesChannels extends MemoryChannel {
+      resolveChannel(name: string) {
+        return Promise.resolve(name === 'team-chat' ? 'C0TEAM001' : null);
+      }
+      // Slack lists public channels the app isn't in; this one it isn't.
+      isMember() {
+        return Promise.resolve(false);
+      }
+    }
+    const { registry } = registryWith();
+    registry
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
+      .register('channel', 'slack', () => new SeesChannels());
+    const env = { WHEEMS_SECRETS: join(home, 'secrets.json') };
+    await writeSecret(env.WHEEMS_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
+    const report = await runDoctor({ ...probes, home, registry, env, quick: true });
+    const channels = report.sections.find((x) => x.title === 'Channels')?.checks ?? [];
+    expect(channels.find((c) => c.name === 'team chat channel')).toMatchObject({
+      status: 'warn',
+      message: "The app isn't in team-chat, so messages there never reach the chief of staff",
+      hint: 'In team-chat, type /invite and choose the app.',
+    });
+    expect(channels.find((c) => c.name === 'typo chat channel')).toMatchObject({ status: 'fail' });
+    // The direct-messages workspace has nothing to check.
+    expect(channels.some((c) => c.name.startsWith('personal'))).toBe(false);
+  });
+
   it("checks the embeddings driver and each workspace's search index", async () => {
     const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {

@@ -153,6 +153,16 @@ export class SlackChannel implements ChannelDriver {
     return this.channelIds.get(name) ?? null;
   }
 
+  async isMember(channelId: string): Promise<boolean | null> {
+    try {
+      const info = await this.transport.call('conversations.info', { channel: channelId });
+      const member = (info.channel as { is_member?: unknown } | undefined)?.is_member;
+      return typeof member === 'boolean' ? member : null;
+    } catch {
+      return null;
+    }
+  }
+
   async stop(): Promise<void> {
     this.handler = undefined;
     if (!this.started) return;

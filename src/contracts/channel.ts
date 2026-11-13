@@ -33,6 +33,18 @@ export interface ChannelDriver extends Driver<'channel'> {
 
   /** Disconnects. No handler calls happen after it resolves. Safe to call twice. */
   stop(): Promise<void>;
+
+  /**
+   * Optional: a channel's id from its name (or its id), or null when the app can't see it.
+   * Drivers without it take channel names as ids.
+   */
+  resolveChannel?(nameOrId: string): Promise<string | null>;
+
+  /**
+   * Optional: whether the app is a member of a channel, so messages there reach it. Null when it
+   * can't tell. Seeing a channel isn't enough: Slack lists public channels the app isn't in.
+   */
+  isMember?(channelId: string): Promise<boolean | null>;
 }
 
 export interface MessageRef {
