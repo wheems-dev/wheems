@@ -24,7 +24,7 @@ export interface EngineContractOptions {
 export function engineContract(label: string, options: EngineContractOptions): void {
   describe(`engine contract: ${label}`, () => {
     let driver: EngineDriver;
-    const root = isWindows() ? 'C:\\opinr-contract' : '/opinr-contract';
+    const root = isWindows() ? 'C:\\wheems-contract' : '/wheems-contract';
     const agent: AgentDefinition = {
       name: 'contract-agent',
       description: 'An agent used by the engine contract tests',
@@ -116,7 +116,7 @@ export function engineContract(label: string, options: EngineContractOptions): v
 
     it('names the conversation, and carries it on when resuming', async (ctx) => {
       const fresh = await driver.prepare(agent, context);
-      // An engine that chooses its own ids finds them later (findSession); others take Opinr's.
+      // An engine that chooses its own ids finds them later (findSession); others take Wheems's.
       if (!driver.findSession) expect(JSON.stringify(fresh)).toContain(context.session.id);
       if (!driver.capabilities.resume) {
         ctx.skip();

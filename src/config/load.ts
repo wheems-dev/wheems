@@ -239,7 +239,7 @@ export async function validateFile(
         level: 'error',
         file: path,
         message:
-          'Not a config file Opinr knows: expected install.yaml, workspace.yaml, skills.yaml, agents/*.md or workflows/*.yaml',
+          'Not a config file Wheems knows: expected install.yaml, workspace.yaml, skills.yaml, agents/*.md or workflows/*.yaml',
       });
   }
   return { kind, problems };

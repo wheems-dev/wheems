@@ -39,7 +39,7 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
   try {
     await stat(where.install);
   } catch {
-    throw new Error(`No install at ${options.home}. Run opinr setup first.`);
+    throw new Error(`No install at ${options.home}. Run wheems setup first.`);
   }
   const dir = join(where.workspaces, options.id);
   try {

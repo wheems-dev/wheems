@@ -2,9 +2,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 /**
- * Where Opinr keeps things. Config lives in the install folder (`~/opinr`, a git
- * folder). Running state lives in its `.opinr/` folder, which is never committed.
- * Secrets live outside both, in `~/.config/opinr/`.
+ * Where Wheems keeps things. Config lives in the install folder (`~/wheems`, a git
+ * folder). Running state lives in its `.wheems/` folder, which is never committed.
+ * Secrets live outside both, in `~/.config/wheems/`.
  */
 export interface Paths {
   home: string;
@@ -17,7 +17,7 @@ export interface Paths {
   logs: string;
   /** The knowledge bases' search indexes, rebuildable from the files. */
   index: string;
-  /** Holds the `opinr` command that agents run, pinned to this Node.js. */
+  /** Holds the `wheems` command that agents run, pinned to this Node.js. */
   bin: string;
   secrets: string;
   /** The page about the person, which every agent in every workspace reads. */
@@ -25,11 +25,13 @@ export interface Paths {
 }
 
 export function defaultHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.OPINR_HOME && env.OPINR_HOME.length > 0 ? env.OPINR_HOME : join(homedir(), 'opinr');
+  return env.WHEEMS_HOME && env.WHEEMS_HOME.length > 0
+    ? env.WHEEMS_HOME
+    : join(homedir(), 'wheems');
 }
 
 export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths {
-  const state = join(home, '.opinr');
+  const state = join(home, '.wheems');
   const configHome =
     env.XDG_CONFIG_HOME && env.XDG_CONFIG_HOME.length > 0
       ? env.XDG_CONFIG_HOME
@@ -41,13 +43,13 @@ export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths
     aboutYou: join(home, 'about-you.md'),
     state,
     conversations: join(state, 'conversations.json'),
-    socket: join(state, 'opinr.sock'),
+    socket: join(state, 'wheems.sock'),
     logs: join(state, 'logs'),
     index: join(state, 'index'),
     bin: join(state, 'bin'),
     secrets:
-      env.OPINR_SECRETS && env.OPINR_SECRETS.length > 0
-        ? env.OPINR_SECRETS
-        : join(configHome, 'opinr', 'secrets.json'),
+      env.WHEEMS_SECRETS && env.WHEEMS_SECRETS.length > 0
+        ? env.WHEEMS_SECRETS
+        : join(configHome, 'wheems', 'secrets.json'),
   };
 }

@@ -41,7 +41,7 @@ export interface ConversationManagerOptions {
   runtime: RuntimeDriver;
   engine: (name: string) => EngineDriver;
   store: ConversationStore;
-  /** Environment every agent session gets, such as PATH with the `opinr` command first. */
+  /** Environment every agent session gets, such as PATH with the `wheems` command first. */
   sessionEnv: Record<string, string>;
   /** Most live sessions per workspace; the least recently used idle ones are stopped. */
   maxLiveSessions?: number;
@@ -103,7 +103,7 @@ interface Watch {
  * Routes chat messages to agent sessions: one conversation, and one engine
  * session, per chat thread. A thread's later messages go to the same session;
  * if that session has ended, the engine resumes the conversation in a new one.
- * Agents answer with `opinr reply`, which arrives here through `reply()`.
+ * Agents answer with `wheems reply`, which arrives here through `reply()`.
  */
 export class ConversationManager {
   private readonly options: Required<
@@ -116,7 +116,7 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
-  /** The latest `opinr reply` in each conversation. */
+  /** The latest `wheems reply` in each conversation. */
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
@@ -192,7 +192,7 @@ export class ConversationManager {
   }
 
   /**
-   * Saves a note an agent wrote (`opinr note`) to its workspace's inbox, and counts the
+   * Saves a note an agent wrote (`wheems note`) to its workspace's inbox, and counts the
    * conversation's work so far as noted. Returns the note's file.
    */
   async note(key: string, text: string): Promise<string> {
@@ -249,7 +249,7 @@ export class ConversationManager {
     }
   }
 
-  /** Posts an agent's reply (`opinr reply`) into its conversation's thread. */
+  /** Posts an agent's reply (`wheems reply`) into its conversation's thread. */
   async reply(key: string, text: string): Promise<void> {
     await this.post(key, text);
     this.lastReply.set(key, { at: Date.now(), text: text.trim() });
@@ -449,7 +449,7 @@ export class ConversationManager {
   private chiefOfStaff(binding: Binding) {
     const config = binding.workspace.config;
     if (!config)
-      throw new Error(`Workspace ${binding.workspace.id} has config problems; run opinr doctor`);
+      throw new Error(`Workspace ${binding.workspace.id} has config problems; run wheems doctor`);
     const agent = binding.workspace.agents.find((a) => a.definition.name === config.chief_of_staff);
     if (!agent)
       throw new Error(`Workspace ${binding.workspace.id} has no chief of staff agent file`);
@@ -506,10 +506,10 @@ export class ConversationManager {
       env: {
         ...plan.env,
         ...this.options.sessionEnv,
-        OPINR_WORKSPACE: workspace.id,
-        OPINR_CONVERSATION: key,
+        WHEEMS_WORKSPACE: workspace.id,
+        WHEEMS_CONVERSATION: key,
       },
-      labels: { opinr: 'conversation', workspace: workspace.id },
+      labels: { wheems: 'conversation', workspace: workspace.id },
     });
     const text = plan.typeAfterStart;
     if (text !== undefined) {
@@ -690,7 +690,7 @@ export class ConversationManager {
   /**
    * Posts the agent's answers since the last one posted, when its engine can read them:
    * usually one, more when turns followed each other quickly. An answer the agent already
-   * sent word for word with `opinr reply` during this turn is not posted again. Returns
+   * sent word for word with `wheems reply` during this turn is not posted again. Returns
    * how many answers there were (0 for none yet).
    */
   private async postAnswers(key: string, watch: Watch, attempts = 5): Promise<number> {
@@ -723,7 +723,7 @@ export class ConversationManager {
   }
 
   /**
-   * The id to read answers by: Opinr's own for engines that take it, else the engine's
+   * The id to read answers by: Wheems's own for engines that take it, else the engine's
    * own, found once after the session's first turn and kept with the conversation.
    */
   private async engineSessionId(
@@ -746,7 +746,7 @@ export class ConversationManager {
 
   /** Stops the least recently used idle sessions beyond the workspace's limit. */
   private async trim(workspace: string, keep: string): Promise<void> {
-    const live = await this.options.runtime.list({ labels: { opinr: 'conversation', workspace } });
+    const live = await this.options.runtime.list({ labels: { wheems: 'conversation', workspace } });
     if (live.length <= this.options.maxLiveSessions) return;
     const lastActive = new Map<string, string>();
     const busy = new Set<string>();
@@ -877,7 +877,7 @@ export class ConversationManager {
       if (!(await this.endNoteTurn(key, binding, session))) {
         // Its answer could still come and be taken for this message's reply: don't send it in.
         throw new Error(
-          `Couldn't stop the agent's session after Opinr asked it for a note, so this message wasn't sent. Its session is \`${session.id}\` in Herdr; try again shortly.`,
+          `Couldn't stop the agent's session after Wheems asked it for a note, so this message wasn't sent. Its session is \`${session.id}\` in Herdr; try again shortly.`,
         );
       }
       return;
@@ -996,7 +996,7 @@ export class ConversationManager {
     const channel = this.channel(binding.connection);
     const conversation = await this.options.store.get(key);
     const target = conversation?.channel ?? key.split(':')[2] ?? '';
-    await channel.send({ channel: target, threadId: thread, text: `_Opinr:_ ${text}` });
+    await channel.send({ channel: target, threadId: thread, text: `_Wheems:_ ${text}` });
   }
 
   private async unmark(channel: ChannelDriver, message: MessageRef): Promise<void> {
@@ -1023,7 +1023,7 @@ export function conversationKey(
 
 /** A stable UUID for a conversation (version 5 style, from SHA-1), so its engine session can be resumed. */
 export function uuidFor(key: string): string {
-  const hash = createHash('sha1').update(`opinr:${key}`).digest();
+  const hash = createHash('sha1').update(`wheems:${key}`).digest();
   hash[6] = ((hash[6] ?? 0) & 0x0f) | 0x50;
   hash[8] = ((hash[8] ?? 0) & 0x3f) | 0x80;
   const hex = hash.subarray(0, 16).toString('hex');

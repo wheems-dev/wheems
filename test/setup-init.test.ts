@@ -15,7 +15,7 @@ import { loadInstall } from '../src/config/load.js';
 import { readSecrets } from '../src/secrets.js';
 import { parseLaunchctlPrint, renderPlist } from '../src/service/launchd.js';
 
-describe('opinr setup', () => {
+describe('wheems setup', () => {
   let root: string;
   let home: string;
   let env: NodeJS.ProcessEnv;
@@ -27,9 +27,9 @@ describe('opinr setup', () => {
   beforeEach(() => {
     installed = new Set(['claude-code']);
     signedIn = new Set(['claude-code']);
-    root = mkdtempSync(join(tmpdir(), 'opinr-setup-'));
-    home = join(root, 'opinr');
-    env = { OPINR_SECRETS: join(root, 'config', 'secrets.json') };
+    root = mkdtempSync(join(tmpdir(), 'wheems-setup-'));
+    home = join(root, 'wheems');
+    env = { WHEEMS_SECRETS: join(root, 'config', 'secrets.json') };
     calls = [];
     running = false;
   });
@@ -45,7 +45,7 @@ describe('opinr setup', () => {
         connect: slackConnectFlow({
           verifyTokens: (bot, app) =>
             bot === 'xoxb-good' && app === 'xapp-good'
-              ? Promise.resolve({ team: 'Home', botUser: 'opinr' })
+              ? Promise.resolve({ team: 'Home', botUser: 'wheems' })
               : Promise.reject(new Error('Slack refused the bot token: invalid_auth')),
           memberName: (_bot, id) =>
             id === 'UFLAKY01'
@@ -149,13 +149,13 @@ describe('opinr setup', () => {
       'The bot token starts with xoxb-',
       'A member ID starts with U or W, then letters and digits',
     ]);
-    expect(await readSecrets(env.OPINR_SECRETS!)).toEqual({
+    expect(await readSecrets(env.WHEEMS_SECRETS!)).toEqual({
       slack: { bot_token: 'xoxb-good', app_token: 'xapp-good' },
     });
-    expect(statSync(env.OPINR_SECRETS!).mode & 0o777).toBe(0o600);
+    expect(statSync(env.WHEEMS_SECRETS!).mode & 0o777).toBe(0o600);
     expect(statSync(join(home, '.git')).isDirectory()).toBe(true);
-    expect(readFileSync(join(home, '.gitignore'), 'utf8')).toContain('.opinr/');
-    expect(readFileSync(join(home, '.opinr', 'slack-app-manifest.yaml'), 'utf8')).toContain(
+    expect(readFileSync(join(home, '.gitignore'), 'utf8')).toContain('.wheems/');
+    expect(readFileSync(join(home, '.wheems', 'slack-app-manifest.yaml'), 'utf8')).toContain(
       'socket_mode_enabled: true',
     );
 
@@ -182,7 +182,7 @@ describe('opinr setup', () => {
     });
     const again = scriptedUi(['channels', 'slack', true, 'done']);
     await setup({ home, env, ui: again, registry: registry(), actions });
-    expect(again.shown.some((s) => s.message.includes('Connected as opinr in Home'))).toBe(true);
+    expect(again.shown.some((s) => s.message.includes('Connected as wheems in Home'))).toBe(true);
     expect(again.shown.some((s) => s.message === 'Allowed to talk to agents: UMEMBER1')).toBe(true);
     // With a channel connected, the menu starts on Workspaces.
     const menu = again.shown.find((s) => s.message === 'What do you want to set up?');
@@ -204,8 +204,8 @@ describe('opinr setup', () => {
       connect: slackConnectFlow({
         verifyTokens: (bot) =>
           bot === 'xoxb-good'
-            ? Promise.resolve({ team: 'Home', botUser: 'opinr' })
-            : Promise.resolve({ team: 'Work', botUser: 'opinr' }),
+            ? Promise.resolve({ team: 'Home', botUser: 'wheems' })
+            : Promise.resolve({ team: 'Work', botUser: 'wheems' }),
         memberName: (bot, id) =>
           Promise.resolve(bot === 'xoxb-work' && id === 'UWORKER1' ? 'Me at work' : null),
       }),
@@ -330,7 +330,7 @@ describe('opinr setup', () => {
     expect(
       ui.shown.some((s) => s.kind === 'warn' && s.message.includes('nothing from it was saved')),
     ).toBe(true);
-    expect(await readSecrets(env.OPINR_SECRETS!)).toEqual({});
+    expect(await readSecrets(env.WHEEMS_SECRETS!)).toEqual({});
   });
 
   describe('the Knowledge section', () => {
@@ -447,10 +447,10 @@ describe('opinr setup', () => {
   });
 });
 
-describe('opinr init', () => {
+describe('wheems init', () => {
   let home: string;
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'opinr-init-'));
+    home = mkdtempSync(join(tmpdir(), 'wheems-init-'));
     await setupMinimal(home);
   });
   afterEach(() => {
@@ -510,7 +510,7 @@ describe('opinr init', () => {
     await initWorkspace({ home, id: 'personal' });
     await expect(initWorkspace({ home, id: 'personal' })).rejects.toThrow(/already exists/);
     await expect(initWorkspace({ home: join(home, 'nowhere'), id: 'x' })).rejects.toThrow(
-      /Run opinr setup first/,
+      /Run wheems setup first/,
     );
   });
 
@@ -530,15 +530,15 @@ describe('launchd', () => {
   it('writes a user agent that runs the service and restarts it', () => {
     const plist = renderPlist({
       node: '/opt/homebrew/opt/node@22/bin/node',
-      cli: '/Users/me/Projects/opinr/dist/cli/main.js',
-      home: '/Users/me/opinr & co',
-      logFile: '/Users/me/opinr/.opinr/logs/service.log',
+      cli: '/Users/me/Projects/wheems/dist/cli/main.js',
+      home: '/Users/me/wheems & co',
+      logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });
-    expect(plist).toContain('<string>dev.opinr.service</string>');
+    expect(plist).toContain('<string>dev.wheems.service</string>');
     expect(plist).toContain(
-      '<string>/opt/homebrew/opt/node@22/bin/node</string>\n    <string>/Users/me/Projects/opinr/dist/cli/main.js</string>\n    <string>service</string>\n    <string>run</string>',
+      '<string>/opt/homebrew/opt/node@22/bin/node</string>\n    <string>/Users/me/Projects/wheems/dist/cli/main.js</string>\n    <string>service</string>\n    <string>run</string>',
     );
-    expect(plist).toContain('<string>/Users/me/opinr &amp; co</string>');
+    expect(plist).toContain('<string>/Users/me/wheems &amp; co</string>');
     expect(plist).toMatch(/<key>PATH<\/key>\s*<string>\/opt\/homebrew\/opt\/node@22\/bin:/);
     expect(plist).toContain('<key>KeepAlive</key>\n  <true/>');
   });
@@ -546,7 +546,7 @@ describe('launchd', () => {
   it('reads launchctl print', () => {
     expect(
       parseLaunchctlPrint(
-        'gui/501/dev.opinr.service = {\n\tstate = running\n\tpid = 4242\n\tlast exit code = 0\n}',
+        'gui/501/dev.wheems.service = {\n\tstate = running\n\tpid = 4242\n\tlast exit code = 0\n}',
       ),
     ).toEqual({
       loaded: true,

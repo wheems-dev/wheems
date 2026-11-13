@@ -37,7 +37,7 @@ export class FakeSlack implements SlackTransport {
     }
     switch (method) {
       case 'auth.test':
-        return Promise.resolve({ ok: true, user: 'opinr', user_id: 'UBOT', team: 'Test team' });
+        return Promise.resolve({ ok: true, user: 'wheems', user_id: 'UBOT', team: 'Test team' });
       case 'chat.postMessage':
         return Promise.resolve({ ok: true, channel: args.channel, ts: this.nextTs() });
       case 'reactions.add': {

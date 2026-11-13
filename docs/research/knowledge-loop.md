@@ -57,14 +57,14 @@ Hermes's reviewer prompt now carries rules learned from these failures:
 - write lessons, not logs;
 - never record environment failures or "tool X is broken".
 
-## What Opinr takes from this
+## What Wheems takes from this
 
-Opinr's design already differs in three ways. Notes go to an inbox and a filing job writes the
+Wheems's design already differs in three ways. Notes go to an inbox and a filing job writes the
 knowledge base, so sessions never edit it directly. Skills an agent proposes wait for approval.
 Workspaces are separated by default. Both projects' issues support those choices. What to add:
 
 1. **Capture before context is lost, not only at the end.** Sessions that time out, or that get
-   compacted mid-way, lose what a session-end note would have said. Opinr already stops idle
+   compacted mid-way, lose what a session-end note would have said. Wheems already stops idle
    sessions, so the service asks for the note as a last turn before stopping one. This works
    with every engine. Where the engine has hooks (Claude Code's `PreCompact`), it also asks before
    compaction.
@@ -94,9 +94,9 @@ Workspaces are separated by default. Both projects' issues support those choices
 
 ## Open questions
 
-- **A shared profile of you.** Hermes shares the user model across profiles. Opinr could keep an
+- **A shared profile of you.** Hermes shares the user model across profiles. Wheems could keep an
   install-level "about you" page that each workspace reads but none writes, changed only with
   your approval. It's useful (your preferences once, not per workspace) but is the one thing
   that crosses workspaces.
 - **Approving skill proposals before milestone 3.** Approvals with buttons arrive in milestone 3.
-  Until then, proposals wait for `opinr skills review` in the terminal.
+  Until then, proposals wait for `wheems skills review` in the terminal.

@@ -28,8 +28,8 @@ const agent: AgentDefinition = {
   instructions: '# Chief of staff',
 };
 const context: EngineContext = {
-  workspace: { id: 'personal', dir: '/home/me/opinr/workspaces/personal' },
-  sessionDir: '/home/me/opinr/workspaces/personal',
+  workspace: { id: 'personal', dir: '/home/me/wheems/workspaces/personal' },
+  sessionDir: '/home/me/wheems/workspaces/personal',
   account: { name: 'claude-subscription', driver: 'claude' },
   session: {
     id: '11111111-2222-5333-8444-555555555555',
@@ -151,7 +151,7 @@ describe('claude-code transcripts', () => {
   });
 
   it("finds the session's transcript in Claude Code's config folder", async () => {
-    const root = mkdtempSync(join(tmpdir(), 'opinr-cc-'));
+    const root = mkdtempSync(join(tmpdir(), 'wheems-cc-'));
     try {
       const dir = join(root, 'workspaces', 'personal');
       mkdirSync(dir, { recursive: true });

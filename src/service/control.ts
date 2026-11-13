@@ -1,6 +1,6 @@
 /**
- * The service's control socket: a Unix socket in the install's `.opinr/` folder
- * that the `opinr` command talks to. One JSON request per line, one JSON
+ * The service's control socket: a Unix socket in the install's `.wheems/` folder
+ * that the `wheems` command talks to. One JSON request per line, one JSON
  * response per line. Only this user can open it (mode 600).
  */
 import { chmod, mkdir, rm } from 'node:fs/promises';
@@ -65,7 +65,7 @@ async function respond(line: string, handler: ControlHandler): Promise<ControlRe
   }
   const request = requestSchema.safeParse(parsed);
   if (!request.success)
-    return { ok: false, error: `Not a request Opinr knows: ${z.prettifyError(request.error)}` };
+    return { ok: false, error: `Not a request Wheems knows: ${z.prettifyError(request.error)}` };
   try {
     return await handler(request.data);
   } catch (error) {
@@ -84,7 +84,7 @@ export function request(
     let buffer = '';
     const timer = setTimeout(() => {
       socket.destroy();
-      reject(new Error('The Opinr service did not answer in time'));
+      reject(new Error('The Wheems service did not answer in time'));
     }, timeoutMs);
     socket.setEncoding('utf8');
     socket.on('connect', () => socket.write(`${JSON.stringify(body)}\n`));
@@ -94,14 +94,14 @@ export function request(
       try {
         resolve(JSON.parse(buffer.trim()) as ControlResponse);
       } catch {
-        reject(new Error('The Opinr service gave an answer that is not JSON'));
+        reject(new Error('The Wheems service gave an answer that is not JSON'));
       }
     });
     socket.on('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       reject(
         error.code === 'ENOENT' || error.code === 'ECONNREFUSED'
-          ? new Error('The Opinr service is not running (opinr service status)')
+          ? new Error('The Wheems service is not running (wheems service status)')
           : error,
       );
     });

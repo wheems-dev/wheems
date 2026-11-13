@@ -1,6 +1,6 @@
 /**
  * Setting things up interactively. A driver that needs credentials or choices brings its
- * own connect flow; `opinr setup` shows it through a SetupUi, so a new driver (Telegram,
+ * own connect flow; `wheems setup` shows it through a SetupUi, so a new driver (Telegram,
  * Discord, a plugin's) needs no changes to the setup command.
  */
 
@@ -68,7 +68,7 @@ export interface ConnectResult {
   allowedUsers: string[];
 }
 
-/** How `opinr setup` installs an engine's CLI, signs in and wires it to Herdr. */
+/** How `wheems setup` installs an engine's CLI, signs in and wires it to Herdr. */
 export interface EngineSetup {
   /** The installed version, or null when the CLI isn't installed. */
   version(): Promise<string | null>;
@@ -91,7 +91,7 @@ export interface EngineSetup {
   account: { name: string; driver: string };
 }
 
-/** A driver's interactive connect flow, run by `opinr setup`. */
+/** A driver's interactive connect flow, run by `wheems setup`. */
 export interface ConnectFlow {
   connect(ui: SetupUi, context: ConnectContext): Promise<ConnectResult>;
 }

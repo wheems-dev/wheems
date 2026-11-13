@@ -16,7 +16,7 @@ import { knowledgePaths, looksLikeSecret, noteTitle } from './notes.js';
  * full-text search, and by meaning when an embeddings driver is set up. The two rankings
  * are combined, and notes from automated jobs rank below people's own work.
  *
- * The index is running state in `.opinr/index/<workspace>/`, never committed, and always
+ * The index is running state in `.wheems/index/<workspace>/`, never committed, and always
  * rebuildable from the files. Each build is a generation: a SQLite file for the text and a
  * vector collection for the meanings. A rebuild fills a new generation and swaps it in by
  * rewriting `current.json`, so search keeps working while it runs, and a failed rebuild
@@ -84,7 +84,7 @@ export interface IndexStatus {
 export interface SearchIndexOptions {
   workspace: string;
   workspaceDir: string;
-  /** Where every workspace's index lives: `.opinr/index`. */
+  /** Where every workspace's index lives: `.wheems/index`. */
   indexDir: string;
   embeddings: EmbeddingsDriver | null;
   /** Where vectors go; needed only with embeddings. */
@@ -166,7 +166,7 @@ export class SearchIndex {
       const current = await this.readCurrent();
       if (current === null) {
         throw new Error(
-          `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: opinr kb reindex`,
+          `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: wheems kb reindex`,
         );
       }
       try {
@@ -424,7 +424,7 @@ export class SearchIndex {
     // Never create a generation here: only a build does.
     if (!(await exists(this.dbFile(current.generation)))) {
       throw new Error(
-        `The ${this.workspace} workspace's search index is missing. The service rebuilds it, or run: opinr kb reindex`,
+        `The ${this.workspace} workspace's search index is missing. The service rebuilds it, or run: wheems kb reindex`,
       );
     }
     const db = await openDatabase(this.dbFile(current.generation));
@@ -673,7 +673,7 @@ export class KnowledgeSearch {
       install: InstallConfig;
       workspaces: LoadedWorkspace[];
       registry: DriverRegistry;
-      /** `.opinr/index` */
+      /** `.wheems/index` */
       indexDir: string;
       log?: (message: string) => void;
     },

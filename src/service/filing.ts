@@ -37,7 +37,7 @@ export interface FilingOptions {
 
 /**
  * Files each workspace's inbox, one note at a time: the filer agent works on a copy of the
- * knowledge base, Opinr checks its changes, applies those that pass, moves the note to
+ * knowledge base, Wheems checks its changes, applies those that pass, moves the note to
  * `notes/`, and commits. Each workspace has its own queue.
  */
 export class FilingQueue {
@@ -171,8 +171,8 @@ export class FilingQueue {
       dir: folder,
       task: filingTask(noteName),
       name: filerSessionName(workspace.id),
-      labels: { opinr: 'filer', workspace: workspace.id },
-      env: { ...this.options.sessionEnv, OPINR_WORKSPACE: workspace.id },
+      labels: { wheems: 'filer', workspace: workspace.id },
+      env: { ...this.options.sessionEnv, WHEEMS_WORKSPACE: workspace.id },
       timeoutSeconds: this.options.timeoutSeconds,
     });
     if (!result.ok) throw new Error(`the filer didn't finish: ${result.reason}`);

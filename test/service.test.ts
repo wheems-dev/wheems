@@ -20,7 +20,7 @@ describe('the service', () => {
   let service: RunningService | undefined;
   let channelOptions: Record<string, unknown> | undefined;
 
-  /** Runs `opinr reply` (or another command) as an agent would, inside a conversation. */
+  /** Runs `wheems reply` (or another command) as an agent would, inside a conversation. */
   const cliReply = async (conversation: string, args: string[], stdin = '', command = 'reply') => {
     let out = '';
     let err = '';
@@ -31,7 +31,7 @@ describe('the service', () => {
         ...defaultIo(),
         out: (t) => (out += t),
         err: (t) => (err += t),
-        env: { ...env, OPINR_CONVERSATION: conversation },
+        env: { ...env, WHEEMS_CONVERSATION: conversation },
         color: false,
         stdin: () => Promise.resolve(stdin),
       });
@@ -44,20 +44,20 @@ describe('the service', () => {
   beforeEach(async () => {
     // Kept short: the control socket's path must fit in about 100 bytes.
     home = mkdtempSync(join(tmpdir(), 'os-'));
-    env = { ...process.env, OPINR_HOME: home, OPINR_SECRETS: join(home, 'secrets.json') };
+    env = { ...process.env, WHEEMS_HOME: home, WHEEMS_SECRETS: join(home, 'secrets.json') };
     writeFileSync(
       join(home, 'install.yaml'),
       installYaml().replace('allowed_users: []', 'allowed_users: [UME]'),
     );
     await initWorkspace({ home, id: 'personal' });
-    await writeSecret(env.OPINR_SECRETS!, 'slack', {
+    await writeSecret(env.WHEEMS_SECRETS!, 'slack', {
       bot_token: 'xoxb-test',
       app_token: 'xapp-test',
     });
     channel = new MemoryChannel();
     const runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
-        // The agent replies with the real `opinr reply` command, over the control socket.
+        // The agent replies with the real `wheems reply` command, over the control socket.
         reply: async (conversation, text) => {
           const result = await cliReply(conversation, [text]);
           if (result.code !== 0) throw new Error(result.err);
@@ -75,7 +75,7 @@ describe('the service', () => {
       home,
       registry,
       node: '/usr/local/bin/node',
-      cli: '/opt/opinr/dist/cli/main.js',
+      cli: '/opt/wheems/dist/cli/main.js',
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -97,11 +97,11 @@ describe('the service', () => {
     expect(await request(where.socket, { op: 'nope' } as never)).toMatchObject({ ok: false });
   });
 
-  it('gives the channel driver its secrets, and agents an opinr command pinned to its Node.js', () => {
+  it('gives the channel driver its secrets, and agents an wheems command pinned to its Node.js', () => {
     expect(channelOptions).toEqual({ bot_token: 'xoxb-test', app_token: 'xapp-test' });
-    const wrapper = readFileSync(join(paths(home, env).bin, 'opinr'), 'utf8');
+    const wrapper = readFileSync(join(paths(home, env).bin, 'wheems'), 'utf8');
     expect(wrapper).toBe(
-      "#!/bin/sh\nexec '/usr/local/bin/node' '/opt/opinr/dist/cli/main.js' \"$@\"\n",
+      "#!/bin/sh\nexec '/usr/local/bin/node' '/opt/wheems/dist/cli/main.js' \"$@\"\n",
     );
   });
 
@@ -127,7 +127,7 @@ describe('the service', () => {
     ]);
   });
 
-  it('lets opinr reply read a long reply from standard input', async () => {
+  it('lets wheems reply read a long reply from standard input', async () => {
     const first = await channel.receive({
       channel: 'D1',
       text: 'hello',
@@ -140,7 +140,7 @@ describe('the service', () => {
     expect(channel.sent.at(-1)?.text).toBe('# Report\n\nAll done.');
   });
 
-  it("saves a note with opinr note to the conversation's workspace inbox", async () => {
+  it("saves a note with wheems note to the conversation's workspace inbox", async () => {
     const first = await channel.receive({
       channel: 'D1',
       text: 'hello',
@@ -177,7 +177,7 @@ describe('the service', () => {
           ...defaultIo(),
           out: (t) => (out += t),
           err: (t) => (err += t),
-          env: { ...env, OPINR_WORKSPACE: 'personal' },
+          env: { ...env, WHEEMS_WORKSPACE: 'personal' },
           color: false,
         });
         return { code, out, err };
@@ -210,7 +210,7 @@ describe('the service', () => {
     expect(await kb(['search', 'x', '--workspace', 'nope'])).toMatchObject({ code: 1 });
   });
 
-  it('refuses opinr reply outside a conversation, or for one it does not know', async () => {
+  it('refuses wheems reply outside a conversation, or for one it does not know', async () => {
     const outside = await run(['reply', 'hi'], {
       ...defaultIo(),
       out: () => undefined,
@@ -228,7 +228,7 @@ describe('the service', () => {
 describe('the service when a channel cannot connect', () => {
   it('stops what it started and does not answer on its socket', async () => {
     const home = mkdtempSync(join(tmpdir(), 'os-'));
-    const env = { ...process.env, OPINR_HOME: home, OPINR_SECRETS: join(home, 'secrets.json') };
+    const env = { ...process.env, WHEEMS_HOME: home, WHEEMS_SECRETS: join(home, 'secrets.json') };
     try {
       writeFileSync(join(home, 'install.yaml'), installYaml());
       await initWorkspace({ home, id: 'personal' });

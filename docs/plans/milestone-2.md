@@ -25,11 +25,11 @@ workspaces/personal/
 workspace loads it. It is the one thing shared across workspaces.
 
 The knowledge base is part of the install's git folder, so every version of every page is kept.
-The search index is running state in `.opinr/index/`, never committed, and can always be rebuilt.
+The search index is running state in `.wheems/index/`, never committed, and can always be rebuilt.
 
 ## How it works
 
-1. **Notes.** An agent writes a note with `opinr note`, which reads Markdown on stdin. Opinr
+1. **Notes.** An agent writes a note with `wheems note`, which reads Markdown on stdin. Wheems
    adds the details agents can't be trusted with (workspace, agent, conversation, time) and
    saves it to the workspace's inbox. Agents never write into `knowledge/` directly.
 2. **When notes are written.** The service asks for a note as an extra turn:
@@ -41,7 +41,7 @@ The search index is running state in `.opinr/index/`, never committed, and can a
 
 3. **Filing.** When a note lands, the service runs the **filer**, a built-in agent you never talk
    to. It runs in Herdr like any other, so you can watch it. It reads the note, searches the
-   knowledge base, updates or creates pages, and keeps `brief.md` under its cap. Then Opinr
+   knowledge base, updates or creates pages, and keeps `brief.md` under its cap. Then Wheems
    checks its work in code before committing:
    - every page lists the notes it came from;
    - a page that loses more than a quarter of its content is put back;
@@ -56,8 +56,8 @@ The search index is running state in `.opinr/index/`, never committed, and can a
    - Keyword search always works: SQLite's full-text search, built into Node.
    - With an embeddings driver set up, it also searches by meaning, and the two are combined.
    - Notes from automated jobs rank below people's own work.
-   - `opinr kb search "…"` searches the agent's own workspace.
-   - `opinr kb reindex` rebuilds the index into a new file and swaps it in. The index rebuilds
+   - `wheems kb search "…"` searches the agent's own workspace.
+   - `wheems kb reindex` rebuilds the index into a new file and swaps it in. The index rebuilds
      itself when the embedding model changes.
 5. **Built-in instructions and skills.**
    - Every agent's instructions file gets the brief, `about-you.md`, and short built-in
@@ -65,7 +65,7 @@ The search index is running state in `.opinr/index/`, never committed, and can a
      propose skills.
    - Longer guidance ships as built-in skills where the engine supports them.
 6. **Skill proposals.**
-   - `opinr skill propose <name>` saves a proposed skill to the install's library, marked as
+   - `wheems skill propose <name>` saves a proposed skill to the install's library, marked as
      waiting.
    - The proposing guidance carries the lessons from the research: improve an existing skill
      before making a new one, read before changing, write lessons not logs, and never record
@@ -74,7 +74,7 @@ The search index is running state in `.opinr/index/`, never committed, and can a
      result is shown with it.
    - Skills people wrote are never changed by an agent.
 7. **Review.**
-   - `opinr review` lists what's waiting: skill proposals and suggested changes to
+   - `wheems review` lists what's waiting: skill proposals and suggested changes to
      `about-you.md`. For each it shows the content or a diff, and you approve, edit or turn it
      down.
    - An approved skill goes into the library, pinned in that workspace's `skills.yaml`.
@@ -91,20 +91,20 @@ The search index is running state in `.opinr/index/`, never committed, and can a
 | Embeddings   | `embed(texts)` → vectors, with its `model` and `dimensions`      | **Ollama** (`nomic-embed-text`, local and free). With none set up, search is keyword-only                                                 |
 | Vector store | `upsert`, `remove`, `nearest(vector, k)`, `clear`, per workspace | **SQLite**: vectors kept beside the full-text index and compared in code, fast enough for thousands of pages. pgvector and Pinecone later |
 
-Both get contract suites in `@opinr/hq/testing`, plus in-memory reference drivers, as
-the existing driver types have. `opinr setup` gains a **Knowledge** section, which offers to pull
-the Ollama model. `opinr doctor` checks the index and the embeddings driver.
+Both get contract suites in `wheems/testing`, plus in-memory reference drivers, as
+the existing driver types have. `wheems setup` gains a **Knowledge** section, which offers to pull
+the Ollama model. `wheems doctor` checks the index and the embeddings driver.
 
 ## Pull requests
 
 Each one is reviewed and merged before the next starts.
 
 1. **Notes**
-   - `opinr note`, the inbox and the knowledge folder layout.
+   - `wheems note`, the inbox and the knowledge folder layout.
    - The note turn when a conversation goes quiet or before a session stops, with its answer
      never posted.
    - `about-you.md`, and the brief loaded at launch.
-   - `opinr init` creates the knowledge folder.
+   - `wheems init` creates the knowledge folder.
 2. **Filing**
    - A small runner that gives an agent a task and waits for its answer, outside any chat.
      Workflows reuse it in milestone 6.
@@ -113,7 +113,7 @@ Each one is reviewed and merged before the next starts.
    - The embeddings and vector store contracts, the Ollama and SQLite drivers, and the index.
    - `kb search` and `kb reindex`, the setup section, and the doctor checks.
 4. **Skills and review**
-   - The library folder, `skill propose` with its near-duplicate check, `opinr review`, and
+   - The library folder, `skill propose` with its near-duplicate check, `wheems review`, and
      pinning in `skills.yaml`.
    - The nightly tidy.
 
@@ -128,7 +128,7 @@ Then the live test: a day of real use, then the next morning a new thread asking
 - **Notes before Claude Code compresses a long conversation.** Its `PreCompact` hook can't give
   the agent a turn. The 30-minute quiet note covers most cases. Revisit if long threads lose
   things.
-- **Searching raw session transcripts.** Only notes and pages are searched, as Opinr's design
+- **Searching raw session transcripts.** Only notes and pages are searched, as Wheems's design
   says.
 
 ## Risks
@@ -136,7 +136,7 @@ Then the live test: a day of real use, then the next morning a new thread asking
 - **Codex and skills.** Codex reads skills from its own folders, and that is still untested. The
   built-in guidance also goes into every agent's instructions file, so it works whatever skills
   support an engine has.
-- **Node's SQLite** prints an "experimental" warning. Opinr hides that warning, and the minimum
+- **Node's SQLite** prints an "experimental" warning. Wheems hides that warning, and the minimum
   Node version rises to 22.13, the first version where it works without a flag.
 - **Subscription usage.** Each note and filing run uses your Claude subscription. That's why the
   filer defaults to Sonnet and runs once per note, with no reviewer firing every few turns.

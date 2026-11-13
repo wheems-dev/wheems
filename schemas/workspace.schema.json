@@ -132,7 +132,7 @@
       "properties": {
         "note_after_idle": {
           "default": 30,
-          "description": "Minutes a conversation stays quiet, after new work, before Opinr asks its agent for a note. 0 turns this off.",
+          "description": "Minutes a conversation stays quiet, after new work, before Wheems asks its agent for a note. 0 turns this off.",
           "type": "integer",
           "minimum": 0,
           "maximum": 9007199254740991
@@ -273,6 +273,6 @@
     "accounts"
   ],
   "additionalProperties": false,
-  "$id": "https://opinr.dev/schemas/workspace.schema.json",
-  "title": "Opinr workspace.yaml"
+  "$id": "https://wheems.dev/schemas/workspace.schema.json",
+  "title": "Wheems workspace.yaml"
 }

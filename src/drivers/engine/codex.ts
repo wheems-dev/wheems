@@ -66,7 +66,7 @@ export class CodexEngine implements EngineDriver {
           message: version.missing
             ? 'codex is not installed or not on PATH'
             : version.stderr.trim(),
-          hint: 'Run opinr setup and choose Engines to install it.',
+          hint: 'Run wheems setup and choose Engines to install it.',
         },
       ];
     }
@@ -85,7 +85,7 @@ export class CodexEngine implements EngineDriver {
             name: 'Codex sign-in',
             status: 'warn',
             message: 'Codex is not signed in',
-            hint: 'Run codex login, or opinr setup and choose Engines.',
+            hint: 'Run codex login, or wheems setup and choose Engines.',
           },
     );
     return checks;
@@ -113,7 +113,7 @@ export class CodexEngine implements EngineDriver {
       files: [
         {
           path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Opinr from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
+          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
         },
       ],
     });
@@ -251,7 +251,7 @@ async function firstRecord(file: string): Promise<CodexRecord | null> {
   }
 }
 
-/** Whether a message from the user in a record ends with the text, as Opinr's tag does. */
+/** Whether a message from the user in a record ends with the text, as Wheems's tag does. */
 async function hasUserMessageEndingWith(file: string, wanted: string): Promise<boolean> {
   const text = await readFile(file, 'utf8').catch(() => '');
   for (const line of text.split('\n')) {
@@ -275,7 +275,7 @@ async function hasUserMessageEndingWith(file: string, wanted: string): Promise<b
   return false;
 }
 
-/** How `opinr setup` installs Codex and signs in. */
+/** How `wheems setup` installs Codex and signs in. */
 export function codexSetup(binary = 'codex'): EngineSetup {
   return {
     version: async () => {

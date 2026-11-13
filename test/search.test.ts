@@ -38,13 +38,13 @@ afterEach(() => {
 embeddingsContract('hash', { create: () => new HashEmbeddings() });
 embeddingsContract('ollama', {
   create: () =>
-    new OllamaEmbeddings({ model: process.env.OPINR_TEST_OLLAMA_MODEL ?? 'nomic-embed-text' }),
+    new OllamaEmbeddings({ model: process.env.WHEEMS_TEST_OLLAMA_MODEL ?? 'nomic-embed-text' }),
   // Only where Ollama runs with the model, such as a developer's Mac.
-  available: process.env.OPINR_TEST_OLLAMA_MODEL !== undefined,
+  available: process.env.WHEEMS_TEST_OLLAMA_MODEL !== undefined,
 });
 vectorStoreContract('memory', { create: () => new MemoryVectorStore(), persistent: false });
 vectorStoreContract('sqlite', {
-  create: () => new SqliteVectorStore({ dir: tempDir('opinr-vectors-') }),
+  create: () => new SqliteVectorStore({ dir: tempDir('wheems-vectors-') }),
 });
 
 describe('the Ollama driver', () => {
@@ -177,9 +177,9 @@ describe('the search index', () => {
     });
 
   beforeEach(() => {
-    const dir = tempDir('opinr-search-');
+    const dir = tempDir('wheems-search-');
     workspace = join(dir, 'personal');
-    indexDir = join(dir, '.opinr', 'index');
+    indexDir = join(dir, '.wheems', 'index');
     const knowledge = knowledgePaths(workspace);
     mkdirSync(knowledge.pages, { recursive: true });
     mkdirSync(join(knowledge.notes, '2026', '11'), { recursive: true });

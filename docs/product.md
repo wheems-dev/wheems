@@ -1,6 +1,6 @@
-# Opinr: the product
+# Wheems: the product
 
-Opinr is an open-source, opinionated framework for running teams of AI agents, with
+Wheems is an open-source, opinionated framework for running teams of AI agents, with
 Herdr core (`hc`) as the runtime. The name means "one who opines", and
 its dropped vowel pairs it with Herdr.
 
@@ -12,7 +12,7 @@ workflows, rules and knowledge base, and none of them can see another workspace.
 
 People don't know what to set up, or what fits. Existing agent harnesses leave those choices
 open and assume one instance per business. That suits one company, but not someone with a
-personal life, a business and several side projects. Opinr makes the choices for them, with
+personal life, a business and several side projects. Wheems makes the choices for them, with
 a clear place for everything, the way Laravel does for web apps.
 
 ## Who it's for
@@ -25,7 +25,7 @@ for businesses to adopt it as their way of working with agents. That brings seve
 workspace with their own roles, an audit trail, cost tracking and provider API keys, so the
 contracts are designed to allow them later.
 
-|                 | Typical agent harnesses                  | Opinr                                                                                   |
+|                 | Typical agent harnesses                  | Wheems                                                                                  |
 | --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
 | The agent       | Their own agent loop calling a model     | Claude Code, Codex and opencode, unchanged, each in its own terminal                    |
 | Improvements    | Come from the harness's own releases     | Every Claude Code or Codex update reaches every agent                                   |
@@ -49,7 +49,7 @@ should keep its knowledge private, or may be handed to someone else one day.
 
 ## The opinions
 
-Opinr decides these so users don't have to. Each can be renamed or tuned, but not removed.
+Wheems decides these so users don't have to. Each can be renamed or tuned, but not removed.
 
 **Built in, in every workspace**
 
@@ -73,7 +73,7 @@ sets, such as "software business" or "content site", give a recommended team.
 - The chief of staff reads the knowledge base to answer questions and brief agents.
 - The knowledge base is searched by meaning as well as by words. Turning text into
   embeddings and storing them are both drivers, the way Laravel's storage has disks: local by
-  default, free and private, with hosted services as other drivers. `opinr kb reindex` rebuilds
+  default, free and private, with hosted services as other drivers. `wheems kb reindex` rebuilds
   the index.
 - Agents improve themselves the same way. An agent that learns how to do something proposes a
   skill. The proposal goes to the library and waits for approval, like any outside skill.
@@ -86,7 +86,7 @@ sets, such as "software business" or "content site", give a recommended team.
   empty or ignored, so nothing leaks into every workspace.
 - Each workspace pins the version of each skill. Library edits never silently change a live
   workspace.
-- `opinr doctor` warns when a workspace or agent goes past a budget, around 15 to 20 skills.
+- `wheems doctor` warns when a workspace or agent goes past a budget, around 15 to 20 skills.
 - Outside skills go into the library first, never straight into a workspace.
 
 **Workflows: a fixed outline, with agents doing the steps.** An agent is who does the work,
@@ -111,16 +111,16 @@ agent does. To keep that work in check:
 
 - a step can declare the shape of its output, and a result of the wrong shape fails the step;
 - every run records each step's input and output, so it can be inspected and replayed;
-- **evals** run a workflow or an agent against a set of example inputs with checks (`opinr
+- **evals** run a workflow or an agent against a set of example inputs with checks (`wheems
 eval`). Where a check needs judgement, the judge comes from a different provider.
 
 **Blueprints: headless apps an agent can adapt.** A blueprint is a small app with no screens,
 such as a CRM: tables in the workspace's database, tools that let agents use them, and skills
-that explain the data. `opinr blueprint add crm` installs one into a workspace. The database is
-a driver, SQLite by default and Postgres for larger installs. Opinr ships a handful of
+that explain the data. `wheems blueprint add crm` installs one into a workspace. The database is
+a driver, SQLite by default and Postgres for larger installs. Wheems ships a handful of
 blueprints, the CRM first. A blueprint is defined in code with a documented shape, so the chief
 of staff can adapt one (add a field, a table or a tool) or build a new one with
-`opinr make:blueprint`, and the change is applied once you approve it. Like skills, each
+`wheems make:blueprint`, and the change is applied once you approve it. Like skills, each
 workspace pins the blueprint versions it uses.
 
 **Isolation, stated per workspace**
@@ -135,7 +135,7 @@ user with shell access, so instructions don't enforce anything.
 
 **One page about you crosses workspaces.** `about-you.md`, at the top of the install, holds
 your preferences and how you like to work. Every agent in every workspace reads it, and none can
-change it: the filing job suggests changes and you approve them with `opinr review`.
+change it: the filing job suggests changes and you approve them with `wheems review`.
 
 **The overseer sees summaries, not knowledge bases.** Each workspace publishes a short
 status: its work-tracker summary and what's waiting on you. A read-only overseer reads only

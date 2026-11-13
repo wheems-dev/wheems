@@ -6,7 +6,7 @@ let loaded: Promise<Sqlite> | undefined;
 
 /**
  * Node's built-in SQLite, loaded without its "experimental" warning, which would otherwise
- * be printed by every `opinr` command that touches the search index. Only that one warning
+ * be printed by every `wheems` command that touches the search index. Only that one warning
  * is hidden.
  */
 export function sqlite(): Promise<Sqlite> {

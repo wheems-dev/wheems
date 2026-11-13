@@ -1,8 +1,8 @@
 /**
- * Contract test suites and in-memory drivers, published as `@opinr/hq/testing`.
+ * Contract test suites and in-memory drivers, published as `wheems/testing`.
  * The suites use Vitest; a driver package runs one in its own test file:
  *
- *   import { runtimeContract } from '@opinr/hq/testing';
+ *   import { runtimeContract } from 'wheems/testing';
  *   runtimeContract('my-runtime', { create: () => new MyRuntime() });
  */
 export {

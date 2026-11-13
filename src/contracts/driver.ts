@@ -1,5 +1,5 @@
 /**
- * Every extension point in Opinr is a driver: a small, documented contract with
+ * Every extension point in Wheems is a driver: a small, documented contract with
  * built-in drivers behind it. Version one has runtime, engine, channel, embeddings
  * and vector-store contracts; integration, account, trigger, step, isolation and
  * secret-store contracts follow in later milestones.
@@ -12,7 +12,7 @@ export interface Driver<K extends DriverKind = DriverKind> {
   readonly name: string;
 }
 
-/** The result of one health check, shown by `opinr doctor`. */
+/** The result of one health check, shown by `wheems doctor`. */
 export interface HealthCheck {
   /** Short name of what was checked, such as `hc version`. */
   name: string;

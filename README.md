@@ -1,4 +1,4 @@
-# Opinr
+# Wheems
 
 An opinionated framework for running teams of AI agents, with Herdr core as the runtime.
 
@@ -6,7 +6,8 @@ One install per person holds machines, connections, accounts and a library of ag
 templates, skills and workflows. Isolated workspaces, one per business or area of life, each
 have a chief of staff, agents, scoped skills, workflows, rules, a knowledge base and channels.
 Agents are Claude Code, Codex and opencode, unchanged, each live in its own Herdr terminal.
-Everything that extends Opinr is a driver with a contract, as in Laravel.
+Everything that extends Wheems is a driver with a contract, as in Laravel. Wheems was formerly
+called Opinr.
 
 > **Status: milestone 1, talk to one chief of staff.** Chat with a chief of staff on Claude
 > Code from Slack, one conversation per thread, with the service running under launchd. See
@@ -14,12 +15,12 @@ Everything that extends Opinr is a driver with a contract, as in Laravel.
 
 ## Install
 
-Opinr is published on npm as `@opinr/hq`; the command it installs is `opinr`. It isn't published
+Wheems will be published on npm as `wheems`; the command it installs is `wheems`. It isn't published
 yet, so for now run it from this repository (below).
 
 ```bash
-npm install -g @opinr/hq
-opinr doctor
+npm install -g wheems
+wheems doctor
 ```
 
 ## Try it
@@ -29,7 +30,7 @@ Requires Node.js 22.13 or later, and Herdr core 0.1.20 or later (`hc`) for the r
 ```bash
 npm install
 npm run build
-node dist/cli/main.js doctor                          # checks Node, Herdr core and ~/opinr
+node dist/cli/main.js doctor                          # checks Node, Herdr core and ~/wheems
 node dist/cli/main.js validate examples/install       # checks an install folder
 node dist/cli/main.js doctor --home examples/install  # both
 ```
@@ -42,8 +43,8 @@ doctor`). Doctor fails with the version it found when Node.js is too old.
 
 ## Docs
 
-- [Getting started](docs/getting-started.md): set up Opinr on a Mac and chat from Slack
-- [The product](docs/product.md): what Opinr is, and the opinions it holds
+- [Getting started](docs/getting-started.md): set up Wheems on a Mac and chat from Slack
+- [The product](docs/product.md): what Wheems is, and the opinions it holds
 - [Architecture](docs/architecture.md): the service, the CLI, engines, integrations and guardrails
 - [Config formats](docs/config.md): `install.yaml`, `workspace.yaml`, agents, `skills.yaml`, workflows
 - [Drivers and plugins](docs/drivers.md): the contracts and their contract tests
@@ -56,23 +57,23 @@ doctor`). Doctor fails with the version it found when Node.js is too old.
 npm run check      # lint, typecheck, test and build, as CI does
 npm test           # tests only
 npm run schemas    # regenerate schemas/*.schema.json after changing src/config/schemas.ts
-npm run opinr -- doctor   # run the CLI from source
+npm run wheems -- doctor   # run the CLI from source
 ```
 
 The tests run the runtime contract suite against the real `hc` when it is installed, in a Herdr
-core of their own so your terminals are never touched; `OPINR_TEST_HC=0` turns that off. They
+core of their own so your terminals are never touched; `WHEEMS_TEST_HC=0` turns that off. They
 also run it against a fake `hc`, which is what CI uses.
 
-| Folder                       | What is in it                                                                |
-| ---------------------------- | ---------------------------------------------------------------------------- |
-| `src/cli/`                   | The `opinr` command                                                          |
-| `src/config/`                | Config schemas, loading with line numbers, and checks across files           |
-| `src/contracts/`             | Driver contracts: runtime, engine, channel, and the registry                 |
-| `src/drivers/runtime/herdr/` | The Herdr runtime driver; `hc.ts` is the only module that calls `hc`         |
-| `src/doctor/`                | `opinr doctor`                                                               |
-| `src/testing/`               | Contract test suites and in-memory drivers, published as `@opinr/hq/testing` |
-| `schemas/`                   | JSON Schemas for the config formats                                          |
-| `examples/install/`          | A complete example install                                                   |
+| Folder                       | What is in it                                                             |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `src/cli/`                   | The `wheems` command                                                      |
+| `src/config/`                | Config schemas, loading with line numbers, and checks across files        |
+| `src/contracts/`             | Driver contracts: runtime, engine, channel, and the registry              |
+| `src/drivers/runtime/herdr/` | The Herdr runtime driver; `hc.ts` is the only module that calls `hc`      |
+| `src/doctor/`                | `wheems doctor`                                                           |
+| `src/testing/`               | Contract test suites and in-memory drivers, published as `wheems/testing` |
+| `schemas/`                   | JSON Schemas for the config formats                                       |
+| `examples/install/`          | A complete example install                                                |
 
 ## Licence
 

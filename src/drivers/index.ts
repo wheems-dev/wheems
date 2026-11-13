@@ -38,7 +38,7 @@ function parse<T>(driver: string, schema: z.ZodType<T>, options: Record<string, 
       'invalid',
       `Invalid ${driver} options: ${z.prettifyError(parsed.error)}`,
       {
-        hint: driver === 'slack' ? 'Run opinr setup to enter the Slack tokens.' : undefined,
+        hint: driver === 'slack' ? 'Run wheems setup to enter the Slack tokens.' : undefined,
       },
     );
   }

@@ -131,7 +131,7 @@ export class ClaudeCodeEngine implements EngineDriver {
       files: [
         {
           path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Opinr from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
+          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
         },
       ],
     });
@@ -196,7 +196,7 @@ export function turnAnswers(jsonl: string): FinalMessage[] {
   return answers;
 }
 
-/** How `opinr setup` installs Claude Code and signs in. */
+/** How `wheems setup` installs Claude Code and signs in. */
 export function claudeCodeSetup(binary = 'claude'): EngineSetup {
   return {
     version: async () => {

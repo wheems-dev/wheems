@@ -15,7 +15,7 @@ export interface FakeHc {
 
 /** A fresh fake hc with its own state file. */
 export function fakeHc(extraEnv: Record<string, string> = {}): FakeHc {
-  const dir = mkdtempSync(join(tmpdir(), 'opinr-fake-hc-'));
+  const dir = mkdtempSync(join(tmpdir(), 'wheems-fake-hc-'));
   return {
     binary: FAKE_HC,
     dir,
@@ -26,9 +26,9 @@ export function fakeHc(extraEnv: Record<string, string> = {}): FakeHc {
   };
 }
 
-/** Whether a real hc is installed here. OPINR_TEST_HC=0 turns the live tests off. */
+/** Whether a real hc is installed here. WHEEMS_TEST_HC=0 turns the live tests off. */
 export function realHcAvailable(): boolean {
-  if (process.env.OPINR_TEST_HC === '0') return false;
+  if (process.env.WHEEMS_TEST_HC === '0') return false;
   try {
     execFileSync('hc', ['--version'], { stdio: 'ignore' });
     return true;

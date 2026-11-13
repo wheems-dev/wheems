@@ -171,6 +171,6 @@
     "steps"
   ],
   "additionalProperties": false,
-  "$id": "https://opinr.dev/schemas/workflow.schema.json",
-  "title": "Opinr workflow (workflows/<name>.yaml)"
+  "$id": "https://wheems.dev/schemas/workflow.schema.json",
+  "title": "Wheems workflow (workflows/<name>.yaml)"
 }

@@ -161,7 +161,7 @@
           "additionalProperties": {}
         },
         "vector_store": {
-          "description": "Where vectors are kept. Defaults to SQLite files in `.opinr/index/`.",
+          "description": "Where vectors are kept. Defaults to SQLite files in `.wheems/index/`.",
           "type": "object",
           "properties": {
             "driver": {
@@ -181,6 +181,6 @@
     }
   },
   "additionalProperties": false,
-  "$id": "https://opinr.dev/schemas/install.schema.json",
-  "title": "Opinr install.yaml"
+  "$id": "https://wheems.dev/schemas/install.schema.json",
+  "title": "Wheems install.yaml"
 }

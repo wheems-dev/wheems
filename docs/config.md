@@ -1,6 +1,6 @@
 # Config formats
 
-Config is YAML and Markdown in a git folder, `~/opinr` by default (`OPINR_HOME` or `--home`
+Config is YAML and Markdown in a git folder, `~/wheems` by default (`WHEEMS_HOME` or `--home`
 moves it). Adding an agent, channel or workflow means editing config, not code.
 
 Every format has a JSON Schema in [`schemas/`](../schemas/), generated from the Zod schemas in
@@ -8,12 +8,12 @@ Every format has a JSON Schema in [`schemas/`](../schemas/), generated from the 
 editor at one for completion and hover help, for example with the YAML language server:
 
 ```yaml
-# yaml-language-server: $schema=/path/to/opinr/schemas/workspace.schema.json
+# yaml-language-server: $schema=/path/to/wheems/schemas/workspace.schema.json
 ```
 
-`opinr validate` checks files or a whole install folder, with line numbers. For a folder it also
+`wheems validate` checks files or a whole install folder, with line numbers. For a folder it also
 checks the links between files: that names point at things that exist, and that each level only
-picks from the level above. `opinr doctor` runs the same checks.
+picks from the level above. `wheems doctor` runs the same checks.
 
 Keys are `snake_case`. Names (of workspaces, agents, accounts, connections, channels, skills and
 workflows) are lowercase letters, digits and dashes. Unknown keys are errors, so a typo never
@@ -27,7 +27,7 @@ One per person. Holds what every workspace shares.
 
 ```yaml
 herdr:
-  version: 0.1.20 # the minimum Herdr core version; Opinr's own minimum applies if higher
+  version: 0.1.20 # the minimum Herdr core version; Wheems's own minimum applies if higher
   binary: /opt/hc # optional: hc's path when it is not on PATH
 
 machines:
@@ -56,15 +56,15 @@ knowledge: # how every workspace's knowledge base is searched
     driver: ollama
     model: nomic-embed-text # default: the driver's usual model
     url: http://127.0.0.1:11434 # Ollama's own option; other drivers take their own
-  vector_store: { driver: sqlite } # the default: SQLite files in .opinr/index/
+  vector_store: { driver: sqlite } # the default: SQLite files in .wheems/index/
 ```
 
 `knowledge.embeddings` turns on searching by meaning. Keys besides `driver` and `model` are the
-driver's own options. `opinr setup` (Knowledge) writes it, using the model Ollama already has when
+driver's own options. `wheems setup` (Knowledge) writes it, using the model Ollama already has when
 it can. Changing the driver or model rebuilds every index the next time the service syncs it.
 
-`secret` names a credential in the secrets file, `~/.config/opinr/secrets.json` (mode 600; an
-encrypted store comes later). Credentials never appear in config. `opinr setup` writes the Slack
+`secret` names a credential in the secrets file, `~/.config/wheems/secrets.json` (mode 600; an
+encrypted store comes later). Credentials never appear in config. `wheems setup` writes the Slack
 tokens there and your Slack member id into `allowed_users`.
 
 One Slack app serves every workspace: workspaces bind its channels, they don't get apps of their
@@ -151,8 +151,8 @@ asks.
 | opencode                                                                             | `openrouter/x-ai/grok-5`, `opencode/big-pickle` | `--auto` (approves what its config doesn't deny) | `--auto`                                     | Until approvals arrive, a prompt means someone has to answer it at |
 | the machine, so a chief of staff you talk to from your phone usually runs on `auto`. |
 
-Every agent also gets Opinr's built-in instructions: its last message of each turn is posted to
-the chat thread for it, and `opinr reply "..."` sends a progress note during long work.
+Every agent also gets Wheems's built-in instructions: its last message of each turn is posted to
+the chat thread for it, and `wheems reply "..."` sends a progress note during long work.
 
 ## workspaces/&lt;id&gt;/skills.yaml
 

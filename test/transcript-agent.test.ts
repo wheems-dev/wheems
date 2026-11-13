@@ -85,7 +85,7 @@ describe('conversations with the Claude Code driver reading a transcript', () =>
   let channel: MemoryChannel;
 
   beforeEach(async () => {
-    home = mkdtempSync(join(tmpdir(), 'opinr-ta-'));
+    home = mkdtempSync(join(tmpdir(), 'wheems-ta-'));
     writeFileSync(
       join(home, 'install.yaml'),
       installYaml().replace('allowed_users: []', 'allowed_users: [UME]'),
@@ -105,7 +105,7 @@ describe('conversations with the Claude Code driver reading a transcript', () =>
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.opinr', 'conversations.json')),
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
       sessionEnv: {},
       pollMs: 5,
       startupSeconds: 2,

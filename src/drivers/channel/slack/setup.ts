@@ -2,10 +2,10 @@ import { WebClient } from '@slack/web-api';
 import { slackError } from './slack-channel.js';
 
 /** The Slack app manifest: Socket Mode, so no public URL is needed. One app serves every workspace. */
-export function slackManifest(name = 'Opinr'): string {
+export function slackManifest(name = 'Wheems'): string {
   return `display_information:
   name: ${name}
-  description: Your agents' chief of staff, from Opinr.
+  description: Your agents' chief of staff, from Wheems.
   background_color: "#2c2d30"
 features:
   app_home:

@@ -17,7 +17,7 @@ import {
 import { isAtLeast } from '../../../util/version.js';
 import { Hc, HcError, type HcOptions, type HcTerminal, type HcWaitResult } from './hc.js';
 
-/** The oldest Herdr core this version of Opinr was tested with. */
+/** The oldest Herdr core this version of Wheems was tested with. */
 export const HERDR_MINIMUM_VERSION = '0.1.20';
 
 export interface HerdrRuntimeOptions extends HcOptions {
@@ -227,7 +227,7 @@ export class HerdrRuntime implements RuntimeDriver {
       throw new DriverError(
         this.name,
         'version',
-        `hc ${version} is older than the minimum ${this.minimumVersion} that Opinr needs`,
+        `hc ${version} is older than the minimum ${this.minimumVersion} that Wheems needs`,
         { hint: 'Run hc update.' },
       );
     }

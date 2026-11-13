@@ -31,7 +31,7 @@ export async function installAndWait(where: Paths): Promise<boolean> {
   }
   const cli = cliPath();
   if (!cli.endsWith('.js')) {
-    throw new Error('Install the service from a build of Opinr (npm run build), not from source.');
+    throw new Error('Install the service from a build of Wheems (npm run build), not from source.');
   }
   await installService({
     node: process.execPath,
@@ -59,7 +59,7 @@ export function registerService(program: Command, io: Io): void {
     .command('service')
     .description('The always-running service that connects chat to agents');
   const homeOption = '--home <dir>';
-  const homeHelp = 'the install folder (default: $OPINR_HOME or ~/opinr)';
+  const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
   const home = (options: { home?: string }) => resolve(options.home ?? defaultHome(io.env));
 
   service
@@ -88,12 +88,12 @@ export function registerService(program: Command, io: Io): void {
     .option(homeOption, homeHelp)
     .action(async (options: { home?: string }) => {
       const where = paths(home(options), io.env);
-      io.out(`Installing ${plistPath()}\nNode.js: ${process.execPath}\nOpinr: ${cliPath()}\n`);
+      io.out(`Installing ${plistPath()}\nNode.js: ${process.execPath}\nWheems: ${cliPath()}\n`);
       if (await installAndWait(where)) {
         io.out('The service is running.\n');
         return;
       }
-      io.out(`The service has not answered yet. Check its log: opinr service logs\n`);
+      io.out(`The service has not answered yet. Check its log: wheems service logs\n`);
       process.exitCode = 1;
     });
 

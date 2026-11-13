@@ -104,9 +104,9 @@ export async function setup(options: SetupOptions): Promise<void> {
         {
           value: 'service',
           label: 'Service',
-          hint: running ? 'running' : 'run Opinr in the background',
+          hint: running ? 'running' : 'run Wheems in the background',
         },
-        { value: 'doctor', label: 'Check everything', hint: 'opinr doctor' },
+        { value: 'doctor', label: 'Check everything', hint: 'wheems doctor' },
         { value: 'done', label: 'Done' },
       ],
     });
@@ -126,7 +126,7 @@ export async function setup(options: SetupOptions): Promise<void> {
           () => options.actions.doctor(),
           (r) => (r.ok ? 'Everything checks out' : 'Some checks need attention'),
         );
-        ui.note(report.trimEnd(), 'opinr doctor');
+        ui.note(report.trimEnd(), 'wheems doctor');
         next = ok ? 'done' : 'doctor';
       }
     } catch (error) {
@@ -516,7 +516,7 @@ async function service(options: SetupOptions): Promise<boolean> {
     (ok) =>
       ok ? 'The service is running, now and at every login' : 'The service has not answered yet',
   );
-  if (!answering) ui.warn('See what it says with: opinr service logs');
+  if (!answering) ui.warn('See what it says with: wheems service logs');
   return answering;
 }
 

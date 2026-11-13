@@ -31,7 +31,7 @@ const conversationSchema = z.object({
   pending: z.number().int().nonnegative().optional(),
   /** When the agent last wrote a note, or was asked for one. Work after it has no note yet. */
   notedAt: z.string().optional(),
-  /** Opinr asked for a note and its answer, which is never posted, may not be skipped yet. */
+  /** Wheems asked for a note and its answer, which is never posted, may not be skipped yet. */
   noting: z.boolean().optional(),
 });
 

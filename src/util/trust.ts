@@ -1,7 +1,7 @@
 /**
  * Whether engines trust a folder. Each asks once ("trust this folder?") and records the
  * answer in its own config, for the folder or a folder around it (such as the git root).
- * Opinr only ever reads these records.
+ * Wheems only ever reads these records.
  */
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
