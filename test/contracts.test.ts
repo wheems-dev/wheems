@@ -114,4 +114,22 @@ describe('the memory runtime', () => {
     await runtime.send(session.id, 'later');
     expect(events.at(-1)).toBe('input: later');
   });
+
+  it('drops text typed ahead once the program has exited', async () => {
+    const got: string[] = [];
+    const runtime = new MemoryRuntime({
+      once: () => ({
+        input: (line, io) => {
+          got.push(line);
+          io.exit(0);
+        },
+      }),
+    });
+    const session = await runtime.start({ name: 'once', command: ['once'] });
+    await runtime.send(session.id, 'one');
+    await runtime.send(session.id, 'two');
+    await new Promise((r) => setTimeout(r, 5));
+    expect(got).toEqual(['one']);
+    expect((await runtime.get(session.id))?.state).toBe('finished');
+  });
 });

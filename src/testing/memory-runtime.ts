@@ -167,7 +167,12 @@ export class MemoryRuntime implements RuntimeDriver {
       if (session.info.state !== 'live') return;
       session.program.start?.(session.io);
       session.started = true;
-      for (const line of session.typedAhead.splice(0)) session.program.input(line, session.io);
+      // A program that exits takes no more input; what's left is dropped, as it would be.
+      const exited = () => session.info.state !== 'live';
+      for (const line of session.typedAhead.splice(0)) {
+        if (exited()) break;
+        session.program.input(line, session.io);
+      }
     }, 0);
     return Promise.resolve(snapshot);
   }
