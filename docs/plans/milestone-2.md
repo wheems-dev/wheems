@@ -122,16 +122,16 @@ Then the live test: a day of real use, then the next morning a new thread asking
 
 ## Left for later
 
-- **Usage counts and archiving unused skills.** These come in milestone 4, with the skill
-  library's scoping. Count how often each skill is used, then either suggest it ("these
-  haven't been used: disable or remove them?") or clean up on its own. Which of the two could be
-  a setting. Nothing is built for this yet.
+- **Usage counts and archiving unused skills.** These come with skill delivery per agent, in
+  milestone 5. Count how often each skill is used, then either suggest it ("these haven't been
+  used: disable or remove them?") or clean up on its own. Which of the two could be a setting.
+  Nothing is built for this yet.
 - **Loading approved skills into agents.** Approval records and pins a skill, and gives it to
-  the agents chosen, but nothing writes skills into an agent's session yet. Every agent in a
-  workspace runs in the same folder, so a skill written there would reach all of them, not only
-  the agents it was given to. How to scope it is still to be decided.
+  the agents chosen, but nothing writes skills into an agent's session yet, because every agent
+  in a workspace runs in the same folder. Decided in the architecture round: from milestone 5
+  each agent session gets its own folder, which carries only its pinned skills.
 - **A reviewer from a different provider checking skill proposals.** This comes in milestone 5,
-  with agent templates.
+  with agent templates (now milestone 5).
 - **Notes before Claude Code compresses a long conversation.** Its `PreCompact` hook can't give
   the agent a turn. The 30-minute quiet note covers most cases. Revisit if long threads lose
   things.

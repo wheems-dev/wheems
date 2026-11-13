@@ -201,7 +201,8 @@ numbered folder. Agents can't propose changes to a skill whose latest version a 
 
 ## workspaces/&lt;id&gt;/workflows/&lt;name&gt;.yaml
 
-A trigger, then steps. Version one has three triggers and three steps.
+**Today** the schema accepts a trigger and a list of steps, validated so config written now
+keeps working, but nothing runs workflows yet:
 
 ```yaml
 description: A summary of yesterday and what is waiting, every weekday morning.
@@ -215,3 +216,73 @@ steps:
 ```
 
 `name` defaults to the file name, and must match it if given.
+
+**Planned (milestone 7):** workflows become DAGs. Each step gets an `id`, the steps it `needs`, a
+timeout, checks on its output and bounded retries. Triggers add an event in an integration
+(`{ integration: { name: support-email, event: message.received } }`), and steps add `task` (an
+agent task with acceptance criteria), `model` (a lightweight model call on an API-key account),
+`classify` (labels mapped to actions, each `mode: shadow` or `auto`) and `call` (an integration
+action through the broker). A morning brief like the one above is better as a routine. See
+[architecture.md](architecture.md#workflows) for the format and a worked example.
+
+## Planned formats
+
+These are designed and will change as they're built; nothing reads them yet. See
+[architecture.md](architecture.md) for how each works.
+
+### workspaces/&lt;id&gt;/projects/&lt;name&gt;/project.yaml (milestone 4)
+
+A project is any body of work, with an optional lead, its own knowledge base, team list and
+channel. Only workspaces are confidentiality walls.
+
+```yaml
+name: Reviews
+description: Replies to reviews from the reviews service.
+lead: lead # agents/lead.md in this project; leave out and the workspace chief covers it
+channel: { connection: slack, channel: acme-reviews }
+team: [writer] # workspace agents this project may use, besides its own agents/
+skills: [review-replies] # narrows the workspace's skills.yaml
+integrations: [reviews] # narrows the workspace's integrations
+routing: search # search (default): the workspace chief searches it; ask: send it a task
+folder: ~/Projects/acme-site # only for projects with code
+machine: server # default machine for its agents (milestone 10)
+```
+
+### Agent front matter (milestones 5 and 10)
+
+```yaml
+lifetime: task # thread (chiefs and leads) or task (everyone else, fresh per task)
+machine: lab-server # where it runs; defaults to its project's, then its workspace's
+```
+
+### install.yaml accounts (milestone 5)
+
+```yaml
+accounts:
+  claude-subscription: { driver: claude, max_sessions: 4 } # queues tasks beyond this
+  openrouter: { driver: openrouter, secret: openrouter-key } # also serves model steps
+```
+
+### workspaces/&lt;id&gt;/routines/&lt;name&gt;.yaml (milestone 5)
+
+A trigger, one agent and one skill, run as a task.
+
+```yaml
+description: Yesterday's work and what's waiting on me, every weekday morning.
+trigger: { schedule: '0 7 * * 1-5' }
+agent: chief-of-staff
+skill: morning-brief
+post: { channel: chat }
+accept: { sections: [Done, Waiting on you, Today], rubric: brief }
+```
+
+### workspace.yaml additions (milestones 5 and 9)
+
+```yaml
+pairs: { daily_limit: 3, max_rounds: 1 } # pairs are opt-in per task or agent
+payments: # milestone 9
+  currency: GBP
+  limits: { per_purchase: 50, per_day: 100, per_month: 300 }
+  agents: { marketer: { per_day: 20 } }
+  merchants: [registrar.example] # anything else is refused
+```

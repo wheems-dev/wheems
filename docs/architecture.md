@@ -10,6 +10,15 @@ service posts each answer, read from the engine's own record of the conversation
 send progress notes, ask for approval or leave notes by running the CLI, which talks to the
 service over a private Unix socket.
 
+Wheems is for business work generally, not only code: answering email, replying to reviews,
+finding and following up leads, keeping a website growing. It's **a harness first, with
+workflows when you want them**: talking to a chief always works, and nothing needs a workflow.
+See [Harness first](#harness-first-workflows-when-you-want-them).
+
+**Built or planned.** Sections say which. "Built" is in the code today; "planned (milestone N)"
+is designed here and arrives with that milestone of the [roadmap](roadmap.md). The decisions
+behind the planned parts are in [ideas/decisions.md](ideas/decisions.md).
+
 **Why TypeScript on Node.** Claude Code and Codex already need Node on every agent machine,
 so it adds no new runtime. Slack's main Bolt library and the main Claude Agent SDK are both
 TypeScript first.
@@ -17,8 +26,9 @@ TypeScript first.
 ## The parts
 
 - **The service**: always running, under launchd on a Mac and systemd on Linux. It holds the
-  channel connections and routes messages. It also runs approvals, thread sessions and
-  workflows, and keeps a small SQLite file of what's waiting.
+  channel connections and routes messages, files notes, keeps search indexes and runs the
+  nightly tidy (built). It will also run tasks, approvals, routines and workflows, and keep a
+  small SQLite store of what's waiting (planned).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems post updates "…"`,
   `wheems ask approvals "Deploy?"` and `wheems note`. It replaces hand-written scripts and
   hard-coded channel IDs.
@@ -63,10 +73,16 @@ and never pass through an agent.
         ├── agents/           one Markdown file per agent
         ├── skills.yaml       chosen skills and pinned versions
         ├── workflows/        one YAML file per workflow
-        ├── projects/         one file per project: folder, space, agents, rules
-        ├── .claude/          this workspace's own Claude Code config
+        ├── projects/         planned (4): one folder per project, see Projects
+        │   └── support/
+        │       ├── project.yaml
+        │       ├── agents/   agents only this project uses, such as its lead
+        │       └── knowledge/   the same shape as the workspace's
+        ├── .claude/          planned (6): this workspace's own Claude Code config
         └── knowledge/
             ├── brief.md      short, capped; every agent here loads it at launch
+            ├── activity.md   planned (4): one line per filed project note, newest first
+            ├── cards/        planned (4): one generated card per project
             ├── inbox/        notes land here, from wheems note
             ├── notes/        filed notes, kept as the sources
             ├── pages/        the knowledge base, one topic per page
@@ -77,7 +93,8 @@ Running state, never committed, lives in `.wheems/`: the control socket, logs, c
 filer's working copies, the search indexes (`.wheems/index/`) and what waits for review
 (`.wheems/review/`).
 
-Agents never write into `knowledge/` or `about-you.md` themselves. They write notes with
+Agents are told never to write into `knowledge/` or `about-you.md` themselves; that's an
+instruction, not a lock, until permission rules arrive (milestone 6). They write notes with
 `wheems note`, and the service saves each note to its workspace's inbox with where it came from:
 workspace, agent, engine, conversation and time. When a conversation has been quiet for
 `knowledge.note_after_idle` minutes after new work, and before the service stops an idle session
@@ -163,7 +180,8 @@ looks like a credential), and commits them. A service that was stopped at that t
 starts. A night when no page or the brief changed since the last tidy is skipped, as is a
 workspace with no pages, so it costs nothing when there's nothing new. The tidy waits for any
 note being filed in the workspace, and a page edited meanwhile means nothing is applied that
-night.
+night. From milestone 5 it also looks for requests that repeat (see
+[Learning what repeats](#learning-what-repeats)).
 
 ### Skills and review
 
@@ -196,11 +214,387 @@ agents get it (the agent that proposed it is ticked to begin with); then it comm
 a change to `about-you.md` writes it and commits. Outside a terminal, `wheems review` only lists
 what waits, and `wheems doctor` says how much does.
 
-For now, approved skills are recorded and pinned but not yet written into agents' sessions:
-how a skill reaches only its agents, when every agent in a workspace shares one folder, is still
-being decided.
+Approved skills are recorded and pinned, but not yet written into agents' sessions, because
+today every agent in a workspace runs in the workspace's folder. From milestone 5 each agent
+session gets a folder of its own, and the engine driver writes only that agent's pinned skills
+there (see [Tasks](#tasks)).
 
 `WHEEMS_HOME` moves the install folder.
+
+## Harness first, workflows when you want them
+
+Talking to a chief always works, and nothing requires a workflow. When a job repeats, it can be
+hardened, one step at a time, as far as it needs to be. A repeated job sits at one of three
+tiers, chosen per job (planned, milestones 5 and 7):
+
+| Tier                | What it is                                                                | What's guaranteed                                      | How it's evaluated                                                                                                              |
+| ------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Routine**         | A schedule or an event, one agent and one skill, run as a single task     | When it runs, who runs it, what it may touch           | Its output: acceptance criteria checked in code, a rubric judge, your feedback, and consistency between runs                    |
+| **Skill procedure** | A routine whose skill lists steps for the agent to follow                 | Nothing about order or completeness, beyond the broker | Its trace: expected steps against the steps the agent marked and the calls the broker recorded. Detects drift; can't prevent it |
+| **Workflow**        | A DAG: steps, order, gates and checks run by Wheems; agents only in steps | Order, approvals, checks between steps, recorded runs  | Per step and end to end, plus evals on a golden set                                                                             |
+
+**Rule of thumb.** A single output for you to read, such as a morning brief, is a routine.
+Several touchpoints, side effects outside (sending, publishing, money, customers), approvals in
+the middle, or hand-offs between agents make a workflow. A skill procedure is promoted to a
+workflow when its trace checks show drift, or as soon as it acts on the outside world.
+
+**Hardening is a path, not a switch.** You ask the chief for something in chat. When the chief
+notices the same request coming back, it offers to save it as a routine or a workflow
+("creating workflows by asking"). A new routine or workflow that acts on the outside world starts
+in **shadow mode**, proposing each action for your approval, and its steps graduate to acting on
+their own as their evaluation earns it.
+
+**Both directions use the task.** A workflow step hands work to an agent as a [task](#tasks), and
+an agent can start a saved workflow (`wheems workflow run <name> --wait`, a tool through the
+broker) and get its result back.
+
+**Determinism is chosen per step.** Fixed steps, gates and checks where the job is known; an
+agent's judgement only where it's needed.
+
+### Learning what repeats
+
+The knowledge loop already sees every request and task. The nightly tidy (planned, milestone 5)
+also groups similar requests by meaning: the first message of each conversation and the brief of
+each task a person started. When one recurs (for example three times in two weeks, or at a
+regular time), the chief offers in chat: "Shall I make this a routine?", with a suggested
+schedule, the skill it would use (drafted as an ordinary skill proposal, for `wheems review`), and
+the tier. You approve or turn it down. The same detector offers to promote a routine to a
+workflow when its trace shows drift or it starts acting on the outside world.
+
+## Projects
+
+Planned, milestone 4. A **project** is any body of work inside a workspace: "Customer support",
+"Reviews", "Sales leads", "Bookkeeping", or a website with its code. Each has, all optional apart
+from its knowledge base:
+
+- a **lead** (a chief officer for the project), reachable in the project's own Slack channel as
+  well as through the workspace chief;
+- its own **knowledge base**, with the same loop as the workspace's: notes, filing, pages, a
+  brief, reports and a search index;
+- a **team list**: the workspace agents it may use, plus agents of its own;
+- a **channel**, and session folders of its own.
+
+A project shares its workspace's accounts, secrets, integrations, rules and skills, and may
+narrow them. **Only workspaces are confidentiality walls.** Projects keep context clean, not
+secrets: an agent in one project of a workspace is not stopped from reading another's files.
+Doctor, the README and `wheems project new` all say so. The rule: if one chief should be able to
+answer about all of it, make projects in one workspace; if it needs secrecy or other people, make
+a workspace. There is no chief above workspaces; looking across them stays with the read-only
+overseer (later).
+
+```yaml
+# workspaces/acme/projects/reviews/project.yaml (proposed format)
+name: Reviews
+description: Replies to reviews from the reviews service, and what customers tell us in them.
+lead: lead # agents/lead.md in this project; leave out and the workspace chief covers it
+channel: { connection: slack, channel: acme-reviews }
+team: [writer] # workspace agents this project may use, besides its own agents/
+skills: [review-replies] # narrows the workspace's skills.yaml
+integrations: [reviews] # narrows the workspace's integrations
+routing: search # search (the default) or ask
+# folder: ~/Projects/acme-site   only for projects with code; tasks get a worktree of it
+```
+
+**Notes and knowledge.** The service stamps each note with its project, as it stamps the
+workspace today; an agent can't choose where its note goes. The workspace's one filer files
+project notes into that project's knowledge base. Each knowledge base has its own search index
+(collection `<workspace>.<project>.<generation>`), and a search across several is combined with
+the same reciprocal rank fusion. When a project note is filed, its first line goes onto the
+project's card and into the workspace's `knowledge/activity.md`, so the workspace chief knows what
+happened without anything being posted.
+
+**Cards are generated, never written by an agent.** `knowledge/cards/<project>.md` holds the
+project's name, description, lead, channel, status, a "can answer about" list taken from its
+brief's headings, and the latest lines of activity. Code writes it at `project new`, after each
+project note is filed, and at the nightly tidy, so it can't drift; `wheems validate` reports a
+card without a project or a project without a card. The chief's built-in instructions get a
+generated Projects section at each launch, from the `project.yaml` files.
+
+| Command (planned)                                                                  | What it does                                                                                                                                        |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wheems project new <name> [--workspace] [--lead template] [--channel] [--folder]` | Creates the folder, `project.yaml`, a lead from a template, an empty knowledge base and the card; creates or checks the channel; validates; commits |
+| `wheems project list`                                                              | Projects, leads, channels, routing and note counts                                                                                                  |
+| `wheems project rename <old> <new>`                                                | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                                                  |
+| `wheems project archive <name>`                                                    | Moves it to `projects/_archive/`, marks the card archived and stops its channel. Knowledge is never deleted                                         |
+
+**Routing: search first, ask for jobs.** The workspace chief's `wheems kb search` covers its own
+pages, the cards, and every project with `routing: search` (the default), with each result
+labelled by project. If the pages answer the question, the chief replies with sources. A project
+with `routing: ask` is left out of that search, and the chief must send it a task. Work and live
+state ("has the refund gone through?") always go to the project's lead as a [task](#tasks). A
+question about several projects sends tasks in parallel, and the chief combines the answers
+without hiding disagreements; a timeout gives a partial answer, not an invented one.
+
+**Slack.** One app, as now. Each project with a lead gets a channel, `<workspace>-<project>` by
+default, where its lead posts under its own name and icon. `approvals` and `updates` stay one per
+workspace, each post tagged with its project. `wheems project new` creates the channel when the
+app may, and otherwise tells you to create it and invite the app; doctor checks it.
+
+## Tasks
+
+Planned, milestone 5. **The task is the one hand-off between agents**: a written brief to an
+agent in a fresh Herdr session, and a written result back. A chief asking a project lead, a lead
+handing work to a worker, a routine's run, a workflow's agent step, each member of a pair and
+every judge are all tasks. It's built on the task runner that the filer already uses
+(`src/service/runner.ts`), not a second agent loop.
+
+### Lifetimes and session folders
+
+| Who                                                     | Lifetime                                                 | Why                                 |
+| ------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------- |
+| Workspace chief                                         | One session per Slack thread, resumable (built)          | You talk to it                      |
+| Project lead                                            | Per thread in its channel; fresh per task when sent work | Tasks don't clutter your threads    |
+| Workers, pair members, judges, routines, workflow steps | Fresh per task                                           | Clean context; runs can be repeated |
+| Filer                                                   | Fresh per note (built)                                   |                                     |
+
+Agent front matter gains `lifetime: thread | task`: `thread` by default for chiefs and leads,
+`task` for everyone else. Each agent session gets **its own folder**
+(`.wheems/sessions/<workspace>/<agent>/` for thread agents, `.wheems/tasks/<id>/work/` for
+tasks), so the engine driver writes that agent's instructions file and only its pinned skills
+there. A task on a project with code works in a git worktree of the project's folder, on a branch
+`wheems/<task-id>`.
+
+### The brief and the result
+
+`.wheems/tasks/20261113-0912-k7/task.md`, written by Wheems (proposed format):
+
+<!-- prettier-ignore -->
+```markdown
+---
+id: 20261113-0912-k7
+from: acme/chief-of-staff
+to: acme/reviews/lead
+kind: job # question, job, review, pair-member, judge, routine, workflow-step
+timeout: 30m
+accept:
+  sections: [Replies, Flagged]
+  checks:
+    - every reply is under 120 words
+    - every reply names the review it answers, by id
+    - no reply promises a refund
+  rubric: review-reply # a judge grades tone, accuracy and policy
+  pass_at: 4 # out of 5, on every rubric item
+  review: before_send # a person approves before anything is sent
+---
+
+Draft replies to the reviews that arrived this week. Flag any that mention a safety issue.
+```
+
+The agent finishes with `wheems task done`, sending `result.md`: a status (done, blocked or
+failed), a one-line summary, the sections asked for, its sources and its artifacts (a branch, a
+CRM row, a draft). The result is filed as the session's note, so a task needs no extra note turn.
+
+### How a task runs
+
+1. `wheems task new` (or a routine, a workflow or a pair) writes `task.md` and records the task in
+   the service's SQLite store.
+2. The runner prepares the agent in the task's own folder and starts it through the runtime
+   driver, on the agent's machine, labelled with the task's id.
+3. It follows the session as conversations are followed today: by status, or by answers for
+   engines without status. A permission prompt is posted to `approvals` with the `hc attach` line.
+4. The result is evaluated ([below](#evaluating-tasks)). A result that fails its checks goes back
+   to the agent with the reasons, up to the task's retries (two by default); then the task fails.
+5. A session that goes quiet without a result gets one reminder, then fails with `no_result`.
+6. The session is stopped and kept for a day for `hc attach`. A caller that asked to wait gets the
+   result.
+
+A task's state is durable: queued, running, waiting for approval, succeeded, failed, cancelled,
+or **outcome unknown**. Each attempt has its own id. After a service restart, a running task is
+picked up again from its session, never launched a second time. The commands a task runs
+(`wheems task done`, `note`, the broker's tools) authenticate with a **short-lived task
+credential** bound to the task's scope and grants; an environment variable alone isn't proof of
+who's calling. An external write whose outcome is uncertain (an email that may have been sent) is
+marked outcome unknown and reconciled against the outside system before anything is retried;
+it's never blindly retried.
+
+`max_sessions` per account in `install.yaml` queues tasks, so chiefs, leads, workers, judges and
+pairs together can't exhaust one subscription.
+
+### Evaluating tasks
+
+Every task says what "done" means, and Wheems checks it in three layers, cheapest and surest
+first. Only the first layer guarantees anything; the other two are signals.
+
+| Layer          | What it checks                                                                                                                                                                                                                                                                                                                                                                                | On failure                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **In code**    | The result's shape (sections, an output schema), allowed values (a label from the list, a score in range), sources that resolve to files the task may read, no credentials, artifacts that exist (the branch, the CRM row, the draft), side effects the broker recorded matching what the result claims, the steps of a skill procedure, and for code, the project's own checks on the branch | Back to the agent with the reasons, within the retries; then the task fails            |
+| **By a judge** | Criteria code can't check: tone, accuracy, whether a claim follows from its source, policy. A separate fresh judge task, from another provider where possible, sees only the brief, the criteria, the result and the cited files, never which agent or engine wrote it. It returns a score and reasons per rubric item, which are themselves checked in code                                  | Below `pass_at`: back to the agent once with the judge's reasons, then flagged for you |
+| **By people**  | Feedback buttons on results posted to Slack (good, not right, and why), your edits before something is sent (the difference is recorded), approvals and refusals, and pair picks                                                                                                                                                                                                              | Recorded with the task; refusals and "not right" feed the evals below                  |
+
+Criteria come from the task's `accept:` block, from the agent's or skill's defaults, and from the
+step that started it. Rubrics live in files, so the same rubric judges every run.
+
+**Recorded outcomes.** Every task keeps a run record: its brief, result, each check and whether it
+passed, the judge's scores and reasons, your feedback and edits, any outcome measure (the reply
+was sent, the ticket closed, the customer answered), the time and turns it took, and the agent,
+engine, model and skill versions it ran with. `wheems eval report` shows quality per agent, kind
+of task and engine over time.
+
+**Evals catch regressions.** An eval is a golden set: saved tasks with known-good outcomes
+(`evals/<name>/`, each case an input and what must be true of the result). The set re-runs
+whenever something it depends on changes (an agent's instructions, a skill's version, the model,
+the engine, a prompt or a label set) and on demand with `wheems eval run`. When scores drop below
+the last accepted baseline, Wheems posts to `updates`; a new baseline needs your approval. Your
+"not right" answers and corrected results are offered as new cases.
+
+**Business tasks are evaluated on business terms.**
+
+- A classification (which kind of email this is, a review's sentiment) is measured against a
+  labelled sample of real items: a confusion table per label, re-run when a prompt, model or label
+  set changes. Precision matters most for labels that act.
+- Anything new that acts on the outside world starts in **shadow mode**: it proposes, you
+  approve. Once its approval rate over a stated number of items is high enough, you may switch
+  individual labels or steps to act on their own, and a sample of their actions is still posted
+  for audit.
+- Written outputs (review replies, outreach emails) are judged against a rubric, and your edits
+  before sending count as signal.
+- Where an outcome exists, it's measured: a reply sent, a ticket closed, a lead bought.
+
+Judges share blind spots, especially from one provider, and a consensus of two agents isn't
+proof. That's why code checks come first, and why approvals stay on anything that can't be
+undone.
+
+### Pairs
+
+Planned, milestone 5. A pair is two independent task members and a judge: the same brief to two
+agents, ideally on different providers, each in its own folder or worktree and unaware of the
+other. When both finish, an anonymised judge task sees the two results as A and B in random
+order, with engines and models removed, and fills a fixed rubric: where they agree, where they
+differ and which is better on each point, a recommended merge, and its confidence. You pick:
+**Take A**, **Take B**, **Merge** or **Neither**. Pair members can't publish, merge or buy. If one
+member fails, the pair is reported as incomplete, not re-run.
+
+Pairs suit naming, plans, research, review replies, marketing copy and code reviews. They cost a
+little more than twice one task, so they're opt-in per task or agent, with a daily limit and caps
+on rounds and time.
+
+## Routines, skill procedures and workflows
+
+### Routines
+
+Planned, milestone 5. A routine is a trigger, an agent and a skill, run as a task:
+
+```yaml
+# workspaces/acme/routines/morning-brief.yaml (proposed format)
+description: Yesterday's work and what's waiting on me, every weekday morning.
+trigger: { schedule: '0 7 * * 1-5' }
+agent: chief-of-staff
+skill: morning-brief
+post: { channel: chat }
+accept:
+  sections: [Done, Waiting on you, Today]
+  rubric: brief
+```
+
+When the skill lists steps (a skill procedure), each step has a name in the skill's front matter,
+the agent marks it with `wheems step <name>` as it goes, and the broker records every tool and
+integration call. After the run, Wheems compares the steps expected with the steps marked and the
+calls made, and reports drift: a step skipped, done twice or out of order. That detects drift; it
+can't prevent it, which is what workflows are for.
+
+### Workflows
+
+Planned, milestone 7. A workflow is a DAG in YAML: steps, the order between them, gates and
+checks, run by Wheems. Agents work only inside steps, so the order never varies.
+
+**Triggers:** a time, a message in a channel, a file landing, and **an event in an integration**:
+a new email, a new review, a new form entry, a new row. Events are polled first, with webhooks
+where the service offers them, and each item runs once (by its id in the outside system). Until
+the always-on server (milestone 10), events are polled while the laptop is awake.
+
+**Steps:**
+
+| Step       | What it does                                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `task`     | Runs an agent [task](#tasks), with its acceptance criteria                                                                                                                                                                                                                                                   |
+| `model`    | A **lightweight model call** for small, high-volume judgements: classify, extract fields, score. Runs through an API-key account (OpenRouter, Anthropic's API), not a full agent session, so it's fast and doesn't use subscription limits. Its output is always checked in code: an allowed label, a schema |
+| `classify` | A `model` step whose labels map to actions                                                                                                                                                                                                                                                                   |
+| `call`     | An action in an integration, through the broker: send an email, create a CRM row, fetch analytics                                                                                                                                                                                                            |
+| `ask`      | Asks for approval in `approvals` and waits. A no stops the run                                                                                                                                                                                                                                               |
+| `post`     | Posts to a channel                                                                                                                                                                                                                                                                                           |
+
+Each step has an id, the steps it `needs`, a timeout, checks on its output and bounded retries.
+A read that fails is retried with backoff; an uncertain write is reconciled first. Every run
+records each step's input, output and checks. Shell and HTTP steps are deferred: outside calls
+go through integrations and the broker.
+
+**Classify, then act** is a core pattern. Which actions need approval is set in config and
+enforced by the broker:
+
+```yaml
+# workspaces/acme/workflows/support-inbox.yaml (proposed format)
+description: Sort the support inbox and act on each email.
+trigger: { integration: { name: support-email, event: message.received } }
+steps:
+  - id: sort
+    classify:
+      account: openrouter
+      labels: [refund, how-to, complaint, spam, other]
+  - id: act
+    needs: [sort]
+    on:
+      how-to: { task: { agent: support, skill: how-to-reply }, mode: shadow }
+      refund: { task: { to: billing } } # a task for the billing project's lead
+      complaint: { ask: { channel: approvals } }
+      spam: { call: { integration: support-email, action: archive }, mode: auto }
+      other: { post: { channel: chat } }
+```
+
+`mode: shadow` on a label means its action is proposed for your approval; when its approval rate
+over enough items is high, you switch it to `auto`, and sampled audits continue.
+
+**Evals** run per step and end to end on a golden set, and a classification step on its labelled
+sample (see [Evaluating tasks](#evaluating-tasks)). Creating workflows by asking: the chief writes
+the file, explains it in plain English, and saves it once you approve.
+
+The first business integrations arrive with workflows (milestone 7): email, a reviews service and
+search analytics. `connect` and `grant` for every integration, and the vault, follow in
+milestone 9.
+
+## Worked example: a lead-generation site
+
+The first real use: running a website you already have and growing it into a lead generator, such
+as a directory that connects people who need a specialist service with local providers, and sells
+the enquiries to those providers. One workspace holds four projects:
+
+| Project    | What it is                                       | Lead and team                  |
+| ---------- | ------------------------------------------------ | ------------------------------ |
+| `site`     | The website's code                               | Developer, reviewer            |
+| `seo`      | Search performance and content                   | SEO lead, analyst, writer      |
+| `outreach` | Finding and contacting businesses that buy leads | Sales lead, researcher, writer |
+| `leads`    | The enquiries coming in, and who they're sold to | Uses the CRM blueprint         |
+
+**A weekly SEO workflow:**
+
+```text
+fetch analytics ─► find opportunities ─► you approve a shortlist ─► make the changes
+  (call)             (task: analyst,        (ask)                     (task: developer,
+                      against criteria)                                 on a branch)
+        ─► check the changes ─► project checks and a preview build ─► you approve the merge
+           (task: reviewer,      (in code)                               (ask)
+            or a pair)
+```
+
+Next week's run starts by measuring the effect of last week's changes, so the analyst's findings
+are judged by what happened, not only by a rubric.
+
+**An outreach workflow:**
+
+```text
+find candidate buyers ─► enrich and score ─► add rows to the CRM ─► draft an email each
+ (task: researcher)       (model step)        (call, blueprint)       (task: writer, rubric judge)
+   ─► send, in shadow mode at first ─► classify replies ─► interested: task for the sales lead
+      (ask, then call: email)           (classify)         not now: follow-up in a month
+                                                           unsubscribe: suppression list
+```
+
+Unsubscribes and the suppression list are enforced in code, before any send, and outreach must
+follow the email marketing rules that apply, such as PECR in the UK. Each send is approved until
+the approval rate earns automatic sends for that label.
+
+**Why a DAG.** The order, the gates and the checks are fixed in YAML; only the judgement inside
+each agent step varies, and every step's output is checked before the next runs.
+[The roadmap](roadmap.md#the-reference-use-case) says which milestone first runs each for real.
 
 ## Engines, models and accounts
 
@@ -228,6 +622,10 @@ Each driver also declares what its engine supports, so doctor can say what won't
 - Occasional or specialist agents run through OpenRouter and pay per token.
 - Each workspace can have its own OpenRouter key with a credit limit, so one workspace can't
   use up everything.
+- Planned (milestone 5): API-key accounts (OpenRouter, Anthropic's API) also serve the
+  lightweight model step, for high-volume classification and extraction that doesn't need a
+  full agent session; and `max_sessions` per account queues tasks so one subscription isn't
+  exhausted.
 
 A model isn't a connection to a service. A Grok agent for X can write posts but can't publish
 them. Posting and reading mentions need the X API. That's an integration the agent uses,
@@ -235,8 +633,11 @@ whatever its model.
 
 ## Integrations
 
-Every outside service is an integration: GitHub, Google, Linear, Stripe, a database. Each is
-connected once and given to workspaces and agents with the same three-level pattern as skills.
+Every outside service is an integration: an email inbox, a reviews service, search analytics,
+GitHub, Google, Linear, Stripe, a database. Each is connected once and given to workspaces and
+agents with the same three-level pattern as skills. Planned: the first business integrations
+(email, a reviews service, search analytics) arrive with workflows in milestone 7, with their
+events as workflow triggers; `connect`, `grant` and the rest below arrive in milestone 9.
 
 **One pattern for everything that's shared.** Skills, integrations and accounts all work the
 same way: the install holds everything that's connected, a workspace picks what it may use,
@@ -301,3 +702,54 @@ Still to work out: sandboxing on macOS (Linux has containers and bubblewrap); wh
 always go through a required GitHub check or the broker also gates opening a pull request; and
 how strict version one is (a sensible start is layers 1 to 4 for anything irreversible, and
 layer 5 wherever an engine supports it).
+
+## The vault and purchases
+
+Planned, milestone 9.
+
+**The vault** holds credentials in the macOS Keychain on a Mac, the secret service on a Linux
+desktop, and an encrypted file on a headless server, where the secret service usually isn't
+unlocked. It never falls back to plain text without saying so. Agents never get a secret's value:
+they ask the broker to use it ("send this email with the support inbox's credentials"), and the
+broker logs every use (which secret, agent, task and call, never the value). Today's secrets file
+(mode 600) is the step before it.
+
+**Purchases: the agent prepares, you pay.** No agent ever types a card number.
+
+1. Through an integration's own billing API where there is one (a domain registrar, a cloud
+   provider): the purchase is a broker action against the card already on that account.
+2. Otherwise `wheems buy` posts the merchant, items, amount, currency, card and reason with the
+   checkout link; you pay on your phone and tap Paid.
+
+Limits per purchase, per day, per month and per agent, and a merchant allowlist, are checked in
+code **before** asking: over a limit is refused, not offered. Every purchase asks, every time,
+with no auto-approve. **An approval binds to the exact quote** (merchant, items, amount, currency,
+destination) and expires; any change needs a fresh approval. An outcome that's uncertain is
+reconciled with the merchant, never retried blindly. A card with a low limit set at the bank is
+the backstop. Single-use cards come later.
+
+```yaml
+# workspaces/acme/workspace.yaml (proposed format)
+payments:
+  currency: GBP
+  limits: { per_purchase: 50, per_day: 100, per_month: 300 }
+  agents: { marketer: { per_day: 20 } }
+  merchants: [registrar.example, cloud.example] # anything else is refused
+```
+
+## Other machines and computer use
+
+**Other machines** (planned, milestone 10). An agent can name its `machine:`, falling back to its
+project's and then its workspace's. Herdr already runs terminals on other machines, but that
+alone isn't enough: the launch files, the `wheems` command's link to the service, and the results
+all live on the hub. A small worker, `wheems node`, runs on each machine: it receives an agent's
+launch files, relays its `wheems` commands to the service, and returns results. Secrets stay on
+the hub, behind the broker. Whether Herdr's SSH link can carry this is the main thing to test.
+
+**Computer use** (after version one) is a tool given to an existing engine, not a new engine:
+Claude Code or Codex gets desktop tools (a `desktop` driver with the `ComputerDriver` contract:
+screenshot, click, type, keys, scroll) that act on a dedicated, resettable GUI machine through
+the broker, which logs every action and keeps the screenshots. The machine itself is the real
+guardrail: no saved passwords, no payment methods, reset to a snapshot on a schedule. Typing
+anything that looks like a credential or a card number is refused, and anything irreversible
+waits for approval.

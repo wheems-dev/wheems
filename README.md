@@ -6,6 +6,15 @@
 
 An opinionated framework for running teams of AI agents, with Herdr core as the runtime.
 
+**A harness first, workflows when you want them.** Talk to a chief of staff from Slack and it gets
+on with the job; nothing needs a workflow. When a job repeats, the chief can turn it into a
+routine or a fixed workflow, which starts by asking before it acts and graduates to acting alone
+as its results earn it. Determinism is chosen per step: fixed steps and checks where the job is
+known, an agent's judgement only where it's needed.
+
+**For business work, not only code:** watching an inbox and acting on each email, replying to
+reviews, finding and following up leads, bookkeeping, growing a website.
+
 You install Wheems once, make a workspace for each business or area of life, and talk to each
 workspace's chief of staff from Slack. Agents are Claude Code, Codex and opencode, unchanged, each
 live in its own Herdr terminal where you can watch it or take over. What they learn goes into a
@@ -145,7 +154,8 @@ A **workspace** is an entity with its own people, knowledge and confidentiality:
 life, a business, a client. Make something a separate workspace when it has different people,
 should keep its knowledge private, or may be handed to someone else one day. Today each
 workspace has its own folder, agents, chat channel, knowledge base and search index. Enforced
-isolation, where an agent in one workspace can't read another's files, arrives in milestone 4.
+isolation, where an agent in one workspace can't read another's files, arrives in milestone 6.
+Projects inside a workspace (milestone 4) keep context clean but are never walls.
 
 `wheems init <id>` creates `workspaces/<id>/`:
 
@@ -428,8 +438,9 @@ Outside a terminal, `wheems review` only lists what waits. `wheems doctor` also 
 does.
 
 Approved skills are recorded and pinned, but not yet written into agents' sessions. Every agent
-in a workspace shares one folder, so a skill written there would reach all of them, not only the
-agents it was given to. How to scope that is still being decided.
+in a workspace shares one folder today, so a skill written there would reach all of them, not
+only the agents it was given to. From milestone 5 each agent session gets a folder of its own,
+which carries only its pinned skills.
 
 ## The service
 
@@ -698,7 +709,7 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
   told not to edit the knowledge base or `about-you.md` themselves, but that is an instruction,
   not a lock: an agent runs in its workspace folder and could edit files there directly, and
   such an edit is treated like one by hand. Permission rules that enforce limits arrive in
-  milestone 4.
+  milestone 6.
 - **What leaves your Mac.** Messages you send go through Slack. Agents run on their model
   providers (Anthropic for Claude Code, OpenAI for Codex, whichever opencode is set up with), so
   those providers see each conversation, and what agents load or read: `about-you.md`, the
@@ -710,21 +721,24 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
 
 Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 
-| Milestone | What it brings                                                                                                          |
-| --------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (its live test is still to come)     |
-| 3         | Approvals and updates: buttons on your phone, the `approvals` and `updates` channels, and a first version of the broker |
-| 4         | A second workspace kept apart, projects, permission rules, and skills scoped and loaded per agent                       |
-| 5         | A team of agents: templates such as developer and reviewer, and more accounts, including OpenRouter                     |
-| 6         | Workflows and evals: triggers, steps that depend on others, recorded runs, and creating workflows by asking             |
-| 7         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                              |
-| 8         | Integrations and guardrails: `connect` and `grant`, the secret store, GitHub, rules enforced on GitHub and in git hooks |
-| 9         | Always on: running on a server, laptops collecting work, Telegram and email                                             |
-| 10        | Plugins and release: `make:` commands, npm plugins, and the open-source release on npm                                  |
+| Milestone | What it brings                                                                                                                                        |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                       |
+| 3         | Approvals and updates: buttons on your phone, the `approvals` and `updates` channels, and a first version of the broker                               |
+| 4         | Projects and leads: any body of work as a project, with a lead in its own channel and its own knowledge base, and the chief routing questions to them |
+| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                               |
+| 6         | A second workspace, kept apart                                                                                                                        |
+| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                   |
+| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                            |
+| 9         | Integrations, guardrails and the vault: `connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                  |
+| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems node`, Telegram and email                                         |
+| 11        | Plugins and release: `make:` commands, npm plugins, and the open-source release on npm                                                                |
 
-Until milestone 9 the service runs on your Mac under launchd, so agents answer only while it's
-awake. [docs/ideas/architecture.md](docs/ideas/architecture.md) collects ideas for
-later milestones; they're ideas, not decisions.
+Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
+awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's
+built, with a worked example: growing a website into a lead generator.
+[docs/ideas/](docs/ideas/) keeps the original ideas, the two design proposals and the
+[decisions](docs/ideas/decisions.md) taken from them.
 
 ## Developing Wheems
 
@@ -765,13 +779,13 @@ yet:
 
 - [The product](docs/product.md): what Wheems is, and the opinions it holds
 - [Getting started](docs/getting-started.md): the setup walk-through
-- [Architecture](docs/architecture.md): the service, engines, integrations and guardrails
+- [Architecture](docs/architecture.md): what's built and what's planned: projects, tasks and their evaluation, routines, workflows, the vault, with a worked example
 - [Config formats](docs/config.md): every config file, including the parts not used yet
 - [Drivers and plugins](docs/drivers.md): the contracts and their contract tests
 - [The Herdr runtime driver](docs/herdr.md)
 - [Roadmap](docs/roadmap.md): the milestones and open questions
 - [Milestone 2 plan](docs/plans/milestone-2.md) and its [research](docs/research/knowledge-loop.md)
-- [Architecture ideas](docs/ideas/architecture.md): ideas for later milestones, not decisions
+- [Architecture ideas](docs/ideas/architecture.md), the [two design proposals](docs/ideas/proposal-claude.md) ([and the other](docs/ideas/proposal-codex.md)) and [the decisions taken](docs/ideas/decisions.md)
 
 ## Licence
 
