@@ -1,6 +1,8 @@
 <p align="center">
-  <img src="docs/assets/lockup-light.svg#gh-light-mode-only" alt="Wheems" width="360">
-  <img src="docs/assets/lockup-dark.svg#gh-dark-mode-only" alt="Wheems" width="360">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lockup-dark.svg">
+    <img src="docs/assets/lockup.svg" alt="Wheems" width="360">
+  </picture>
 </p>
 
 # Wheems
