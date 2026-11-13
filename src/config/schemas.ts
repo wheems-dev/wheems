@@ -209,8 +209,19 @@ export const workspaceSchema = z.strictObject({
         })
         .optional()
         .describe('The agent that files notes into the knowledge base.'),
+      tidy_at: z
+        .union([
+          z
+            .string()
+            .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use a 24-hour time, such as "03:00"'),
+          z.literal(false),
+        ])
+        .default('03:00')
+        .describe(
+          'When the nightly tidy runs, in local time: the filer writes reports/contradictions.md and reports/stale.md and refreshes the brief. false turns it off.',
+        ),
     })
-    .default({ note_after_idle: 30 })
+    .default({ note_after_idle: 30, tidy_at: '03:00' })
     .describe("How the workspace's knowledge loop runs."),
   machine: nameSchema.optional().describe('The machine agents run on by default.'),
   identity: z
@@ -258,7 +269,12 @@ export type AgentFrontMatter = z.infer<typeof agentFrontMatterSchema>;
 // skills.yaml ----------------------------------------------------------------
 
 export const skillsSchema = z.strictObject({
-  skills: z.record(nameSchema, nonEmpty.describe('A library version or content hash')).default({}),
+  skills: z
+    .record(
+      nameSchema,
+      z.number().int().positive().describe('The library version this workspace uses, such as 2'),
+    )
+    .default({}),
 });
 
 export type SkillsConfig = z.infer<typeof skillsSchema>;

@@ -73,6 +73,35 @@ every note it was built from.
   of it. Pages say what's true now; notes say what was true when they were written.
 `;
 
+export const SKILLS_INSTRUCTIONS = `## Proposing skills (built into Wheems)
+
+A skill is how to do a task that comes up again: the steps, the checks, and what to watch out
+for. When you've worked out how to do something you'll be asked to do again, propose it as a
+skill. The person reviews every proposal before any agent can use it.
+
+1. Look first: \`wheems skill list\`. If a skill already covers the task, improve that one
+   instead of making another. Read it before changing it: \`wheems skill show <name>\`.
+2. Propose the whole SKILL.md, new or changed:
+
+   \`\`\`sh
+   wheems skill propose weekly-report - <<'EOF'
+   ---
+   name: weekly-report
+   description: Writes the weekly report. Use when asked for a summary of the week.
+   ---
+
+   The steps, in plain English.
+   EOF
+   \`\`\`
+
+- Write lessons, not a log of what happened this time. Leave out one-off failures.
+- The description says what the skill does and when to use it, in a sentence or two.
+- Never put passwords, tokens or other secrets in a skill.
+- Skills a person wrote can't be changed by an agent. Tell the person what you'd change instead.
+- If the answer says your skill may repeat another, read that one and propose a change to it
+  instead, unless the two really are different tasks.
+`;
+
 /** What an agent knows when it starts: the page about the person and the workspace's brief. */
 export interface Knowledge {
   aboutYou: string | null;
@@ -92,7 +121,7 @@ export function withBuiltins(
     known.length === 0
       ? ''
       : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
-  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}${knows}`;
+  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${knows}`;
 }
 
 /** The message Wheems sends when it asks an agent for its note. */

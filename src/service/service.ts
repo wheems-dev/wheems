@@ -12,6 +12,7 @@ import { readSecrets } from '../secrets.js';
 import { ConversationManager, type Binding } from './conversations.js';
 import { listen, type ControlRequest, type ControlResponse } from './control.js';
 import { KnowledgeSearch } from '../knowledge/search.js';
+import { proposeSkill } from '../skills/proposals.js';
 import { FilingQueue } from './filing.js';
 import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
@@ -34,6 +35,8 @@ export interface ServiceOptions {
   filingSeconds?: number;
   /** How often to bring the search indexes up to date with hand edits; 0 turns it off. */
   indexSyncMs?: number;
+  /** How often to see whether a workspace's nightly tidy is due; 0 turns it off. */
+  tidyCheckMs?: number;
 }
 
 export interface RunningService {
@@ -194,6 +197,21 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             return { ok: true, path: await manager.note(request.conversation, request.text) };
           case 'reindex':
             return { ok: true, index: await search.index(request.workspace).rebuild() };
+          case 'propose-skill': {
+            const owner = await manager.owner(request.conversation);
+            const { proposal, message } = await proposeSkill({
+              home: options.home,
+              stateDir: where.state,
+              workspace: owner.workspace,
+              agent: owner.agent,
+              conversation: request.conversation,
+              name: request.name,
+              text: request.text,
+              embeddings: search.embeddings,
+            });
+            log(`Skill proposed by ${owner.agent} in ${owner.workspace}: ${proposal.id}`);
+            return { ok: true, message };
+          }
         }
       },
     );
@@ -218,6 +236,16 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         }, indexSyncMs)
       : undefined;
   syncTimer?.unref();
+  // After the notes left from before, so the tidy sees them filed.
+  const tidyCheckMs = options.tidyCheckMs ?? 60_000;
+  const tidyDue = () => {
+    void filing.tidyIfDue().catch((error: unknown) => {
+      log(`Nightly tidy: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  };
+  if (tidyCheckMs > 0) tidyDue();
+  const tidyTimer = tidyCheckMs > 0 ? setInterval(tidyDue, tidyCheckMs) : undefined;
+  tidyTimer?.unref();
 
   return {
     async stop() {
@@ -227,6 +255,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         }),
       );
       clearInterval(syncTimer);
+      clearInterval(tidyTimer);
       for (const channel of channels.values()) await channel.stop().catch(() => undefined);
       await manager.stop();
       filing.stop();

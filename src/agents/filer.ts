@@ -1,6 +1,7 @@
 import type { AgentDefinition } from '../contracts/engine.js';
 import { ABOUT_YOU_SUGGESTION, NOTE_FILE } from '../knowledge/filing.js';
 import { BRIEF_LIMIT } from '../knowledge/notes.js';
+import { REPORTS } from '../knowledge/tidy.js';
 
 /** Models the filer uses by default, by engine: a capable one that costs less than the chief of staff's. */
 export const FILER_MODELS: Record<string, string> = {
@@ -66,8 +67,51 @@ words joined by dashes.
 - If nothing in the note is worth keeping, change nothing and say so.
 `;
 
+export const TIDY_INSTRUCTIONS = `# The nightly tidy
+
+You are Wheems's filer for one workspace, doing the nightly tidy. You read the whole knowledge
+base and report what needs the person's attention. Nobody talks to you; you work alone, then
+finish.
+
+This folder is a copy of the knowledge base. Wheems checks what you write here before it
+reaches the real one.
+
+- \`brief.md\`: the workspace's brief. Every agent in the workspace reads it when it starts.
+- \`pages/\`: the knowledge base, one topic per page. Each page's front matter says when it was
+  last \`updated\`.
+- \`${REPORTS[0]}\` and \`${REPORTS[1]}\`: last night's reports, if there were any.
+
+## What to do
+
+1. Read every page and the brief.
+2. Write \`${REPORTS[0]}\`: every place where two pages, or a page and the brief,
+   say different things about the same fact. For each, name the pages, quote what each says, and
+   say which looks current and why (usually the one updated later). If there are none, say so in
+   one line.
+3. Write \`${REPORTS[1]}\`: pages that look out of date, such as work described as in progress
+   or a plan for a date that has passed, on a page not updated for weeks. For each, name the
+   page, say what looks stale, and what to check. If there are none, say so in one line.
+4. Rewrite \`brief.md\` so it says what an agent most needs to know when it starts, from the
+   pages as they are now: what's in progress, recent decisions, and what's waiting on the
+   person. Keep it under ${String(BRIEF_LIMIT)} characters.
+5. Finish with one short line saying what you found, such as
+   "2 contradictions, 1 stale page; brief refreshed."
+
+Start each report with a heading and the date. Write in plain English, briefly.
+
+## Rules
+
+- Change no page. Wheems keeps only the reports and the brief.
+- Never copy passwords, tokens or other secrets into a report or the brief.
+`;
+
 /** The filer, as an agent on the given engine, model and account. */
-export function filerAgent(engine: string, model: string, account: string): AgentDefinition {
+export function filerAgent(
+  engine: string,
+  model: string,
+  account: string,
+  instructions: string = FILER_INSTRUCTIONS,
+): AgentDefinition {
   return {
     name: 'filer',
     description: "Turns notes into the workspace's knowledge base.",
@@ -77,11 +121,16 @@ export function filerAgent(engine: string, model: string, account: string): Agen
     skills: [],
     integrations: [],
     permissions: 'auto',
-    instructions: FILER_INSTRUCTIONS,
+    instructions,
   };
 }
 
 /** The task the filer is started with. */
 export function filingTask(noteName: string): string {
   return `File the note in ${NOTE_FILE} (${noteName}) into this knowledge base, as your instructions say. Then finish with one short line saying what you changed.`;
+}
+
+/** The task the nightly tidy is started with. */
+export function tidyTask(today: string): string {
+  return `Tidy this knowledge base as your instructions say. Today is ${today}. Then finish with one short line saying what you found.`;
 }

@@ -1,0 +1,7 @@
+# Who wrote each version. A version not listed here was written by a person.
+versions:
+  2:
+    written_by: agent
+    workspace: acme
+    agent: developer
+    approved: 2026-11-13

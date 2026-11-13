@@ -218,6 +218,15 @@ export class ConversationManager {
     return file;
   }
 
+  /** The workspace and agent a conversation belongs to, as Wheems knows them. */
+  async owner(key: string): Promise<{ workspace: string; agent: string }> {
+    const conversation = await this.options.store.get(key);
+    if (!conversation) throw new Error(`No conversation ${key}`);
+    const binding = this.bindingFor(conversation);
+    if (!binding) throw new Error(`Workspace ${conversation.workspace} is not running here`);
+    return { workspace: binding.workspace.id, agent: this.chiefOfStaff(binding).definition.name };
+  }
+
   /** Starts looking, every `noteSweepMs`, for quiet conversations that need a note. */
   startNotes(): void {
     if (this.options.noteSweepMs <= 0 || this.sweepTimer) return;

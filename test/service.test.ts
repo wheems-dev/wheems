@@ -10,6 +10,7 @@ import { paths } from '../src/home.js';
 import { writeSecret } from '../src/secrets.js';
 import { request } from '../src/service/control.js';
 import { runService, type RunningService } from '../src/service/service.js';
+import { listProposals } from '../src/skills/proposals.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
 import { fakeAgent } from './helpers/fake-agent.js';
 
@@ -164,6 +165,45 @@ describe('the service', () => {
     );
     // Notes are never posted to the thread.
     expect(channel.sent).toHaveLength(1);
+  });
+
+  it('takes a skill proposal from an agent, for the person to review', async () => {
+    const first = await channel.receive({
+      channel: 'D1',
+      text: 'hello',
+      userId: 'UME',
+      direct: true,
+    });
+    await waitFor(() => channel.sent.length === 1);
+    const skill =
+      '---\ndescription: Writes the weekly report. Use when asked for one.\n---\n\nRead the git log for the week.\n';
+    const result = await cliReply(
+      `personal:slack:D1:${first}`,
+      // As the built-in instructions write it.
+      ['propose', 'weekly-report', '-'],
+      skill,
+      'skill',
+    );
+    expect(result).toMatchObject({
+      code: 0,
+      out: 'Proposed the new skill weekly-report. It waits for the person to review it.\n',
+    });
+    const [waiting] = await listProposals(paths(home, env).state);
+    expect(waiting?.proposal).toMatchObject({
+      name: 'weekly-report',
+      workspace: 'personal',
+      agent: 'chief-of-staff',
+      conversation: `personal:slack:D1:${first}`,
+    });
+    expect(waiting?.text).toContain('name: weekly-report');
+    const refused = await cliReply(
+      `personal:slack:D1:${first}`,
+      ['propose', 'Bad'],
+      skill,
+      'skill',
+    );
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(`"Bad" isn't a skill name`);
   });
 
   it('builds the search index when it starts, and rebuilds it when asked', async () => {

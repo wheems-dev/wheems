@@ -30,6 +30,7 @@ export class OllamaEmbeddings implements EmbeddingsDriver {
   readonly name = 'ollama';
   readonly model: string;
   readonly minimumSimilarity: number | undefined;
+  readonly nearDuplicate: number | undefined;
   private readonly url: string;
   private readonly timeoutMs: number;
   private readonly fetch: typeof fetch;
@@ -38,6 +39,8 @@ export class OllamaEmbeddings implements EmbeddingsDriver {
     this.model = options.model ?? OLLAMA_DEFAULT_MODEL;
     // Measured: related passages score 0.6 to 0.8 with nomic-embed-text, unrelated 0.4 to 0.55.
     this.minimumSimilarity = /nomic-embed/.test(this.model) ? 0.5 : undefined;
+    // Measured on skills: near-duplicates 0.84 to 0.94, different tasks 0.57 to 0.75.
+    this.nearDuplicate = /nomic-embed/.test(this.model) ? 0.8 : undefined;
     this.url = (options.url ?? OLLAMA_DEFAULT_URL).replace(/\/+$/, '');
     this.timeoutMs = options.timeoutMs ?? 120_000;
     this.fetch = options.fetch ?? globalThis.fetch;

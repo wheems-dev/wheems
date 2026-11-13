@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import { installYaml } from '../src/cli/templates.js';
 import { writeSecret } from '../src/secrets.js';
 import { loadInstall } from '../src/config/load.js';
 import { SqliteVectorStore } from '../src/drivers/vector-store/sqlite.js';
+import { proposeSkill } from '../src/skills/proposals.js';
 import { KnowledgeSearch } from '../src/knowledge/search.js';
 import { HashEmbeddings, MemoryChannel, StubEngine } from '../src/testing/index.js';
 
@@ -237,6 +238,38 @@ describe('doctor', () => {
     const broken = await knowledge();
     expect(broken[0]).toMatchObject({ name: 'embeddings', status: 'fail' });
     expect(broken[0]?.message).toMatch(/No embeddings driver named "nowhere"/);
+  });
+
+  it('says what waits for review, without failing', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    const { registry } = registryWith();
+    registry.register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }));
+    const review = async () => {
+      const report = await runDoctor({ ...probes, home, registry, quick: true });
+      return report.sections.find((s) => s.title === 'Review')?.checks[0];
+    };
+    expect(await review()).toMatchObject({ status: 'pass', message: 'Nothing waits for review' });
+    await proposeSkill({
+      home,
+      stateDir: join(home, '.wheems'),
+      workspace: 'personal',
+      agent: 'chief-of-staff',
+      conversation: null,
+      name: 'weekly-report',
+      text: '---\ndescription: Writes the weekly report.\n---\n\nRead the git log.\n',
+    });
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    writeFileSync(join(home, '.wheems', 'review', 'about-you', 'n-personal.md'), '# About you\n');
+    expect(await review()).toMatchObject({
+      status: 'warn',
+      message: '1 skill proposal and 1 change to about-you.md wait for review',
+      hint: 'Run: wheems review',
+    });
   });
 
   it('counts a folder as trusted when Claude Code trusted it or a folder around it', () => {

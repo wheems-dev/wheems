@@ -65,8 +65,8 @@ The search index is running state in `.wheems/index/`, never committed, and can 
      propose skills.
    - Longer guidance ships as built-in skills where the engine supports them.
 6. **Skill proposals.**
-   - `wheems skill propose <name>` saves a proposed skill to the install's library, marked as
-     waiting.
+   - `wheems skill propose <name>` saves a proposed skill for review in `.wheems/review/skills/`.
+     It reaches the library, as the next whole-numbered version, only once approved.
    - The proposing guidance carries the lessons from the research: improve an existing skill
      before making a new one, read before changing, write lessons not logs, and never record
      one-off failures.
@@ -77,7 +77,8 @@ The search index is running state in `.wheems/index/`, never committed, and can 
    - `wheems review` lists what's waiting: skill proposals and suggested changes to
      `about-you.md`. For each it shows the content or a diff, and you approve, edit or turn it
      down.
-   - An approved skill goes into the library, pinned in that workspace's `skills.yaml`.
+   - An approved skill goes into the library, pinned in that workspace's `skills.yaml`, and
+     review asks which agents there get it, with the one that proposed it ticked.
    - The filer suggests changes to `about-you.md`; it never edits it.
 8. **Nightly tidy.**
    - A built-in schedule runs the filer once a night. It writes
@@ -122,7 +123,13 @@ Then the live test: a day of real use, then the next morning a new thread asking
 ## Left for later
 
 - **Usage counts and archiving unused skills.** These come in milestone 4, with the skill
-  library's scoping.
+  library's scoping. Count how often each skill is used, then either suggest it ("these
+  haven't been used: disable or remove them?") or clean up on its own. Which of the two could be
+  a setting. Nothing is built for this yet.
+- **Loading approved skills into agents.** Approval records and pins a skill, and gives it to
+  the agents chosen, but nothing writes skills into an agent's session yet. Every agent in a
+  workspace runs in the same folder, so a skill written there would reach all of them, not only
+  the agents it was given to. How to scope it is still to be decided.
 - **A reviewer from a different provider checking skill proposals.** This comes in milestone 5,
   with agent templates.
 - **Notes before Claude Code compresses a long conversation.** Its `PreCompact` hook can't give

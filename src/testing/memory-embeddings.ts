@@ -11,6 +11,8 @@ export interface HashEmbeddingsOptions {
   synonyms?: Record<string, string>;
   /** Defaults to 0.2: texts with no words in common score near 0. */
   minimumSimilarity?: number;
+  /** Leave unset to have skill proposals compared by their words instead. */
+  nearDuplicate?: number;
 }
 
 /**
@@ -24,6 +26,7 @@ export class HashEmbeddings implements EmbeddingsDriver {
   readonly model: string;
   readonly dimensions: number;
   readonly minimumSimilarity: number;
+  readonly nearDuplicate: number | undefined;
   /** Every call, for tests to inspect. */
   readonly calls: { texts: string[]; purpose: EmbeddingPurpose }[] = [];
   private readonly synonyms: Record<string, string>;
@@ -34,6 +37,7 @@ export class HashEmbeddings implements EmbeddingsDriver {
     this.dimensions = options.dimensions ?? 64;
     this.synonyms = options.synonyms ?? {};
     this.minimumSimilarity = options.minimumSimilarity ?? 0.2;
+    this.nearDuplicate = options.nearDuplicate;
   }
 
   fail(message = 'The embeddings service is not answering'): void {

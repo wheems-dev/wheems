@@ -125,7 +125,8 @@
     },
     "knowledge": {
       "default": {
-        "note_after_idle": 30
+        "note_after_idle": 30,
+        "tidy_at": "03:00"
       },
       "description": "How the workspace's knowledge loop runs.",
       "type": "object",
@@ -160,6 +161,20 @@
             }
           },
           "additionalProperties": false
+        },
+        "tidy_at": {
+          "default": "03:00",
+          "description": "When the nightly tidy runs, in local time: the filer writes reports/contradictions.md and reports/stale.md and refreshes the brief. false turns it off.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ]
         }
       },
       "additionalProperties": false

@@ -14,11 +14,18 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('reply'), conversation: z.string().min(1), text: z.string().min(1) }),
   z.object({ op: z.literal('note'), conversation: z.string().min(1), text: z.string().min(1) }),
   z.object({ op: z.literal('reindex'), workspace: z.string().min(1) }),
+  z.object({
+    op: z.literal('propose-skill'),
+    conversation: z.string().min(1),
+    name: z.string().min(1),
+    text: z.string().min(1),
+  }),
 ]);
 
 export type ControlRequest = z.infer<typeof requestSchema>;
 export type ControlResponse =
-  { ok: true; version?: string; path?: string; index?: IndexStatus } | { ok: false; error: string };
+  | { ok: true; version?: string; path?: string; index?: IndexStatus; message?: string }
+  | { ok: false; error: string };
 
 export type ControlHandler = (request: ControlRequest) => Promise<ControlResponse>;
 

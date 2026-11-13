@@ -463,4 +463,126 @@ describe('the filing queue', () => {
     expect(readdirSync(join(home, '.wheems', 'review', 'about-you'))).toHaveLength(2);
     expect(git(home, 'log', '--format=%s').split('\n')).toHaveLength(2);
   });
+
+  describe('the nightly tidy', () => {
+    const ws = () => join(home, 'workspaces', 'personal');
+    const at = (time: string, day = '2026-11-13') => new Date(`${day}T${time}:00`);
+    let runs: number;
+
+    beforeEach(() => {
+      runs = 0;
+      const knowledge = knowledgePaths(ws());
+      writeFileSync(
+        join(knowledge.pages, 'boat-name.md'),
+        page('Boat name', ['a.md'], 'The boat is Halcyon.'),
+      );
+      writeFileSync(
+        join(knowledge.pages, 'mooring.md'),
+        page('Mooring', ['b.md'], 'The boat is called Kestrel. The mooring is booked for October.'),
+      );
+      git(home, 'add', '.');
+      git(home, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '--quiet', '-m', 'start');
+      act = (cwd) => {
+        runs++;
+        writeFileSync(
+          join(cwd, 'reports', 'contradictions.md'),
+          '# Contradictions\n\nboat-name says Halcyon; mooring says Kestrel.\n',
+        );
+        writeFileSync(
+          join(cwd, 'reports', 'stale.md'),
+          '# Stale\n\nmooring: October has passed.\n',
+        );
+        writeFileSync(join(cwd, 'brief.md'), 'The boat is Halcyon; check the mooring.\n');
+        return '1 contradiction, 1 stale page; brief refreshed.';
+      };
+    });
+
+    it('writes the reports and the brief once a night, after its time, and commits them', async () => {
+      const q = await queue();
+      await q.tidyIfDue(at('02:59'));
+      expect(runs).toBe(0);
+      await q.tidyIfDue(at('03:00'));
+      expect(runs).toBe(1);
+      const knowledge = knowledgePaths(ws());
+      expect(readFileSync(join(knowledge.reports, 'contradictions.md'), 'utf8')).toContain(
+        'Kestrel',
+      );
+      expect(readFileSync(join(knowledge.reports, 'stale.md'), 'utf8')).toContain('October');
+      expect(readFileSync(knowledge.brief, 'utf8')).toBe(
+        'The boat is Halcyon; check the mooring.\n',
+      );
+      expect(git(home, 'log', '-1', '--format=%s')).toBe('Tidied the knowledge base in personal');
+      expect(git(home, 'status', '--porcelain', 'workspaces/personal/knowledge')).toBe('');
+      await q.tidyIfDue(at('23:00'));
+      expect(runs).toBe(1);
+    });
+
+    it('skips a night when nothing changed, and runs again once a page has', async () => {
+      const q = await queue();
+      await q.tidy('personal', at('03:00'));
+      expect(await q.tidy('personal', at('03:00', '2026-11-14'))).toBe('skipped');
+      expect(runs).toBe(1);
+      writeFileSync(
+        join(knowledgePaths(ws()).pages, 'mooring.md'),
+        page('Mooring', ['b.md'], 'The mooring is booked for April.'),
+      );
+      expect(await q.tidy('personal', at('03:00', '2026-11-15'))).toBe('tidied');
+      expect(runs).toBe(2);
+    });
+
+    it('keeps no page changes, and skips a workspace with no pages', async () => {
+      act = (cwd) => {
+        runs++;
+        writeFileSync(join(cwd, 'pages', 'boat-name.md'), page('Boat name', [], 'Rewritten.'));
+        writeFileSync(join(cwd, 'reports', 'stale.md'), '# Stale\n\nNone.\n');
+        return 'Tidied.';
+      };
+      const q = await queue();
+      expect(await q.tidy('personal', at('03:00'))).toBe('tidied');
+      expect(readFileSync(join(knowledgePaths(ws()).pages, 'boat-name.md'), 'utf8')).toContain(
+        'Halcyon',
+      );
+      expect(logs.join('\n')).toContain('the nightly tidy only writes the reports and the brief');
+
+      rmSync(knowledgePaths(ws()).pages, { recursive: true });
+      mkdirSync(knowledgePaths(ws()).pages);
+      expect(await q.tidy('personal', at('03:00', '2026-11-14'))).toBe('skipped');
+      expect(runs).toBe(1);
+    });
+
+    it('applies nothing when a page changed, appeared or went while it worked', async () => {
+      const pages = knowledgePaths(ws()).pages;
+      const inner = act;
+      for (const change of [
+        () => {
+          writeFileSync(join(pages, 'mooring.md'), page('Mooring', ['b.md'], 'Cancelled.'));
+        },
+        () => {
+          writeFileSync(join(pages, 'new.md'), page('New', ['c.md'], 'A new page.'));
+        },
+        () => {
+          rmSync(join(pages, 'new.md'));
+        },
+      ]) {
+        act = (cwd) => {
+          change();
+          return inner(cwd);
+        };
+        const q = await queue();
+        expect(await q.tidy('personal', at('03:00', `2026-11-${String(13 + runs)}`))).toBe(
+          'failed',
+        );
+      }
+      expect(existsSync(join(knowledgePaths(ws()).reports, 'contradictions.md'))).toBe(false);
+      expect(logs.join('\n')).toContain('changed while the filer worked');
+    });
+
+    it('never runs when tidy_at is false', async () => {
+      const file = join(ws(), 'workspace.yaml');
+      writeFileSync(file, readFileSync(file, 'utf8') + 'knowledge:\n  tidy_at: false\n');
+      const q = await queue();
+      await q.tidyIfDue(at('23:59'));
+      expect(runs).toBe(0);
+    });
+  });
 });

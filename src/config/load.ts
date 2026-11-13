@@ -1,3 +1,4 @@
+import { listLibrary } from '../skills/library.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename, extname, join, relative } from 'node:path';
 import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, type Document } from 'yaml';
@@ -51,6 +52,8 @@ export interface LoadedInstall {
   config: InstallConfig | null;
   workspaces: LoadedWorkspace[];
   problems: Problem[];
+  /** The versions of each skill in the library, when it was read. */
+  library?: Map<string, number[]>;
 }
 
 /** Reads and validates an install folder: install.yaml and every workspace in it. */
@@ -67,7 +70,9 @@ export async function loadInstall(home: string): Promise<LoadedInstall> {
     if (!(await isDirectory(dir))) continue;
     workspaces.push(await loadWorkspace(dir, id, problems, display));
   }
-  return { home, config, workspaces, problems };
+  const library = new Map<string, number[]>();
+  for (const skill of await listLibrary(home)) library.set(skill.name, skill.versions);
+  return { home, config, workspaces, problems, library };
 }
 
 async function loadWorkspace(
