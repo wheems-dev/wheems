@@ -78,10 +78,11 @@ Wheems was formerly called Opinr.
 
 You need:
 
-- macOS (the service runs under launchd; Linux comes later)
+- macOS (the service runs under launchd; Linux, with systemd, comes with the always-on
+  milestone)
 - Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
   search, which Wheems needs)
-- Herdr core 0.1.20 or later (`hc`)
+- Herdr core 0.1.20 or later (`hc`): see [herdr.dev/core](https://herdr.dev/core/) to install it
 - A Slack workspace where you can add apps
 
 Install the `wheems` command from npm:
@@ -143,6 +144,14 @@ One Slack app serves every workspace, so you do this once.
 5. Give your Slack member ID (your profile, **⋯**, **Copy member ID**). Only people on this list
    can talk to your agents. Messages from anyone else are ignored.
 
+### Inviting the app to a channel
+
+A workspace that chats in a channel needs the app in that channel: in the channel, type
+`/invite` and choose the app. Slack lists public channels the app isn't in, so a channel name
+that's spelt right can still hear nothing; the service warns at start-up and `wheems doctor`
+checks it. The service looks channels up when it starts, so after creating a channel or renaming
+one, run `wheems service restart`.
+
 ### Trusting the workspace folder
 
 Claude Code and Codex ask once whether to trust a new folder, and nobody can answer that from
@@ -151,7 +160,9 @@ folder, then press Ctrl+C twice to come back. `wheems doctor` checks the trust.
 
 ### Without the menu
 
-Each part has a command of its own, for scripts:
+Each part has a command of its own, for scripts. `wheems init` creates the install too when
+there isn't one, so a fresh machine can start there; connecting Slack still needs `wheems setup`,
+because you type its tokens in yourself:
 
 ```bash
 wheems init personal                                   # a workspace on Claude Code
@@ -228,8 +239,9 @@ can be given skills, but nothing starts them yet: teams of agents come in later 
 Message the Slack app (or the workspace's channel). Each message you send starts a
 **conversation**, and replies in its thread carry it on.
 
-- Each conversation is its own engine session in Herdr, named after the workspace and agent.
-  Watch it or take over with `hc attach <session>`.
+- Each conversation is its own engine session in Herdr, named after the workspace with a short
+  id for the thread, such as `personal-3f9a2c1b`. Watch it or take over with
+  `hc attach <session>`.
 - A 👀 reaction means your message has reached the agent. It goes when the agent answers.
 - The agent's last message of each turn is posted to the thread as its answer. The answer is
   read from the engine's own record of the conversation, never from the screen.
@@ -508,8 +520,9 @@ from its workspace's skills. Pinned skill versions must exist in the library.
 
 ## Command reference
 
-Every command takes `--home <dir>` for the install folder (default: `$WHEEMS_HOME`, then
-`~/wheems`).
+Commands that use the install take `--home <dir>` for the install folder (default:
+`$WHEEMS_HOME`, then `~/wheems`). `wheems service restart`, `service uninstall` and
+`slack manifest` don't need it.
 
 **For you**
 

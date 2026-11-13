@@ -434,13 +434,20 @@ async function systemChecks(options: DoctorOptions): Promise<HealthCheck[]> {
         },
   );
   checks.push(
-    platform === 'darwin' || platform === 'linux'
-      ? { name: 'platform', status: 'pass', message: platform === 'darwin' ? 'macOS' : 'Linux' }
-      : {
-          name: 'platform',
-          status: 'warn',
-          message: `${platform} is not supported yet; Wheems runs on macOS and Linux`,
-        },
+    platform === 'darwin'
+      ? { name: 'platform', status: 'pass', message: 'macOS' }
+      : platform === 'linux'
+        ? {
+            name: 'platform',
+            status: 'warn',
+            message:
+              'Linux: the commands work, but the service runs under launchd on macOS only; systemd comes with the always-on milestone',
+          }
+        : {
+            name: 'platform',
+            status: 'warn',
+            message: `${platform} is not supported yet; Wheems runs on macOS (and Linux, apart from the service)`,
+          },
   );
   return checks;
 }

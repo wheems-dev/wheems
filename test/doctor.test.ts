@@ -64,7 +64,7 @@ describe('doctor', () => {
       home,
       registry: registryWith().registry,
       nodeVersion: '22.16.0',
-      platform: 'linux',
+      platform: 'darwin',
     });
     expect(report.ok).toBe(true);
     expect(statuses(report)).toEqual({
@@ -73,6 +73,25 @@ describe('doctor', () => {
       Config: ['skip install'],
     });
     expect(formatReport(report, false)).toMatch(/Doctor passed\.\n$/);
+  });
+
+  it('warns on Linux that the service needs macOS for now', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    const report = await runDoctor({
+      ...probes,
+      home,
+      registry: registryWith().registry,
+      quick: true,
+      nodeVersion: '22.16.0',
+      platform: 'linux',
+    });
+    const platform = report.sections[0]?.checks.find((c) => c.name === 'platform');
+    expect(platform).toMatchObject({ status: 'warn' });
+    expect(platform?.message).toMatch(/launchd on macOS only/);
+    expect(report.ok).toBe(true);
   });
 
   it('fails on Node 23, and on a Node whose SQLite has no full-text search', async () => {

@@ -104,7 +104,7 @@ export function createProgram(io: Io): Command {
 
   program
     .command('setup')
-    .description('Set up Wheems: connect channels, create workspaces, run the service')
+    .description('Set up Wheems: engines, chat channels, workspaces, search and the service')
     .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (options: { home?: string }) => {
       if (!process.stdin.isTTY || !process.stdout.isTTY) {

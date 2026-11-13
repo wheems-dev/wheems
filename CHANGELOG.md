@@ -10,6 +10,11 @@ change anything, including commands and config formats, without a migration path
 - `wheems` on its own shows a welcome screen: the cloud from the brand kit, in blue, beside the
   name and "Your crew, ready for work.", then how the install is doing (workspaces and agents,
   the service, search, and anything waiting for review). `wheems setup` opens with the cloud too.
+- `wheems init` creates the install when there isn't one, so setup can be scripted from a fresh
+  machine (connecting Slack still needs `wheems setup`).
+- `wheems doctor` checks that Claude Code is signed in (`claude auth status`), and that the app is
+  a member of each workspace's chat channel: Slack lists public channels the app isn't in, and
+  sends no messages from them. The service warns about such a channel when it starts.
 
 **Fixed**
 
@@ -20,6 +25,24 @@ change anything, including commands and config formats, without a migration path
   "no such module: fts5".
 - `npm run build` now marks `dist/cli/main.js` executable, so a `wheems` linked with `npm link`
   runs instead of failing with "Permission denied".
+- Slack messages with a file attached were silently ignored. Now a file with no words gets a reply
+  asking for the text, and with words the agent gets them and a note that files can't be passed
+  on yet.
+- After connecting Slack, setup says to restart the service (which reads tokens only when it
+  starts) and how to let someone else talk to the agents.
+- On Linux, `wheems doctor` warns that the service needs macOS for now instead of passing.
+- Docs: where to install Herdr core ([herdr.dev/core](https://herdr.dev/core/)), npm as the way
+  to install, inviting the app to a channel, session names, which commands take `--home`, a
+  broken table in config.md, and milestone numbers in code comments.
+
+**Known issues**
+
+- Only one Slack connection, named `slack`, can be set up from `wheems setup` and `wheems init`;
+  a second Slack app has to be added by hand.
+- The Slack app's manifest asks for interactivity, which nothing uses until approvals with
+  buttons (milestone 3).
+- The launchd label is fixed, so only one install per Mac user can run as a service.
+- `wheems kb search --json` reports inbox notes as `kind: note`; the path tells them apart.
 
 ## 0.0.1
 

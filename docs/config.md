@@ -145,12 +145,14 @@ Review the pull request you are given. Report findings; do not change code.
 prompts, `auto` lets the engine allow routine actions and ask for risky ones, and `skip` never
 asks.
 
-| Engine                                                                               | `model`, for example                            | `auto`                                           | `skip`                                       |
-| ------------------------------------------------------------------------------------ | ----------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
-| claude-code                                                                          | `claude-opus-5-5`                               | `--permission-mode auto`                         | `--dangerously-skip-permissions`             |
-| codex                                                                                | `gpt-6.1-sol`                                   | `--approve-for-me`                               | `--dangerously-bypass-approvals-and-sandbox` |
-| opencode                                                                             | `openrouter/x-ai/grok-5`, `opencode/big-pickle` | `--auto` (approves what its config doesn't deny) | `--auto`                                     | Until approvals arrive, a prompt means someone has to answer it at |
-| the machine, so a chief of staff you talk to from your phone usually runs on `auto`. |
+| Engine      | `model`, for example                            | `auto`                                           | `skip`                                       |
+| ----------- | ----------------------------------------------- | ------------------------------------------------ | -------------------------------------------- |
+| claude-code | `claude-opus-5-5`                               | `--permission-mode auto`                         | `--dangerously-skip-permissions`             |
+| codex       | `gpt-6.1-sol`                                   | `--approve-for-me`                               | `--dangerously-bypass-approvals-and-sandbox` |
+| opencode    | `openrouter/x-ai/grok-5`, `opencode/big-pickle` | `--auto` (approves what its config doesn't deny) | `--auto`                                     |
+
+Until approvals arrive, a prompt means someone has to answer it at the machine, so a chief of
+staff you talk to from your phone usually runs on `auto`.
 
 Every agent also gets Wheems's built-in instructions: its last message of each turn is posted to
 the chat thread for it, and `wheems reply "..."` sends a progress note during long work.
