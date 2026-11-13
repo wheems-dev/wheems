@@ -202,6 +202,12 @@ async function channels(options: SetupOptions, where: Paths): Promise<boolean> {
   );
   await writeFile(where.install, doc.toString());
   ui.success(`${entry.label} is connected. Its tokens are saved privately in ${where.secrets}`);
+  ui.info(
+    [
+      'The service reads tokens when it starts: restart it (Service) for these to take effect.',
+      `To let someone else talk to your agents, add their member ID to allowed_users under connections.${connection} in install.yaml, then restart the service.`,
+    ].join('\n'),
+  );
   return true;
 }
 

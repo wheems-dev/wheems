@@ -17,7 +17,7 @@ import { registerSkill } from './commands/skill.js';
 import { registerNote } from './commands/note.js';
 import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
-import { setup } from './commands/setup.js';
+import { ensureInstall, setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
 import { renderWelcome, welcomeStatus } from './welcome.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
@@ -104,7 +104,7 @@ export function createProgram(io: Io): Command {
 
   program
     .command('setup')
-    .description('Set up Wheems: connect channels, create workspaces, run the service')
+    .description('Set up Wheems: engines, chat channels, workspaces, search and the service')
     .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (options: { home?: string }) => {
       if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -155,7 +155,7 @@ export function createProgram(io: Io): Command {
 
   program
     .command('init')
-    .description('Create a workspace with its chief of staff')
+    .description('Create a workspace with its chief of staff (and the install, if there is none)')
     .argument('<workspace>', 'the workspace id, such as personal')
     .option('--name <name>', 'its display name (default: from the id)')
     .option('--channel <channel>', "chat in this channel instead of the bot's direct messages")
@@ -184,8 +184,12 @@ export function createProgram(io: Io): Command {
           throw new Error(`No engine "${options.engine}". Choose one of: ${known}`);
         }
         const setup = entry.engine;
+        const home = resolve(options.home ?? defaultHome(io.env));
+        // On a fresh machine, init makes the install too, so setup can be scripted.
+        const createdInstall = await ensureInstall(paths(home, io.env));
+        if (createdInstall) io.out(`Created the install at ${home} (a git folder)\n`);
         const dir = await initWorkspace({
-          home: resolve(options.home ?? defaultHome(io.env)),
+          home,
           id,
           env: io.env,
           engine: {

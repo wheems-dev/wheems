@@ -7,7 +7,7 @@ You need:
 
 - Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
   search, which Wheems needs)
-- Herdr core 0.1.20 or later (`hc`)
+- Herdr core 0.1.20 or later (`hc`): see [herdr.dev/core](https://herdr.dev/core/) to install it
 - A Slack workspace where you can add apps
 
 Setup installs the agent CLIs for you: Claude Code, Codex or opencode.
@@ -18,12 +18,13 @@ Setup installs the agent CLIs for you: Claude Code, Codex or opencode.
 npm install -g wheems
 ```
 
-Until the first release, build it from this repository instead, and run `wheems` as
-`node /path/to/wheems/dist/cli/main.js`:
+Or build it from this repository (clone it anywhere except `~/wheems`, which is your install),
+and link the command:
 
 ```bash
 npm install
 npm run build
+npm link
 ```
 
 If your default `node` isn't one of those (Homebrew's `node` may be 23), run Wheems with one that is, such as Homebrew's 22:

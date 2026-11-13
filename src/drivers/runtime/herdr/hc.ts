@@ -277,7 +277,7 @@ function toHcError(error: ExecFileException, stderr: string, binary: string): Hc
     return new HcError(
       'missing',
       `Herdr core's hc command was not found (${binary})`,
-      'Install Herdr core, or make sure hc is on PATH.',
+      'Install Herdr core (https://herdr.dev/core/), or make sure hc is on PATH.',
       null,
       { cause: error },
     );

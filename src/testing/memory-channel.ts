@@ -92,6 +92,7 @@ export class MemoryChannel implements ChannelDriver {
     threadId?: string;
     userId?: string;
     direct?: boolean;
+    files?: { name: string }[];
   }): Promise<string> {
     const messageId = this.id();
     await this.handler?.({
@@ -103,6 +104,7 @@ export class MemoryChannel implements ChannelDriver {
       text: message.text,
       direct: message.direct ?? false,
       receivedAt: new Date(),
+      ...(message.files !== undefined && { files: message.files }),
     });
     return messageId;
   }

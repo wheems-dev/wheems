@@ -5,7 +5,7 @@ import { z } from 'zod';
 /**
  * Credentials, by name: `secrets.slack.bot_token`. They live in a private file on
  * this machine (mode 600), outside the install folder, and never pass through an
- * agent. The encrypted secret store comes in milestone 8.
+ * agent. The vault (the Keychain, or an encrypted file on servers) comes in milestone 9.
  */
 export type Secrets = Record<string, Record<string, string>>;
 

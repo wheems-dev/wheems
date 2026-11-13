@@ -64,7 +64,7 @@ describe('doctor', () => {
       home,
       registry: registryWith().registry,
       nodeVersion: '22.16.0',
-      platform: 'linux',
+      platform: 'darwin',
     });
     expect(report.ok).toBe(true);
     expect(statuses(report)).toEqual({
@@ -73,6 +73,25 @@ describe('doctor', () => {
       Config: ['skip install'],
     });
     expect(formatReport(report, false)).toMatch(/Doctor passed\.\n$/);
+  });
+
+  it('warns on Linux that the service needs macOS for now', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    const report = await runDoctor({
+      ...probes,
+      home,
+      registry: registryWith().registry,
+      quick: true,
+      nodeVersion: '22.16.0',
+      platform: 'linux',
+    });
+    const platform = report.sections[0]?.checks.find((c) => c.name === 'platform');
+    expect(platform).toMatchObject({ status: 'warn' });
+    expect(platform?.message).toMatch(/launchd on macOS only/);
+    expect(report.ok).toBe(true);
   });
 
   it('fails on Node 23, and on a Node whose SQLite has no full-text search', async () => {
@@ -208,6 +227,42 @@ describe('doctor', () => {
     ]);
     expect(statuses(after).Service).toEqual(['pass service']);
     expect(after.ok).toBe(true);
+  });
+
+  it("warns when the app isn't in a workspace's chat channel, and fails when it can't see it", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'team', channel: 'team-chat' });
+    await initWorkspace({ home, id: 'typo', channel: 'no-such-channel' });
+    class SeesChannels extends MemoryChannel {
+      resolveChannel(name: string) {
+        return Promise.resolve(name === 'team-chat' ? 'C0TEAM001' : null);
+      }
+      // Slack lists public channels the app isn't in; this one it isn't.
+      isMember() {
+        return Promise.resolve(false);
+      }
+    }
+    const { registry } = registryWith();
+    registry
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
+      .register('channel', 'slack', () => new SeesChannels());
+    const env = { WHEEMS_SECRETS: join(home, 'secrets.json') };
+    await writeSecret(env.WHEEMS_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
+    const report = await runDoctor({ ...probes, home, registry, env, quick: true });
+    const channels = report.sections.find((x) => x.title === 'Channels')?.checks ?? [];
+    expect(channels.find((c) => c.name === 'team chat channel')).toMatchObject({
+      status: 'warn',
+      message: "The app isn't in team-chat, so messages there never reach the chief of staff",
+      hint: 'In team-chat, type /invite and choose the app.',
+    });
+    expect(channels.find((c) => c.name === 'typo chat channel')).toMatchObject({ status: 'fail' });
+    // The direct-messages workspace has nothing to check.
+    expect(channels.some((c) => c.name.startsWith('personal'))).toBe(false);
   });
 
   it("checks the embeddings driver and each workspace's search index", async () => {

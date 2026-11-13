@@ -168,8 +168,29 @@ export class ConversationManager {
       event.channel,
       replyThread(event),
     );
+    let message = event;
+    // Files can't reach the agent yet. Say so, rather than leave them unanswered.
+    if (event.files !== undefined && event.files.length > 0) {
+      const names = event.files.map((f) => f.name).join(', ');
+      if (event.text.trim() === '') {
+        return this.enqueue(key, () =>
+          this.notice(
+            key,
+            binding,
+            replyThread(event),
+            `I can't open files yet (${names}). Paste the text, or say in words what you need.`,
+          ).catch((error: unknown) => {
+            this.options.log(`Conversation ${key}: ${describe(error)}`);
+          }),
+        );
+      }
+      message = {
+        ...event,
+        text: `${event.text}\n\n(The person attached ${event.files.length === 1 ? 'a file' : `${String(event.files.length)} files`}: ${names}. Wheems can't pass files to you yet, so if you need what's in them, ask the person to paste it.)`,
+      };
+    }
     return this.enqueue(key, () =>
-      this.deliver(key, binding, event).catch((error: unknown) => {
+      this.deliver(key, binding, message).catch((error: unknown) => {
         this.options.log(`Conversation ${key}: ${describe(error)}`);
         return this.notice(
           key,
@@ -366,6 +387,8 @@ export class ConversationManager {
           const wait = since + this.options.typeDelayMs - Date.now();
           if (wait > 0) await sleep(wait);
         }
+        // Taken before sending: a quick agent can reply before the turn is being followed.
+        const sentAt = Date.now();
         const sent = await this.options.runtime.send(session.id, event.text);
         await this.options.store.touch(key, now);
         await this.options.store.addPending(key);
@@ -376,6 +399,8 @@ export class ConversationManager {
           sent.turn,
           seen,
           this.conversationFor(key, binding),
+          false,
+          sentAt,
         );
       } catch (error) {
         if (!isDriverError(error, 'blocked')) throw error;
@@ -429,7 +454,17 @@ export class ConversationManager {
       pending: 1,
     });
     // A new session's turns count from 0; its first turn is the message it was started with.
-    this.watchTurn(key, binding, sessionName, 0, seen, this.conversationFor(key, binding));
+    // `now` was taken before the session started, so a reply to its first message counts.
+    this.watchTurn(
+      key,
+      binding,
+      sessionName,
+      0,
+      seen,
+      this.conversationFor(key, binding),
+      false,
+      now.getTime(),
+    );
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
     this.trimLater(binding.workspace.id, sessionName);
   }
@@ -554,6 +589,8 @@ export class ConversationManager {
     seen: MessageRef | null,
     target: Pick<Watch, 'conversation' | 'engine'>,
     recovered = false,
+    /** When the message was handed to the agent; replies from then on count as its answer. */
+    sentAt = Date.now(),
   ): void {
     const active = this.watches.get(key);
     if (active && active.sessionName === sessionName && !active.closed) {
@@ -565,7 +602,7 @@ export class ConversationManager {
     const watch: Watch = {
       sessionName,
       fromTurn,
-      sentAt: Date.now(),
+      sentAt,
       seen: seen ? [seen] : [],
       queued: [],
       closed: false,

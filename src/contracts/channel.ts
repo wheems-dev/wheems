@@ -2,7 +2,7 @@ import type { Driver, HealthCheck } from './driver.js';
 
 /**
  * The channel contract: sends and receives messages, buttons and threads.
- * Version one ships Slack (milestone 1) and Telegram and email (milestone 9).
+ * Version one ships Slack (milestone 1) and Telegram and email (milestone 10).
  *
  * A channel driver holds one connection, such as one Slack app. Channels inside
  * it are addressed by the driver's own channel id.
@@ -33,6 +33,18 @@ export interface ChannelDriver extends Driver<'channel'> {
 
   /** Disconnects. No handler calls happen after it resolves. Safe to call twice. */
   stop(): Promise<void>;
+
+  /**
+   * Optional: a channel's id from its name (or its id), or null when the app can't see it.
+   * Drivers without it take channel names as ids.
+   */
+  resolveChannel?(nameOrId: string): Promise<string | null>;
+
+  /**
+   * Optional: whether the app is a member of a channel, so messages there reach it. Null when it
+   * can't tell. Seeing a channel isn't enough: Slack lists public channels the app isn't in.
+   */
+  isMember?(channelId: string): Promise<boolean | null>;
 }
 
 export interface MessageRef {
@@ -67,6 +79,8 @@ export interface InboundMessage {
   /** True for a direct message between the person and the bot. */
   direct: boolean;
   receivedAt: Date;
+  /** Files attached to it, by name. Wheems can't pass their contents on yet. */
+  files?: { name: string }[];
 }
 
 export interface ButtonPress {

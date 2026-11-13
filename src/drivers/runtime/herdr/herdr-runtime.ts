@@ -55,7 +55,7 @@ export class HerdrRuntime implements RuntimeDriver {
         name: 'hc installed',
         status: 'fail',
         message: describe(error),
-        hint: 'Install Herdr core and make sure hc is on PATH.',
+        hint: 'Install Herdr core (https://herdr.dev/core/) and make sure hc is on PATH.',
       });
       return checks;
     }
