@@ -97,3 +97,31 @@ describe('wheems CLI', () => {
     }
   });
 });
+
+describe('wheems init on a fresh machine', () => {
+  it('creates the install as well as the workspace, so setup can be scripted', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const join = (...parts: string[]) => path.join(...parts);
+    const exists = (file: string) => fs.existsSync(file);
+    const home = join(fs.mkdtempSync(join(os.tmpdir(), 'wheems-fresh-')), 'wheems');
+    try {
+      let out = '';
+      const code = await run(['init', 'personal', '--home', home], {
+        out: (text) => (out += text),
+        err: () => undefined,
+        env: {},
+        color: false,
+        ...defaultIo(),
+      });
+      expect(code).toBe(0);
+      expect(out).toContain(`Created the install at ${home}`);
+      expect(exists(join(home, 'install.yaml'))).toBe(true);
+      expect(exists(join(home, '.git'))).toBe(true);
+      expect(exists(join(home, 'workspaces', 'personal', 'workspace.yaml'))).toBe(true);
+    } finally {
+      fs.rmSync(join(home, '..'), { recursive: true, force: true });
+    }
+  });
+});
