@@ -550,6 +550,33 @@ describe('the filing queue', () => {
       expect(runs).toBe(1);
     });
 
+    it('applies nothing when a page changed, appeared or went while it worked', async () => {
+      const pages = knowledgePaths(ws()).pages;
+      const inner = act;
+      for (const change of [
+        () => {
+          writeFileSync(join(pages, 'mooring.md'), page('Mooring', ['b.md'], 'Cancelled.'));
+        },
+        () => {
+          writeFileSync(join(pages, 'new.md'), page('New', ['c.md'], 'A new page.'));
+        },
+        () => {
+          rmSync(join(pages, 'new.md'));
+        },
+      ]) {
+        act = (cwd) => {
+          change();
+          return inner(cwd);
+        };
+        const q = await queue();
+        expect(await q.tidy('personal', at('03:00', `2026-11-${String(13 + runs)}`))).toBe(
+          'failed',
+        );
+      }
+      expect(existsSync(join(knowledgePaths(ws()).reports, 'contradictions.md'))).toBe(false);
+      expect(logs.join('\n')).toContain('changed while the filer worked');
+    });
+
     it('never runs when tidy_at is false', async () => {
       const file = join(ws(), 'workspace.yaml');
       writeFileSync(file, readFileSync(file, 'utf8') + 'knowledge:\n  tidy_at: false\n');

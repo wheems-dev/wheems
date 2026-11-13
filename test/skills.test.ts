@@ -152,7 +152,7 @@ describe('proposing a skill', () => {
       'Proposed the new skill weekly-report. It waits for the person to review it.\n',
     );
     expect(proposal).toMatchObject({
-      id: '20261113-091500-weekly-report',
+      id: expect.stringMatching(/^20261113-091500-weekly-report-[0-9a-f]{6}$/) as string,
       basedOn: null,
       similar: [],
       workspace: 'personal',
@@ -187,7 +187,16 @@ describe('proposing a skill', () => {
     });
     expect(message).toContain('It replaces the earlier proposal for it.');
     const waiting = await listProposals(state);
-    expect(waiting.map((w) => w.proposal.id)).toEqual(['20261113-100000-weekly-report']);
+    expect(waiting.map((w) => w.proposal.id)).toEqual([
+      expect.stringMatching(/^20261113-100000-weekly-report-/),
+    ]);
+    // Two in the same second: the later one is kept.
+    await propose('weekly-report', WEEKLY.replace('seven', 'nine'), {
+      now: new Date('2026-11-13T10:00:00Z'),
+    });
+    const kept = await listProposals(state);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.text).toContain('nine');
     await expect(
       propose('weekly-report', WEEKLY, { workspace: 'acme', agent: 'developer' }),
     ).rejects.toThrow(/from the personal workspace is already waiting/);

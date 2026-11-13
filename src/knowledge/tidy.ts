@@ -34,6 +34,24 @@ export async function prepareTidyFolder(folder: string, workspaceDir: string): P
   return tidySnapshot(folder);
 }
 
+/** The brief, pages and reports in a workspace's knowledge folder, as the tidy copies them. */
+async function knowledgeSnapshot(workspaceDir: string): Promise<Snapshot> {
+  const knowledge = knowledgePaths(workspaceDir);
+  const files: Snapshot = new Map();
+  const brief = await readFile(knowledge.brief, 'utf8').catch(() => null);
+  if (brief !== null) files.set('brief.md', brief);
+  for (const name of await readdir(knowledge.pages).catch(() => [] as string[])) {
+    if (!PAGE_NAME.test(name)) continue;
+    const text = await readFile(join(knowledge.pages, name), 'utf8').catch(() => null);
+    if (text !== null) files.set(`pages/${name}`, text);
+  }
+  for (const report of REPORTS) {
+    const text = await readFile(join(knowledge.root, report), 'utf8').catch(() => null);
+    if (text !== null) files.set(report, text);
+  }
+  return files;
+}
+
 /** The brief, pages and reports in a tidy's folder. */
 export async function tidySnapshot(folder: string): Promise<Snapshot> {
   const files = await snapshot(folder);
@@ -95,8 +113,9 @@ export async function reviewTidy(
 }
 
 /**
- * Writes the tidy's accepted files into the knowledge folder, unless one changed since the
- * tidy took its copy: a person's edit, or a note filed meanwhile, is never overwritten.
+ * Writes the tidy's accepted files into the knowledge folder, unless anything it read or
+ * writes changed since it took its copy: a person's edit, or a note filed meanwhile, is never
+ * overwritten, and reports are never published about pages that have since changed.
  * Returns the paths changed, relative to the workspace folder.
  */
 export async function applyTidy(
@@ -105,11 +124,13 @@ export async function applyTidy(
   before: Snapshot,
 ): Promise<{ ok: true; changed: string[] } | { ok: false; conflicts: string[] }> {
   const knowledge = knowledgePaths(workspaceDir);
-  const conflicts: string[] = [];
-  for (const path of accepted.keys()) {
-    const current = await readFile(join(knowledge.root, path), 'utf8').catch(() => null);
-    if (current !== (before.get(path) ?? null)) conflicts.push(path);
-  }
+  // Everything the tidy read, and everything it writes: a page added, changed or deleted
+  // meanwhile makes its reports out of date.
+  const now = await knowledgeSnapshot(workspaceDir);
+  const paths = new Set([...before.keys(), ...now.keys(), ...accepted.keys()]);
+  const conflicts = [...paths]
+    .filter((path) => (now.get(path) ?? null) !== (before.get(path) ?? null))
+    .sort();
   if (conflicts.length > 0) return { ok: false, conflicts };
   const changed: string[] = [];
   for (const [path, text] of accepted) {

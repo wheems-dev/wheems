@@ -17,8 +17,14 @@ export function registerSkill(program: Command, io: Io): void {
       'Propose a new skill, or a change to one, for the person to review (agents run this)',
     )
     .argument('<name>', 'the skill, in lowercase words joined by dashes')
+    .argument('[input]', '"-": read the SKILL.md from standard input, which is also the default')
     .option('--home <dir>', homeHelp)
-    .action(async (name: string, options: { home?: string }) => {
+    .action(async (name: string, input: string | undefined, options: { home?: string }) => {
+      if (input !== undefined && input !== '-') {
+        throw new Error(
+          'Pipe the SKILL.md in on standard input, with "-" or nothing after the name.',
+        );
+      }
       const conversation = io.env.WHEEMS_CONVERSATION;
       if (conversation === undefined || conversation === '') {
         throw new Error(

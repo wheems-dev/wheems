@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { cosine } from '../contracts/vector-store.js';
@@ -18,7 +19,7 @@ import {
  * library.
  *
  * ```
- * .wheems/review/skills/20261113-091500-weekly-report/
+ * .wheems/review/skills/20261113-091500-weekly-report-3f9a2c/
  *   SKILL.md
  *   proposal.json
  * ```
@@ -150,7 +151,8 @@ export async function proposeSkill(
   const similar = await findSimilar(skillText(skill), others, options.embeddings ?? null);
 
   const now = options.now ?? new Date();
-  const id = `${stamp(now)}-${skill.name}`;
+  // Unique even for two proposals in the same second; sorts by time.
+  const id = `${stamp(now)}-${skill.name}-${randomBytes(3).toString('hex')}`;
   const proposal: Proposal = {
     id,
     name: skill.name,
@@ -169,7 +171,7 @@ export async function proposeSkill(
   await writeFile(join(staging, 'proposal.json'), `${JSON.stringify(proposal, null, 2)}\n`);
   await rm(join(root, id), { recursive: true, force: true });
   await rename(staging, join(root, id));
-  for (const old of earlier) await removeProposal(old);
+  for (const old of earlier) if (old.proposal.id !== id) await removeProposal(old);
 
   const what =
     existing === undefined

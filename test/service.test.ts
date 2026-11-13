@@ -179,7 +179,8 @@ describe('the service', () => {
       '---\ndescription: Writes the weekly report. Use when asked for one.\n---\n\nRead the git log for the week.\n';
     const result = await cliReply(
       `personal:slack:D1:${first}`,
-      ['propose', 'weekly-report'],
+      // As the built-in instructions write it.
+      ['propose', 'weekly-report', '-'],
       skill,
       'skill',
     );
