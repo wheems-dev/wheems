@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/icon.svg" alt="" width="112">
+  <img src="https://wheems.dev/brand/wheems-icon-512.png" alt="Wheems" width="112">
 </p>
 
 <h1 align="center">Wheems</h1>
