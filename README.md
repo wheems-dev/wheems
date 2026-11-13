@@ -50,6 +50,7 @@ doctor`). Doctor fails with the version it found when Node.js is too old.
 - [Drivers and plugins](docs/drivers.md): the contracts and their contract tests
 - [The Herdr runtime driver](docs/herdr.md)
 - [Roadmap](docs/roadmap.md): version one, the milestones, and open questions
+- [Architecture ideas](docs/ideas/architecture.md): ideas and open questions for later milestones, not decisions
 
 ## Developing
 
