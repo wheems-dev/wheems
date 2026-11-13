@@ -168,8 +168,29 @@ export class ConversationManager {
       event.channel,
       replyThread(event),
     );
+    let message = event;
+    // Files can't reach the agent yet. Say so, rather than leave them unanswered.
+    if (event.files !== undefined && event.files.length > 0) {
+      const names = event.files.map((f) => f.name).join(', ');
+      if (event.text.trim() === '') {
+        return this.enqueue(key, () =>
+          this.notice(
+            key,
+            binding,
+            replyThread(event),
+            `I can't open files yet (${names}). Paste the text, or say in words what you need.`,
+          ).catch((error: unknown) => {
+            this.options.log(`Conversation ${key}: ${describe(error)}`);
+          }),
+        );
+      }
+      message = {
+        ...event,
+        text: `${event.text}\n\n(The person attached ${event.files.length === 1 ? 'a file' : `${String(event.files.length)} files`}: ${names}. Wheems can't pass files to you yet, so if you need what's in them, ask the person to paste it.)`,
+      };
+    }
     return this.enqueue(key, () =>
-      this.deliver(key, binding, event).catch((error: unknown) => {
+      this.deliver(key, binding, message).catch((error: unknown) => {
         this.options.log(`Conversation ${key}: ${describe(error)}`);
         return this.notice(
           key,

@@ -79,6 +79,8 @@ export interface InboundMessage {
   /** True for a direct message between the person and the bot. */
   direct: boolean;
   receivedAt: Date;
+  /** Files attached to it, by name. Wheems can't pass their contents on yet. */
+  files?: { name: string }[];
 }
 
 export interface ButtonPress {

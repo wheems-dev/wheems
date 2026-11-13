@@ -45,6 +45,27 @@ describe('slack channel', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('passes on messages with files attached, with the files named', async () => {
+    const { fake, events, start } = setup();
+    await start();
+    await fake.emit({
+      channel: 'D1',
+      channel_type: 'im',
+      user: 'U1',
+      subtype: 'file_share',
+      text: 'what does this say?',
+      ts: '2.1',
+      files: [{ name: 'invoice.pdf' }, { title: 'Screenshot' }],
+    });
+    expect(events).toMatchObject([
+      {
+        type: 'message',
+        text: 'what does this say?',
+        files: [{ name: 'invoice.pdf' }, { name: 'Screenshot' }],
+      },
+    ]);
+  });
+
   it('marks direct messages and threads', async () => {
     const { fake, events, start } = setup();
     await start();

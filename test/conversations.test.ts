@@ -111,6 +111,36 @@ describe('conversations', () => {
     }
   };
 
+  it("says files can't reach the agent yet, and passes on any words with a note", async () => {
+    const onlyFile = await channel.receive({
+      channel: 'D1',
+      text: '',
+      userId: ME,
+      direct: true,
+      files: [{ name: 'invoice.pdf' }],
+    });
+    await settle();
+    expect(posts()).toEqual([
+      {
+        thread: onlyFile,
+        text: "_Wheems:_ I can't open files yet (invoice.pdf). Paste the text, or say in words what you need.",
+      },
+    ]);
+    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toEqual([]);
+
+    const withWords = await channel.receive({
+      channel: 'D1',
+      text: 'what is the total?',
+      userId: ME,
+      direct: true,
+      files: [{ name: 'invoice.pdf' }],
+    });
+    await settle();
+    const reply = posts().find((p) => p.thread === withWords)?.text ?? '';
+    expect(reply).toContain('echo: what is the total?');
+    expect(reply).toContain('The person attached a file: invoice.pdf.');
+  });
+
   it('starts a session per thread, hands it the message, and posts its reply in the thread', async () => {
     const first = await dm('hello');
     await settle();

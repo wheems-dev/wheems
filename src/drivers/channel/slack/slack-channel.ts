@@ -173,8 +173,9 @@ export class SlackChannel implements ChannelDriver {
   private async onEvent(event: SlackEvent): Promise<void> {
     const handler = this.handler;
     if (!handler || event.type !== 'message') return;
-    // Edits, deletions, joins and bot posts arrive as subtypes; only plain messages count.
-    if (typeof event.subtype === 'string') return;
+    // Edits, deletions, joins and bot posts arrive as subtypes; only plain messages, and
+    // messages with files attached, count.
+    if (typeof event.subtype === 'string' && event.subtype !== 'file_share') return;
     if (typeof event.bot_id === 'string' || event.user === this.botUserId) return;
     if (
       typeof event.user !== 'string' ||
@@ -194,6 +195,8 @@ export class SlackChannel implements ChannelDriver {
       text: typeof event.text === 'string' ? event.text : '',
       direct: event.channel_type === 'im',
       receivedAt: new Date(Number.parseFloat(event.ts) * 1000),
+      ...(Array.isArray(event.files) &&
+        event.files.length > 0 && { files: fileNames(event.files) }),
     });
   }
 
@@ -233,4 +236,14 @@ function chunks(text: string, size: number): string[] {
   }
   if (rest.length > 0) parts.push(rest);
   return parts;
+}
+
+/** The names of the files on a Slack message. */
+function fileNames(files: unknown[]): { name: string }[] {
+  return files.map((file) => {
+    const f = (file ?? {}) as { name?: unknown; title?: unknown };
+    const name =
+      typeof f.name === 'string' ? f.name : typeof f.title === 'string' ? f.title : 'a file';
+    return { name };
+  });
 }
