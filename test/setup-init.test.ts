@@ -163,6 +163,10 @@ describe('wheems setup', () => {
     expect(install.problems).toEqual([]);
     expect(install.config?.connections.slack?.allowed_users).toEqual(['UMEMBER1']);
     expect(install.workspaces.map((w) => w.id)).toEqual(['personal']);
+    // New tokens only reach a running service after a restart; setup says so, and how to add people.
+    const after = ui.shown.find((x) => x.kind === 'info' && x.message.includes('reads tokens'));
+    expect(after?.message).toMatch(/restart it \(Service\)/);
+    expect(after?.message).toMatch(/allowed_users under connections\.slack/);
     expect(calls).toEqual([
       'copy display_information:',
       'open https://api.slack.com/apps?new_app=1',
