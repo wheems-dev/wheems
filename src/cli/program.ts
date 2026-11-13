@@ -248,13 +248,14 @@ function shellPath(path: string): string {
 export async function run(argv: string[], io: Io): Promise<number> {
   if (argv.length === 0) {
     const home = resolve(defaultHome(io.env));
-    io.out(
-      renderWelcome({
-        version: packageVersion(),
-        status: await welcomeStatus(home, io.env),
-        color: io.color,
-      }),
-    );
+    // The welcome never fails: a problem reading the install becomes one of its lines.
+    const status = await welcomeStatus(home, io.env).catch((error: unknown) => [
+      {
+        mark: '!' as const,
+        text: `Couldn't read the install at ${home}: ${error instanceof Error ? error.message : String(error)}. Run wheems doctor.`,
+      },
+    ]);
+    io.out(renderWelcome({ version: packageVersion(), status, color: io.color }));
     return 0;
   }
   const program = createProgram(io);

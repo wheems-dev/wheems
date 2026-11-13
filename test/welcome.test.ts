@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -94,5 +94,29 @@ describe('the welcome screen', () => {
     expect(code).toBe(0);
     expect(out).toContain(`wheems ${packageVersion()}`);
     expect(out).toContain('No install at ~/none yet: run wheems setup');
+  });
+
+  it("still greets when the install can't be read, and says why", async () => {
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    // An agent file nobody may read makes loading the install fail.
+    const agent = join(home, 'workspaces', 'personal', 'agents', 'chief-of-staff.md');
+    chmodSync(agent, 0o000);
+    let out = '';
+    let code: number;
+    try {
+      code = await run([], {
+        ...defaultIo(),
+        out: (t) => (out += t),
+        err: () => undefined,
+        env: { WHEEMS_HOME: home, HOME: home },
+        color: false,
+      });
+    } finally {
+      chmodSync(agent, 0o644);
+    }
+    expect(code).toBe(0);
+    expect(out).toContain('Your crew, ready for work.');
+    expect(out).toMatch(/! Couldn't read the install at .+Run wheems doctor\./);
   });
 });
