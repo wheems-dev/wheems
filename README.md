@@ -1,11 +1,8 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/lockup-dark.svg">
-    <img src="docs/assets/lockup-light.svg" alt="Wheems" width="360">
-  </picture>
+  <img src="docs/assets/icon.svg" alt="" width="112">
 </p>
 
-# Wheems
+<h1 align="center">Wheems</h1>
 
 An opinionated framework for running teams of AI agents, with Herdr core as the runtime.
 
