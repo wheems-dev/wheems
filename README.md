@@ -515,6 +515,7 @@ Every command takes `--home <dir>` for the install folder (default: `$WHEEMS_HOM
 
 | Command                                                                        | What it does                                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `wheems`                                                                       | The welcome screen: the cloud, and how the install is doing (workspaces, the service, search, review)     |
 | `wheems setup`                                                                 | The setup menu: engines, Slack, workspaces, knowledge, the service, doctor                                |
 | `wheems init <workspace> [--name] [--channel] [--engine] [--model]`            | Creates a workspace with its chief of staff. `--engine` is `claude-code` (default), `codex` or `opencode` |
 | `wheems doctor [--quick] [--json]`                                             | Checks the machine, Herdr core and the install                                                            |

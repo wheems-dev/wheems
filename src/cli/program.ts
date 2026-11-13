@@ -19,6 +19,7 @@ import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
+import { renderWelcome, welcomeStatus } from './welcome.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
 import { SetupCancelled } from '../contracts/setup.js';
@@ -113,6 +114,9 @@ export function createProgram(io: Io): Command {
       const where = paths(home, io.env);
       const registry = io.registry();
       const ui = clackUi();
+      io.out(
+        renderWelcome({ version: packageVersion(), status: [], color: io.color, hints: false }),
+      );
       ui.intro(' Wheems setup ');
       try {
         await setup({
@@ -240,8 +244,20 @@ function shellPath(path: string): string {
   return /^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
-/** Runs the CLI and returns the exit code. */
+/** Runs the CLI and returns the exit code. With no command, it shows the welcome screen. */
 export async function run(argv: string[], io: Io): Promise<number> {
+  if (argv.length === 0) {
+    const home = resolve(defaultHome(io.env));
+    // The welcome never fails: a problem reading the install becomes one of its lines.
+    const status = await welcomeStatus(home, io.env).catch((error: unknown) => [
+      {
+        mark: '!' as const,
+        text: `Couldn't read the install at ${home}: ${error instanceof Error ? error.message : String(error)}. Run wheems doctor.`,
+      },
+    ]);
+    io.out(renderWelcome({ version: packageVersion(), status, color: io.color }));
+    return 0;
+  }
   const program = createProgram(io);
   try {
     await program.parseAsync(argv, { from: 'user' });
