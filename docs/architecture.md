@@ -356,22 +356,25 @@ there. A task on a project with code works in a git worktree of the project's fo
 
 ### The brief and the result
 
+`.wheems/tasks/20261113-0912-k7/task.md`, written by Wheems (proposed format):
+
+<!-- prettier-ignore -->
 ```markdown
-<!-- .wheems/tasks/20261113-0912-k7/task.md, written by Wheems (proposed format) -->
-
 ---
-
 id: 20261113-0912-k7
 from: acme/chief-of-staff
 to: acme/reviews/lead
 kind: job # question, job, review, pair-member, judge, routine, workflow-step
 timeout: 30m
 accept:
-sections: [Replies, Flagged]
-checks: - every reply is under 120 words - every reply names the review it answers, by id - no reply promises a refund
-rubric: review-reply # a judge grades tone, accuracy and policy
-pass_at: 4 # out of 5, on every rubric item
-review: before_send # a person approves before anything is sent
+  sections: [Replies, Flagged]
+  checks:
+    - every reply is under 120 words
+    - every reply names the review it answers, by id
+    - no reply promises a refund
+  rubric: review-reply # a judge grades tone, accuracy and policy
+  pass_at: 4 # out of 5, on every rubric item
+  review: before_send # a person approves before anything is sent
 ---
 
 Draft replies to the reviews that arrived this week. Flag any that mention a safety issue.
