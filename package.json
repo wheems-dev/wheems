@@ -1,9 +1,27 @@
 {
   "name": "wheems",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.0.1",
   "description": "An opinionated framework for running teams of AI agents, on Herdr core",
   "license": "Apache-2.0",
+  "homepage": "https://wheems.dev",
+  "bugs": {
+    "url": "https://github.com/wheems-dev/wheems/issues"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "ai-agents",
+    "agent-harness",
+    "claude-code",
+    "codex",
+    "opencode",
+    "herdr",
+    "slack",
+    "automation",
+    "workflows",
+    "knowledge-base",
+    "cli"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -23,9 +41,11 @@
   },
   "files": [
     "dist",
+    "!dist/**/*.map",
     "schemas",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -36,7 +56,9 @@
     "test:watch": "vitest",
     "schemas": "tsx scripts/write-schemas.ts",
     "wheems": "tsx src/cli/main.ts",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm test && npm run build",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "prepublishOnly": "npm run clean && npm run check"
   },
   "repository": {
     "type": "git",
