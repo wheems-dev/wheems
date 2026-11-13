@@ -359,9 +359,11 @@ export class ConversationManager {
           .capabilities.status;
         if (reportsStatus) {
           await this.untilReady(session.id);
-        } else if (existing?.startedAt !== undefined) {
-          // No status to say it has started: give a new session its start-up time first.
-          const wait = Date.parse(existing.startedAt) + this.options.typeDelayMs - Date.now();
+        } else if ((existing?.launchedAt ?? existing?.startedAt) !== undefined) {
+          // No status to say it has started: give a new session its start-up time first,
+          // counted from when it was launched, not from before it was prepared.
+          const since = Date.parse(existing?.launchedAt ?? existing?.startedAt ?? '');
+          const wait = since + this.options.typeDelayMs - Date.now();
           if (wait > 0) await sleep(wait);
         }
         const sent = await this.options.runtime.send(session.id, event.text);
@@ -407,6 +409,7 @@ export class ConversationManager {
       engineId,
       launchTag,
     );
+    const launchedAt = new Date();
     await this.options.store.set(key, {
       workspace: binding.workspace.id,
       connection: binding.connection,
@@ -421,6 +424,7 @@ export class ConversationManager {
       ...(resume && { engineSessionId: engineId }),
       ...(existing?.notedAt !== undefined && { notedAt: existing.notedAt }),
       startedAt: now.toISOString(),
+      launchedAt: launchedAt.toISOString(),
       ...(launchTag !== undefined && { launchTag }),
       pending: 1,
     });

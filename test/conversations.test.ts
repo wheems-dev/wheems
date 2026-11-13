@@ -102,6 +102,14 @@ describe('conversations', () => {
     await manager.whenIdle();
   };
   const posts = () => channel.sent.map((m) => ({ thread: m.threadId, text: m.text }));
+  /** Waits until `condition` holds, however slow the machine, failing after `ms`. */
+  const until = async (condition: () => boolean, ms = 5000) => {
+    const deadline = Date.now() + ms;
+    while (!condition()) {
+      if (Date.now() > deadline) throw new Error('Timed out waiting for a condition');
+      await new Promise((r) => setTimeout(r, 2));
+    }
+  };
 
   it('starts a session per thread, hands it the message, and posts its reply in the thread', async () => {
     const first = await dm('hello');
@@ -538,14 +546,63 @@ describe('conversations', () => {
     const first = await dm('one');
     await dm('two', first);
     // Wait for the first answer, then restart before the second.
-    for (let i = 0; i < 100 && posts().length === 0; i++)
-      await new Promise((r) => setTimeout(r, 5));
+    await until(() => posts().length > 0);
     expect(posts().map((p) => p.text)).toEqual(['answer: one']);
     await manager.stop();
     manager = make2();
     await manager.recover();
     await settle();
     // Only the second answer was owed: no false "no answer yet" after it.
+    expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
+  });
+
+  it('counts the wait before typing into a new session from when it was launched', async () => {
+    await manager.stop();
+    let launched = 0;
+    const typed: number[] = [];
+    class Timed extends MemoryRuntime {
+      override async start(options: Parameters<MemoryRuntime['start']>[0]) {
+        const info = await super.start(options);
+        launched = Date.now();
+        return info;
+      }
+      override send(id: string, text: string) {
+        typed.push(Date.now());
+        return super.send(id, text);
+      }
+    }
+    const quiet = new Timed({
+      'fake-agent': fakeAgent({
+        behaviour: () => 'answer',
+        reply: (conversation, text) => manager.reply(conversation, text),
+        answers,
+        reportsStatus: false,
+      }),
+    });
+    const engine = new StubEngine({ command: ['fake-agent'], answers, reportsStatus: false });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime: quiet,
+      engine: () => engine,
+      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
+      pollMs: 5,
+      answerPollMs: 5,
+      typeDelayMs: 60,
+      startupSeconds: 2,
+      // Preparing the session is slow: its files take a while to write.
+      writeFile: async (path, content) => {
+        await new Promise((r) => setTimeout(r, 80));
+        writeFileSync(path, content);
+      },
+    });
+    const first = await dm('one');
+    await dm('two', first);
+    expect(typed).toHaveLength(1);
+    expect((typed[0] ?? 0) - launched).toBeGreaterThanOrEqual(55);
+    await settle();
     expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
   });
 
