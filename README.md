@@ -1,8 +1,13 @@
 <p align="center">
-  <img src="docs/assets/icon.svg" alt="" width="112">
+  <img src="https://wheems.dev/brand/wheems-icon-512.png" alt="Wheems" width="112">
 </p>
 
 <h1 align="center">Wheems</h1>
+
+> [!WARNING]
+> **Early preview (0.0.x).** Wheems isn't ready for real use yet. Everything may change between
+> releases, including commands, config formats and where files live, with no migration path.
+> Try it, but don't rely on it.
 
 An opinionated framework for running teams of AI agents, with Herdr core as the runtime.
 
@@ -25,8 +30,8 @@ Wheems was formerly called Opinr.
 
 > **Status: milestone 2, the knowledge loop.** You can chat with a chief of staff from Slack.
 > Notes reach a knowledge base that agents search by keyword and by meaning, and agents propose
-> skills for you to review. Wheems isn't on npm yet: run it from this repository. See
-> [what's not built yet](#whats-not-built-yet).
+> skills for you to review. See [what's not built yet](#whats-not-built-yet) and the
+> [changelog](CHANGELOG.md).
 
 ## Contents
 
@@ -78,8 +83,13 @@ You need:
 - Herdr core 0.1.20 or later (`hc`)
 - A Slack workspace where you can add apps
 
-Wheems will be published on npm as `wheems`, and `npm install -g wheems` will install the
-`wheems` command. Until then, build it from this repository:
+Install the `wheems` command from npm:
+
+```bash
+npm install -g wheems
+```
+
+Or build it from this repository:
 
 ```bash
 git clone https://github.com/wheems-dev/wheems.git ~/Projects/wheems
