@@ -53,7 +53,7 @@ Wheems was formerly called Opinr.
 
 - **The install** is a git folder, `~/wheems`, holding your config: install-wide settings, the
   page about you, the skill library and your workspaces.
-- **A workspace** is one business or area of life, kept apart from the others. It has a chief of
+- **A workspace** is one business or area of life, in a folder of its own. It has a chief of
   staff (the agent you talk to), its own agents, a chat channel and a knowledge base.
 - **The service** runs in the background under launchd. It holds the Slack connection, starts an
   agent session in Herdr for each conversation, posts the agent's answers, files notes into the
@@ -76,12 +76,15 @@ Wheems will be published on npm as `wheems`, and `npm install -g wheems` will in
 `wheems` command. Until then, build it from this repository:
 
 ```bash
-git clone https://github.com/wheems-dev/wheems.git
-cd wheems
+git clone https://github.com/wheems-dev/wheems.git ~/Projects/wheems
+cd ~/Projects/wheems
 npm install
 npm run build
 npm link            # puts the wheems command on your PATH
 ```
+
+Clone it anywhere except `~/wheems`. That folder is your install: your private config, notes
+and knowledge base, kept in a git folder of its own that is never pushed anywhere.
 
 If your default `node` is older than 22.13, use a newer one, such as Homebrew's
 (`brew install node@22`), and run `/opt/homebrew/opt/node@22/bin/node dist/cli/main.js` in place
@@ -143,7 +146,9 @@ wheems doctor
 
 A **workspace** is an entity with its own people, knowledge and confidentiality: your personal
 life, a business, a client. Make something a separate workspace when it has different people,
-should keep its knowledge private, or may be handed to someone else one day.
+should keep its knowledge private, or may be handed to someone else one day. Today each
+workspace has its own folder, agents, chat channel, knowledge base and search index. Enforced
+isolation, where an agent in one workspace can't read another's files, arrives in milestone 4.
 
 `wheems init <id>` creates `workspaces/<id>/`:
 
@@ -218,8 +223,8 @@ Message the Slack app (or the workspace's channel). Each message you send starts
 
 ## The knowledge loop
 
-Agents never write the knowledge base themselves. They write **notes**, and a built-in **filer**
-turns notes into pages. Everything is a Markdown file in your git folder, so every version of
+Agents are told never to write the knowledge base themselves. They write **notes**, and a
+built-in **filer** turns notes into pages. Everything is a Markdown file in your git folder, so every version of
 every page is kept.
 
 ### About you and the brief
@@ -691,10 +696,17 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
 - **Credentials stay out of the knowledge base.** Notes, pages, the brief, reports and skills
   that look like they hold a password, token or key are refused or quarantined. They're never
   indexed, embedded or committed.
-- **Agents never write the knowledge base or `about-you.md` directly.** Every change is checked
-  in code, and `about-you.md` and skills change only with your approval.
-- **Everything runs on your Mac by default.** Search by meaning uses Ollama locally; nothing is
-  sent to a hosted service.
+- **What the filer writes is checked in code, and `about-you.md` and skills change only with
+  your approval** when they come through Wheems: notes, filing and `wheems review`. Agents are
+  told not to edit the knowledge base or `about-you.md` themselves, but that is an instruction,
+  not a lock: an agent runs in its workspace folder and could edit files there directly, and
+  such an edit is treated like one by hand. Permission rules that enforce limits arrive in
+  milestone 4.
+- **What leaves your Mac.** Messages you send go through Slack. Agents run on their model
+  providers (Anthropic for Claude Code, OpenAI for Codex, whichever opencode is set up with), so
+  those providers see each conversation, and what agents load or read: `about-you.md`, the
+  brief, and, for the filer, notes and pages. Search by meaning is local: with Ollama, nothing
+  you index is sent anywhere to be embedded.
 - **The control socket** is a Unix socket only you can open.
 
 ## What's not built yet
