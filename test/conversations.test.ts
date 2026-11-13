@@ -178,6 +178,36 @@ describe('conversations', () => {
     expect(posts().map((p) => p.thread)).toEqual([first, first, first]);
   });
 
+  it('counts a reply that came before the turn was being followed', async () => {
+    // A store that's slow to record the message, so the agent always replies before Wheems
+    // starts following its turn.
+    class SlowStore extends ConversationStore {
+      override async addPending(key: string): Promise<void> {
+        await new Promise((r) => setTimeout(r, 60));
+        await super.addPending(key);
+      }
+    }
+    await manager.stop();
+    const engine = new StubEngine({ command: ['fake-agent'], answers });
+    manager = new ConversationManager({
+      install: install.config!,
+      bindings: [{ workspace: install.workspaces[0]!, connection: 'slack', channel: null }],
+      channels: new Map([['slack', channel]]),
+      runtime,
+      engine: () => engine,
+      store: new SlowStore(join(home, '.wheems', 'conversations.json')),
+      sessionEnv: { WHEEMS_HOME: home },
+      pollMs: 5,
+      startupSeconds: 2,
+      followUpSeconds: 0.5,
+    });
+    const first = await dm('one');
+    await settle();
+    await dm('two', first);
+    await settle();
+    expect(posts().map((p) => p.text)).toEqual(['echo: one', 'echo: two']);
+  });
+
   it('gives a new top-level message its own session', async () => {
     await dm('one');
     await dm('another topic');
