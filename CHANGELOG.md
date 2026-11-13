@@ -3,7 +3,10 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.0.2
+
+Fixes from the first preview, a welcome screen, and checks that catch common set-up problems.
+Still an early preview: not ready for real use.
 
 **Added**
 
@@ -28,6 +31,8 @@ change anything, including commands and config formats, without a migration path
 - Slack messages with a file attached were silently ignored. Now a file with no words gets a reply
   asking for the text, and with words the agent gets them and a note that files can't be passed
   on yet.
+- After a quick reply from an agent, Wheems could add a false "The agent finished without
+  replying here": it recorded when a message was sent only after typing it in.
 - After connecting Slack, setup says to restart the service (which reads tokens only when it
   starts) and how to let someone else talk to the agents.
 - On Linux, `wheems doctor` warns that the service needs macOS for now instead of passing.
