@@ -30,6 +30,8 @@ export interface FilingOptions {
   timeoutSeconds?: number;
   /** Tries per note before it's left in the inbox until the service restarts. */
   maxAttempts?: number;
+  /** Called after a note is filed into a workspace, such as to update its search index. */
+  onFiled?: (workspace: string) => void;
   log?: (message: string) => void;
 }
 
@@ -39,8 +41,9 @@ export interface FilingOptions {
  * `notes/`, and commits. Each workspace has its own queue.
  */
 export class FilingQueue {
-  private readonly options: Required<Omit<FilingOptions, 'log'>> & {
+  private readonly options: Required<Omit<FilingOptions, 'log' | 'onFiled'>> & {
     log: (message: string) => void;
+    onFiled: (workspace: string) => void;
   };
   private readonly chains = new Map<string, Promise<void>>();
   /** Workspaces with a pass over their inbox queued and not yet started. */
@@ -53,6 +56,7 @@ export class FilingQueue {
       timeoutSeconds: 900,
       maxAttempts: 3,
       log: () => undefined,
+      onFiled: () => undefined,
       ...options,
     };
   }
@@ -186,6 +190,7 @@ export class FilingQueue {
       return 'conflict';
     }
     const changed = applied.changed;
+    this.options.onFiled(workspace.id);
     if (review.aboutYouSuggestion !== null) {
       const dir = join(this.options.stateDir, 'review', 'about-you');
       await mkdir(dir, { recursive: true });

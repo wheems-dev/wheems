@@ -355,7 +355,7 @@ describe('the filing queue', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  const queue = async (engines: string[] = []) => {
+  const queue = async (engines: string[] = [], filed: string[] = []) => {
     const install = await loadInstall(home);
     const runtime = new MemoryRuntime({ filer: fakeFiler({ answers, act: (cwd) => act(cwd) }) });
     return new FilingQueue({
@@ -371,6 +371,7 @@ describe('the filing queue', () => {
       aboutYouFile: join(home, 'about-you.md'),
       sessionEnv: {},
       log: (m) => logs.push(m),
+      onFiled: (workspace) => filed.push(workspace),
     });
   };
   const addNote = (text: string) =>
@@ -383,7 +384,10 @@ describe('the filing queue', () => {
   it('files a note into the knowledge base and commits it, with the note as its source', async () => {
     const note = await addNote('# Picked Halcyon\n\nThe boat is Halcyon, because it is calmer.');
     const engines: string[] = [];
-    await (await queue(engines)).file('personal');
+    const filed: string[] = [];
+    await (await queue(engines, filed)).file('personal');
+    // So the search index picks up the new page.
+    expect(filed).toEqual(['personal']);
     const knowledge = knowledgePaths(join(home, 'workspaces', 'personal'));
     const boat = parsePage(readFileSync(join(knowledge.pages, 'boat-name.md'), 'utf8'));
     expect(boat.sources).toEqual([note.split('/').at(-1)]);
@@ -439,8 +443,10 @@ describe('the filing queue', () => {
   it('leaves a note it could not file in the inbox, and stops trying after three tries', async () => {
     act = () => null;
     await addNote('# Something');
-    const filing = await queue();
+    const filed: string[] = [];
+    const filing = await queue([], filed);
     for (let i = 0; i < 4; i++) await filing.file('personal');
+    expect(filed).toEqual([]);
     expect(readdirSync(knowledgePaths(join(home, 'workspaces', 'personal')).inbox)).toHaveLength(1);
     expect(logs.filter((l) => l.startsWith("Couldn't file"))).toHaveLength(3);
   });

@@ -6,7 +6,7 @@ import { initWorkspace } from '../src/cli/commands/init.js';
 import { setup } from '../src/cli/commands/setup.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
 import { slackConnectFlow } from '../src/drivers/channel/slack/connect.js';
-import { MemoryChannel } from '../src/testing/index.js';
+import { HashEmbeddings, MemoryChannel } from '../src/testing/index.js';
 import { CANCEL, scriptedUi } from './helpers/scripted-ui.js';
 import type { EngineSetup } from '../src/contracts/setup.js';
 import { StubEngine } from '../src/testing/index.js';
@@ -331,6 +331,80 @@ describe('opinr setup', () => {
       ui.shown.some((s) => s.kind === 'warn' && s.message.includes('nothing from it was saved')),
     ).toBe(true);
     expect(await readSecrets(env.OPINR_SECRETS!)).toEqual({});
+  });
+
+  describe('the Knowledge section', () => {
+    let models: string[] | null;
+    const withOllama = () =>
+      registry().register('embeddings', 'ollama', () => new HashEmbeddings(), {
+        label: 'Ollama',
+        description: 'runs an embedding model on this machine, free',
+        embeddings: {
+          defaultModel: 'nomic-embed-text',
+          installHint: 'Install Ollama from https://ollama.com',
+          models: () => Promise.resolve(models === null ? null : [...models]),
+          pull: (model) => ['ollama', 'pull', model],
+        },
+      });
+    const pullingActions = {
+      ...actions,
+      run: (command: string[]) => {
+        calls.push(`run ${command.join(' ')}`);
+        if (command[1] === 'pull' && models !== null) models.push(`${command[2] ?? ''}:latest`);
+        return Promise.resolve(0);
+      },
+    };
+    const embeddingsIn = async () => (await loadInstall(home)).config?.knowledge.embeddings;
+
+    it('says how to get Ollama when it is not answering, and changes nothing', async () => {
+      models = null;
+      const ui = scriptedUi(['knowledge', 'ollama', 'done']);
+      await setup({ home, env, ui, registry: withOllama(), actions: pullingActions });
+      expect(ui.shown.some((s) => s.kind === 'warn' && s.message.includes('ollama.com'))).toBe(
+        true,
+      );
+      expect(await embeddingsIn()).toBeUndefined();
+    });
+
+    it('uses the model Ollama already has, under whatever tag', async () => {
+      models = ['llama3.2:latest', 'nomic-embed-text:v1.5'];
+      const ui = scriptedUi(['knowledge', 'ollama', 'done']);
+      await setup({ home, env, ui, registry: withOllama(), actions: pullingActions });
+      expect(calls.filter((c) => c.startsWith('run'))).toEqual([]);
+      expect(await embeddingsIn()).toEqual({ driver: 'ollama', model: 'nomic-embed-text:v1.5' });
+      expect(crossCheck(await loadInstall(home))).toEqual([]);
+    });
+
+    it('offers to download the model, then turns search by meaning off again', async () => {
+      models = [];
+      await setup({
+        home,
+        env,
+        ui: scriptedUi(['knowledge', 'ollama', true, 'done']),
+        registry: withOllama(),
+        actions: pullingActions,
+      });
+      expect(calls).toContain('run ollama pull nomic-embed-text');
+      expect(await embeddingsIn()).toEqual({ driver: 'ollama', model: 'nomic-embed-text:latest' });
+
+      const ui = scriptedUi(['knowledge', 'keyword', 'done']);
+      await setup({ home, env, ui, registry: withOllama(), actions: pullingActions });
+      expect(await embeddingsIn()).toBeUndefined();
+      expect(readFileSync(join(home, 'install.yaml'), 'utf8')).not.toContain('ollama');
+    });
+
+    it('leaves things as they were when the download is declined', async () => {
+      models = [];
+      await setup({
+        home,
+        env,
+        ui: scriptedUi(['knowledge', 'ollama', false, 'done']),
+        registry: withOllama(),
+        actions: pullingActions,
+      });
+      expect(calls.filter((c) => c.startsWith('run'))).toEqual([]);
+      expect(await embeddingsIn()).toBeUndefined();
+    });
   });
 
   it('asks for a channel before a workspace, and a channel name once the direct messages are taken', async () => {

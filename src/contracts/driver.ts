@@ -1,10 +1,10 @@
 /**
  * Every extension point in Opinr is a driver: a small, documented contract with
- * built-in drivers behind it. Version one has runtime, engine and channel
- * contracts; integration, account, trigger, step, isolation and secret-store
- * contracts follow in later milestones.
+ * built-in drivers behind it. Version one has runtime, engine, channel, embeddings
+ * and vector-store contracts; integration, account, trigger, step, isolation and
+ * secret-store contracts follow in later milestones.
  */
-export type DriverKind = 'runtime' | 'engine' | 'channel';
+export type DriverKind = 'runtime' | 'engine' | 'channel' | 'embeddings' | 'vector-store';
 
 export interface Driver<K extends DriverKind = DriverKind> {
   readonly kind: K;

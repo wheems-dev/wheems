@@ -15,6 +15,8 @@ export interface Paths {
   conversations: string;
   socket: string;
   logs: string;
+  /** The knowledge bases' search indexes, rebuildable from the files. */
+  index: string;
   /** Holds the `opinr` command that agents run, pinned to this Node.js. */
   bin: string;
   secrets: string;
@@ -41,6 +43,7 @@ export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths
     conversations: join(state, 'conversations.json'),
     socket: join(state, 'opinr.sock'),
     logs: join(state, 'logs'),
+    index: join(state, 'index'),
     bin: join(state, 'bin'),
     secrets:
       env.OPINR_SECRETS && env.OPINR_SECRETS.length > 0

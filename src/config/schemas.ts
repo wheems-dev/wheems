@@ -78,6 +78,30 @@ export const installSchema = z
     machines: z.record(nameSchema, machineSchema).default({}),
     accounts: z.record(nameSchema, accountSchema).default({}),
     connections: z.record(nameSchema, connectionSchema).default({}),
+    knowledge: z
+      .strictObject({
+        embeddings: z
+          .looseObject({
+            driver: nameSchema.describe('The embeddings driver, such as `ollama`.'),
+            model: nonEmpty
+              .optional()
+              .describe(
+                "The driver's model, such as `nomic-embed-text`. Defaults to its usual one.",
+              ),
+          })
+          .optional()
+          .describe(
+            "Searches the knowledge base by meaning as well as by keyword. Other keys are the driver's own options, such as Ollama's `url`. Leave it out for keyword search only.",
+          ),
+        vector_store: z
+          .looseObject({
+            driver: nameSchema.describe('The vector store driver. Defaults to `sqlite`.'),
+          })
+          .optional()
+          .describe('Where vectors are kept. Defaults to SQLite files in `.opinr/index/`.'),
+      })
+      .default({})
+      .describe('How the knowledge base is searched, for every workspace.'),
   })
   .refine(
     (install) => Object.values(install.machines).filter((m) => m.local === true).length <= 1,

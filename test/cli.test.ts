@@ -1,5 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, packageVersion, run } from '../src/cli/program.js';
+import { installYaml } from '../src/cli/templates.js';
 
 const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 
@@ -51,5 +56,44 @@ describe('opinr CLI', () => {
     const result = await cli('fly');
     expect(result.code).not.toBe(0);
     expect(result.err).toMatch(/unknown command 'fly'/);
+  });
+
+  it('rebuilds and searches the knowledge base itself when the service is not running', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'opinr-kb-'));
+    try {
+      writeFileSync(join(home, 'install.yaml'), installYaml());
+      await initWorkspace({ home, id: 'personal' });
+      await initWorkspace({ home, id: 'work', channel: 'work-chat' });
+      const pages = join(home, 'workspaces', 'work', 'knowledge', 'pages');
+      writeFileSync(join(pages, 'crm.md'), '---\ntitle: CRM\n---\n\nThe CRM starts on SQLite.\n');
+
+      const before = await cli('kb', 'search', 'CRM', '--workspace', 'work', '--home', home);
+      expect(before.code).toBe(1);
+      expect(before.err).toMatch(/no search index yet/);
+      expect(await cli('kb', 'reindex', '--home', home)).toMatchObject({
+        code: 0,
+        out: 'personal: indexed 0 files, keyword search only\nwork: indexed 1 file, keyword search only\n',
+      });
+      const found = await cli(
+        'kb',
+        'search',
+        'sqlite',
+        '--workspace',
+        'work',
+        '--home',
+        home,
+        '--json',
+      );
+      expect(found.code).toBe(0);
+      expect(JSON.parse(found.out)).toMatchObject({
+        mode: 'keyword',
+        results: [{ file: 'pages/crm.md', title: 'CRM', matched: ['keyword'] }],
+      });
+      const which = await cli('kb', 'search', 'sqlite', '--home', home);
+      expect(which.err).toMatch(/Say which workspace with --workspace: personal, work/);
+      expect((await cli('kb', 'search', 'x', '--limit', '0', '--home', home)).code).toBe(1);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

@@ -26,7 +26,8 @@ takes minutes to answer, so voice needs its own contract: a fast voice model hol
 hands work to the agent.
 
 Milestone 0 defines the **runtime**, **engine** and **channel** contracts and ships the Herdr
-runtime driver. The other contracts arrive with the milestones that need them.
+runtime driver. Milestone 2 adds **embeddings** and **vector store**. The other contracts arrive
+with the milestones that need them.
 
 ## The contracts
 
@@ -88,6 +89,31 @@ Milestone 1 ships the Slack driver (Socket Mode, so no public address) and the e
 Claude Code, Codex and opencode. Each engine also brings its setup steps (`EngineSetup`): how to
 install it, sign in, and check that it trusts a folder.
 
+### Embeddings ([`embeddings.ts`](../src/contracts/embeddings.ts))
+
+`embed(texts, purpose)` returns one vector per text, all the same length. `purpose` is
+`document` or `query`, for models that embed the two differently: the Ollama driver marks them
+for nomic-embed-text, which needs it. The driver names its `model`, and the search index is
+rebuilt when it changes, since vectors from different models can't be compared. A driver may set
+`minimumSimilarity`, the score below which a match by meaning alone isn't shown, because every
+model scores unrelated text differently. It throws `unavailable` when the service behind it
+can't be reached, and search falls back to keywords.
+
+Milestone 2 ships **Ollama** (`nomic-embed-text` by default, at `http://127.0.0.1:11434`). With
+no embeddings driver set up, search is keyword-only. An embeddings driver can bring its setup
+steps (`EmbeddingsSetup`): the models it has, how to download one, and how to install it.
+
+### Vector store ([`vector-store.ts`](../src/contracts/vector-store.ts))
+
+A store holds named collections. `open(name)` creates or opens one, and `drop(name)` removes it.
+A collection takes `upsert` (vectors by id, replacing any with the same id), `remove`, `count`,
+`clear`, and `nearest(vector, k)`, which returns the `k` most similar by cosine, most similar
+first. Every vector in a collection has the same length; one of another length is refused with
+`invalid`.
+
+Milestone 2 ships **SQLite**, which keeps each collection in a file and compares every vector in
+code: a few milliseconds for thousands of pages, with nothing to install.
+
 ## Contract tests
 
 Each driver type ships a test suite that any driver of that type must pass, published as
@@ -103,13 +129,21 @@ runtimeContract('my-runtime', { create: () => new MyRuntime() });
 ```
 
 ```ts
-import { engineContract, channelContract } from '@opinr/hq/testing';
+import {
+  channelContract,
+  embeddingsContract,
+  engineContract,
+  vectorStoreContract,
+} from '@opinr/hq/testing';
 
 engineContract('gemini', {
   create: () => new GeminiEngine(),
   model: 'gemini-3-pro',
   accountDriver: 'google',
 });
+
+embeddingsContract('voyage', { create: () => new VoyageEmbeddings(testKey) });
+vectorStoreContract('pgvector', { create: () => new PgVectorStore(testDatabaseUrl) });
 
 channelContract('discord', {
   create: () => new DiscordChannel(testCredentials),
@@ -120,7 +154,8 @@ channelContract('discord', {
 ```
 
 `@opinr/hq/testing` also exports in-memory reference drivers: `MemoryRuntime` (simulated programs),
-`MemoryChannel` (messages kept in memory) and `StubEngine`. The suites run against them in this
+`MemoryChannel` (messages kept in memory), `StubEngine`, `HashEmbeddings` (words hashed into a
+small vector, with synonyms to stand in for meaning) and `MemoryVectorStore`. The suites run against them in this
 repository's own tests, and later milestones use them to test the service without Herdr or
 Slack.
 

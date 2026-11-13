@@ -5,7 +5,7 @@ most of it in Slack's app settings.
 
 You need:
 
-- Node.js 22.12 or later
+- Node.js 22.13 or later
 - Herdr core 0.1.20 or later (`hc`)
 - A Slack workspace where you can add apps
 
@@ -25,7 +25,7 @@ npm install
 npm run build
 ```
 
-If your default `node` is older than 22.12, run Opinr with a newer one, such as Homebrew's:
+If your default `node` is older than 22.13, run Opinr with a newer one, such as Homebrew's:
 `brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node /path/to/opinr/dist/cli/main.js`.
 `opinr doctor` says which Node.js it is running on.
 

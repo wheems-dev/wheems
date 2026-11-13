@@ -1,13 +1,17 @@
 import type { ChannelDriver } from './channel.js';
 import { DriverError, type DriverKind } from './driver.js';
+import type { EmbeddingsDriver, EmbeddingsSetup } from './embeddings.js';
 import type { EngineDriver } from './engine.js';
 import type { RuntimeDriver } from './runtime.js';
 import type { ConnectFlow, EngineSetup } from './setup.js';
+import type { VectorStoreDriver } from './vector-store.js';
 
 export interface DriverTypes {
   runtime: RuntimeDriver;
   engine: EngineDriver;
   channel: ChannelDriver;
+  embeddings: EmbeddingsDriver;
+  'vector-store': VectorStoreDriver;
 }
 
 /** Builds a driver from its config section. Each driver validates its own options. */
@@ -24,6 +28,8 @@ export interface DriverInfo {
   connect?: ConnectFlow;
   /** For engines: how to install it, sign in and wire it to Herdr. */
   engine?: EngineSetup;
+  /** For embeddings drivers: which models it has and how to get one. */
+  embeddings?: EmbeddingsSetup;
 }
 
 /** A driver as `opinr setup` lists it: one that works, or one that is coming later. */
