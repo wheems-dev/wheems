@@ -95,3 +95,41 @@ describe('channel helpers', () => {
     expect(replyThread({ ...base, messageId: '2', threadId: '1' })).toBe('1');
   });
 });
+
+describe('the memory runtime', () => {
+  it('holds text sent before a program starts, as a terminal does, and hands it over after', async () => {
+    const events: string[] = [];
+    const runtime = new MemoryRuntime({
+      recorder: () => ({
+        start: () => events.push('start'),
+        input: (line) => events.push(`input: ${line}`),
+      }),
+    });
+    const session = await runtime.start({ name: 'early', command: ['recorder'] });
+    // Sent before the program has started.
+    await runtime.send(session.id, 'typed ahead');
+    expect(events).toEqual([]);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(events).toEqual(['start', 'input: typed ahead']);
+    await runtime.send(session.id, 'later');
+    expect(events.at(-1)).toBe('input: later');
+  });
+
+  it('drops text typed ahead once the program has exited', async () => {
+    const got: string[] = [];
+    const runtime = new MemoryRuntime({
+      once: () => ({
+        input: (line, io) => {
+          got.push(line);
+          io.exit(0);
+        },
+      }),
+    });
+    const session = await runtime.start({ name: 'once', command: ['once'] });
+    await runtime.send(session.id, 'one');
+    await runtime.send(session.id, 'two');
+    await new Promise((r) => setTimeout(r, 5));
+    expect(got).toEqual(['one']);
+    expect((await runtime.get(session.id))?.state).toBe('finished');
+  });
+});

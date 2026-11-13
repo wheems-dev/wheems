@@ -63,6 +63,9 @@ interface MemorySession {
   io: ProgramIo;
   screen: string[];
   waiters: (() => void)[];
+  /** Whether the program has started; text sent before then waits in `typedAhead`. */
+  started: boolean;
+  typedAhead: string[];
 }
 
 /**
@@ -141,6 +144,8 @@ export class MemoryRuntime implements RuntimeDriver {
       program: factory({ args, env: { ...options.env }, cwd: info.cwd, sessionId: info.id }),
       screen: [],
       waiters: [],
+      started: false,
+      typedAhead: [],
       io: {
         print: (line) => session.screen.push(line),
         exit: (code) => {
@@ -156,9 +161,18 @@ export class MemoryRuntime implements RuntimeDriver {
     };
     this.sessions.set(info.id, session);
     const snapshot = copy(info);
-    // Like a real runtime, start returns before the program has done anything.
+    // Like a real runtime, start returns before the program has done anything. Text sent
+    // before then waits, as a terminal holds typing until the program reads it.
     setTimeout(() => {
-      if (session.info.state === 'live') session.program.start?.(session.io);
+      if (session.info.state !== 'live') return;
+      session.program.start?.(session.io);
+      session.started = true;
+      // A program that exits takes no more input; what's left is dropped, as it would be.
+      const exited = () => session.info.state !== 'live';
+      for (const line of session.typedAhead.splice(0)) {
+        if (exited()) break;
+        session.program.input(line, session.io);
+      }
     }, 0);
     return Promise.resolve(snapshot);
   }
@@ -180,7 +194,8 @@ export class MemoryRuntime implements RuntimeDriver {
     const turn = session.info.turn;
     const status = session.info.status;
     session.screen.push(text);
-    session.program.input(text, session.io);
+    if (session.started) session.program.input(text, session.io);
+    else session.typedAhead.push(text);
     return Promise.resolve({ turn, status, wait: null });
   }
 

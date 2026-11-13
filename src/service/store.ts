@@ -25,6 +25,11 @@ const conversationSchema = z.object({
   startedAt: z.string().optional(),
   launchTag: z.string().optional(),
   /**
+   * When the runtime had launched the session's program: messages typed into an engine that
+   * reports no status wait until it has had its start-up time from here.
+   */
+  launchedAt: z.string().optional(),
+  /**
    * How many messages are waiting for their answers. While any are, the session is never
    * stopped, and after a restart the service follows it until they are all answered.
    */
