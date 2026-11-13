@@ -17,10 +17,10 @@ import { HERDR_MINIMUM_VERSION } from '../drivers/runtime/herdr/herdr-runtime.js
 import { KnowledgeSearch, type IndexStatus } from '../knowledge/search.js';
 import { listAboutYou } from '../review/review.js';
 import { listProposals } from '../skills/proposals.js';
-import { compareVersions, isAtLeast } from '../util/version.js';
+import { compareVersions } from '../util/version.js';
+import { NODE_SUPPORTED, nodeVersionProblem } from '../util/node-support.js';
+import { fullTextSearchProblem } from '../util/sqlite.js';
 export { defaultHome } from '../home.js';
-
-export const NODE_MINIMUM_VERSION = '22.13.0';
 
 export interface DoctorOptions {
   /** The install folder. */
@@ -34,6 +34,8 @@ export interface DoctorOptions {
   platform?: NodeJS.Platform;
   /** Whether an engine trusts a folder: true, false, or null when it can't tell. */
   trust?: (engine: string, dir: string) => Promise<boolean | null>;
+  /** Why SQLite can't do full-text search, or null when it can. */
+  fullTextSearch?: () => Promise<string | null>;
   /** Whether the service is installed and answering. */
   service?: (home: string) => Promise<{ installed: boolean; answering: boolean }>;
 }
@@ -51,7 +53,7 @@ export interface DoctorReport {
 /** Runs every health check: the system, the runtime, and the install's config. */
 export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   const sections: DoctorSection[] = [];
-  sections.push({ title: 'System', checks: systemChecks(options) });
+  sections.push({ title: 'System', checks: await systemChecks(options) });
 
   const installFile = join(options.home, 'install.yaml');
   const hasInstall = await exists(installFile);
@@ -361,22 +363,25 @@ async function probeService(home: string): Promise<{ installed: boolean; answeri
   return { installed: status.loaded, answering };
 }
 
-function systemChecks(options: DoctorOptions): HealthCheck[] {
+async function systemChecks(options: DoctorOptions): Promise<HealthCheck[]> {
   const nodeVersion = options.nodeVersion ?? process.versions.node;
   const platform = options.platform ?? process.platform;
   const checks: HealthCheck[] = [];
+  const problem = nodeVersionProblem(nodeVersion);
   checks.push(
-    isAtLeast(nodeVersion, NODE_MINIMUM_VERSION)
-      ? {
-          name: 'Node.js',
-          status: 'pass',
-          message: `${nodeVersion} meets the minimum ${NODE_MINIMUM_VERSION}`,
-        }
+    problem === null
+      ? { name: 'Node.js', status: 'pass', message: `${nodeVersion} is supported` }
+      : { name: 'Node.js', status: 'fail', message: problem, hint: `Install ${NODE_SUPPORTED}.` },
+  );
+  const search = await (options.fullTextSearch ?? (() => fullTextSearchProblem()))();
+  checks.push(
+    search === null
+      ? { name: 'SQLite search', status: 'pass', message: "Node's SQLite has full-text search" }
       : {
-          name: 'Node.js',
+          name: 'SQLite search',
           status: 'fail',
-          message: `${nodeVersion} is older than the minimum ${NODE_MINIMUM_VERSION}`,
-          hint: `Install Node.js ${NODE_MINIMUM_VERSION} or later.`,
+          message: search,
+          hint: `Install ${NODE_SUPPORTED}.`,
         },
   );
   checks.push(

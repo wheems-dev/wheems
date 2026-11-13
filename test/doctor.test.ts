@@ -63,16 +63,48 @@ describe('doctor', () => {
       ...probes,
       home,
       registry: registryWith().registry,
-      nodeVersion: '22.13.0',
+      nodeVersion: '22.16.0',
       platform: 'linux',
     });
     expect(report.ok).toBe(true);
     expect(statuses(report)).toEqual({
-      System: ['pass Node.js', 'pass platform'],
+      System: ['pass Node.js', 'pass SQLite search', 'pass platform'],
       'Herdr core': ['pass hc installed', 'pass hc version', 'pass Herdr core', 'pass round trip'],
       Config: ['skip install'],
     });
     expect(formatReport(report, false)).toMatch(/Doctor passed\.\n$/);
+  });
+
+  it('fails on Node 23, and on a Node whose SQLite has no full-text search', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    const system = async (options: Partial<Parameters<typeof runDoctor>[0]>) => {
+      const report = await runDoctor({
+        ...probes,
+        home,
+        registry: registryWith().registry,
+        quick: true,
+        platform: 'darwin',
+        ...options,
+      });
+      return report.sections.find((s) => s.title === 'System')?.checks ?? [];
+    };
+    const node23 = await system({ nodeVersion: '23.11.0' });
+    expect(node23[0]).toMatchObject({ name: 'Node.js', status: 'fail' });
+    expect(node23[0]?.message).toMatch(/no Node 23 release has SQLite full-text search/);
+    expect(node23[0]?.hint).toMatch(/22\.16 or later in the 22 line, or 24 or later/);
+
+    const noFts = await system({
+      nodeVersion: '24.1.0',
+      fullTextSearch: () => Promise.resolve('This Node.js has SQLite without full-text search'),
+    });
+    expect(noFts.map((c) => `${c.status} ${c.name}`)).toEqual([
+      'pass Node.js',
+      'fail SQLite search',
+      'pass platform',
+    ]);
   });
 
   it('checks the example install and warns about engines without drivers', async () => {
@@ -110,7 +142,7 @@ describe('doctor', () => {
     });
     expect(report.ok).toBe(false);
     expect(statuses(report)).toEqual({
-      System: ['fail Node.js', 'warn platform'],
+      System: ['fail Node.js', 'pass SQLite search', 'warn platform'],
       // install.yaml failed to parse, so the pin in it does not apply.
       'Herdr core': ['pass hc installed', 'pass hc version', 'pass Herdr core', 'pass round trip'],
       Config: ['fail install', 'fail install.yaml:2'],

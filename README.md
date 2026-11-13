@@ -79,7 +79,8 @@ Wheems was formerly called Opinr.
 You need:
 
 - macOS (the service runs under launchd; Linux comes later)
-- Node.js 22.13 or later
+- Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
+  search, which Wheems needs)
 - Herdr core 0.1.20 or later (`hc`)
 - A Slack workspace where you can add apps
 
@@ -102,9 +103,10 @@ npm link            # puts the wheems command on your PATH
 Clone it anywhere except `~/wheems`. That folder is your install: your private config, notes
 and knowledge base, kept in a git folder of its own that is never pushed anywhere.
 
-If your default `node` is older than 22.13, use a newer one, such as Homebrew's
+If your default `node` isn't one of those (Homebrew's `node` may be 23), use one that is, such as Homebrew's
 (`brew install node@22`), and run `/opt/homebrew/opt/node@22/bin/node dist/cli/main.js` in place
-of `wheems`. `wheems doctor` says which Node.js it runs on and fails when it's too old.
+of `wheems`. `wheems doctor` says which Node.js it runs on, and fails when it's unsupported or its SQLite has no
+full-text search.
 
 ## Set up
 

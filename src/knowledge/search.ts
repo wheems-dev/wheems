@@ -8,7 +8,7 @@ import type { InstallConfig } from '../config/schemas.js';
 import type { EmbeddingsDriver } from '../contracts/embeddings.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import type { VectorCollection, VectorStoreDriver } from '../contracts/vector-store.js';
-import { openDatabase } from '../util/sqlite.js';
+import { openDatabase, requireFullTextSearch } from '../util/sqlite.js';
 import { knowledgePaths, looksLikeSecret, noteTitle } from './notes.js';
 
 /**
@@ -90,6 +90,11 @@ export interface SearchIndexOptions {
   /** Where vectors go; needed only with embeddings. */
   vectors: VectorStoreDriver | null;
   log?: (message: string) => void;
+  /**
+   * Throws when SQLite can't do full-text search, which the index needs. Defaults to checking
+   * this Node's `node:sqlite`; tests pass their own.
+   */
+  requireFullTextSearch?: () => Promise<void>;
 }
 
 interface Current {
@@ -427,6 +432,7 @@ export class SearchIndex {
         `The ${this.workspace} workspace's search index is missing. The service rebuilds it, or run: wheems kb reindex`,
       );
     }
+    await (this.options.requireFullTextSearch ?? requireFullTextSearch)();
     const db = await openDatabase(this.dbFile(current.generation));
     createSchema(db);
     const collection =
@@ -452,6 +458,7 @@ export class SearchIndex {
     const vectors = embeddings !== null ? this.options.vectors : null;
     if (vectors) await vectors.drop(this.collectionName(generation));
 
+    await (this.options.requireFullTextSearch ?? requireFullTextSearch)();
     const db = await openDatabase(file);
     createSchema(db);
     const connection: Connection = {

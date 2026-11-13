@@ -211,6 +211,27 @@ describe('the search index', () => {
     expect((await index.status()).built).toBe(false);
   });
 
+  it("says plainly when Node's SQLite has no full-text search, rather than failing in SQLite", async () => {
+    const missing = new SearchIndex({
+      workspace: 'personal',
+      workspaceDir: workspace,
+      indexDir,
+      embeddings,
+      vectors,
+      requireFullTextSearch: () =>
+        Promise.reject(new Error('This Node.js has SQLite without full-text search (FTS5)')),
+    });
+    try {
+      await expect(missing.sync()).rejects.toThrow(/without full-text search \(FTS5\)/);
+      await expect(missing.rebuild()).rejects.toThrow(/without full-text search/);
+      // An index built by a Node.js that had it is refused the same way.
+      await index.sync();
+      await expect(missing.search('Kestrel')).rejects.toThrow(/without full-text search/);
+    } finally {
+      await missing.close();
+    }
+  });
+
   it('finds pages by keyword', async () => {
     await index.sync();
     const answer = await index.search('Kestrel');

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Check the Node.js version before loading anything that needs a newer one, so an old
-// Node.js gets a plain message rather than a stack trace from a dependency.
-const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-if (major < 22 || (major === 22 && minor < 13)) {
-  process.stderr.write(
-    `Wheems needs Node.js 22.13 or later, and this is ${process.versions.node} (${process.execPath}).\n`,
-  );
+// Check the Node.js version before loading anything that needs a newer one, so an
+// unsupported Node.js gets a plain message rather than a stack trace from a dependency.
+import { nodeVersionProblem } from '../util/node-support.js';
+
+const problem = nodeVersionProblem(process.versions.node);
+if (problem !== null) {
+  process.stderr.write(`${problem}\nThis is ${process.execPath}.\n`);
   process.exit(1);
 }
 

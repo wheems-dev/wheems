@@ -2,7 +2,7 @@ import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
-import { NODE_MINIMUM_VERSION } from '../../doctor/doctor.js';
+import { nodeVersionProblem } from '../../util/node-support.js';
 import { defaultHome, paths, type Paths } from '../../home.js';
 import { request } from '../../service/control.js';
 import {
@@ -13,7 +13,6 @@ import {
   uninstallService,
 } from '../../service/launchd.js';
 import { runService } from '../../service/service.js';
-import { isAtLeast } from '../../util/version.js';
 import type { Io } from '../program.js';
 import { packageVersion } from '../version.js';
 
@@ -24,11 +23,8 @@ export function cliPath(): string {
 
 /** Installs the service under launchd with this Node.js and build, and waits for it to answer. */
 export async function installAndWait(where: Paths): Promise<boolean> {
-  if (!isAtLeast(process.versions.node, NODE_MINIMUM_VERSION)) {
-    throw new Error(
-      `The service needs Node.js ${NODE_MINIMUM_VERSION} or later, and this is ${process.versions.node}.`,
-    );
-  }
+  const problem = nodeVersionProblem(process.versions.node);
+  if (problem !== null) throw new Error(problem);
   const cli = cliPath();
   if (!cli.endsWith('.js')) {
     throw new Error('Install the service from a build of Wheems (npm run build), not from source.');
