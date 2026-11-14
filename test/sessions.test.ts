@@ -611,12 +611,18 @@ describe('wheems session', () => {
       runtime.stop = () => Promise.reject(new Error("Herdr didn't answer"));
       const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
       expect(blocked.err).toContain("couldn't be stopped");
-      // Until it can be stopped, the next message waits rather than joining that turn.
+      // Until it can be stopped, the next message waits rather than joining that turn, even
+      // while Herdr can't say how the session is.
+      const latest = async () =>
+        (await stored((s) => s.workspace('personal').messages(session.id)))[0]?.state;
+      const get = runtime.get.bind(runtime);
+      runtime.get = () => Promise.reject(new Error("Herdr didn't answer"));
       const next = wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
       await new Promise((r) => setTimeout(r, 300));
-      expect((await stored((s) => s.workspace('personal').messages(session.id)))[0]?.state).toBe(
-        'sent',
-      );
+      expect(await latest()).toBe('sent');
+      runtime.get = get;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(await latest()).toBe('sent');
       runtime.stop = stop;
       expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
     });

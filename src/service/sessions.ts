@@ -802,13 +802,15 @@ export class SessionService {
     runtimeId: string,
     before: string | null,
   ): Promise<string | null> {
-    const live = await this.options.runtime.get(runtimeId).catch(() => null);
-    if (live?.state !== 'live' || live.status === 'idle' || live.status === 'done') return null;
+    // A lookup that fails says nothing: the turn may still be running, so it's stopped all the same.
+    const live = await this.options.runtime.get(runtimeId).catch(() => undefined);
+    if (live === null || live?.state === 'finished') return null;
+    if (live?.status === 'idle' || live?.status === 'done') return null;
     const sessions = this.options.state.workspace(workspace.id);
     const name = sessions.session(targetId)?.herdrName ?? runtimeId;
     const minutes = Math.round(this.options.answerWaitSeconds / 60);
     const why =
-      live.status === 'blocked'
+      live?.status === 'blocked'
         ? 'it was waiting for an answer at the Mac'
         : `it gave no answer within ${String(minutes)} minutes`;
     if (await this.stopRuntimeSession(name)) {
@@ -818,8 +820,8 @@ export class SessionService {
     }
     this.options.log(`Session ${targetId} didn't finish its turn, and couldn't be stopped`);
     // Held until that turn is over, or it can be stopped: see untilFree.
-    this.unfinished.set(targetId, { runtimeId: live.id, after: before });
-    return `${why}, and it couldn't be stopped, so its answers may now be out of order. See it with hc attach ${live.id}`;
+    this.unfinished.set(targetId, { runtimeId: live?.id ?? runtimeId, after: before });
+    return `${why}, and it couldn't be stopped, so its answers may now be out of order. See it with hc attach ${live?.id ?? runtimeId}`;
   }
 
   /**
@@ -834,9 +836,11 @@ export class SessionService {
     const name = target.herdrName ?? '';
     while (!this.stopped) {
       const left = this.unfinished.get(target.id);
-      const live = await runtime.get(left?.runtimeId ?? name).catch(() => null);
+      // undefined when the lookup fails: unknown, so a turn left unfinished is still held.
+      const live = await runtime.get(left?.runtimeId ?? name).catch(() => undefined);
       let free: boolean;
-      if (live?.state !== 'live') free = true;
+      if (live === undefined) free = left === undefined;
+      else if (live?.state !== 'live') free = true;
       else if (engine.capabilities.status) {
         // Blocked counts as free: typing into it fails at once, saying why.
         free = live.status !== 'working' && (left === undefined || live.status !== 'blocked');
