@@ -5,7 +5,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runCommand } from '../util/process.js';
+import { runCommand, type RunResult } from '../util/process.js';
 
 export const LABEL = 'dev.wheems.service';
 
@@ -85,10 +85,44 @@ export async function installService(spec: ServiceSpec): Promise<void> {
   await mkdir(dirname(plistPath()), { recursive: true });
   await mkdir(dirname(spec.logFile), { recursive: true });
   await writeFile(plistPath(), renderPlist(spec));
-  // Replace a running copy, if there is one, and undo a stop: launchd won't load a disabled job.
-  await runCommand('launchctl', ['bootout', `${domain()}/${LABEL}`]);
-  await runCommand('launchctl', ['enable', `${domain()}/${LABEL}`]);
-  const result = await runCommand('launchctl', ['bootstrap', domain(), plistPath()]);
+  await reloadJob(domain(), plistPath());
+}
+
+/** How launchd is run, so tests can stand in for it. */
+export interface Launchctl {
+  run: (command: string, args: string[]) => Promise<RunResult>;
+  sleep: (ms: number) => Promise<void>;
+}
+
+const launchctl: Launchctl = {
+  run: (command, args) => runCommand(command, args),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+};
+
+/**
+ * Replaces a running copy of the job, if there is one, and loads it from the plist. `bootout`
+ * returns before launchd has finished unloading the job, and a `bootstrap` then fails with
+ * "5: Input/output error" (as `wheems restart` did), so this waits until launchd says the job
+ * is gone, and tries the bootstrap again briefly if it still fails.
+ */
+export async function reloadJob(
+  domainId: string,
+  plist: string,
+  run: Launchctl = launchctl,
+): Promise<void> {
+  const job = `${domainId}/${LABEL}`;
+  await run.run('launchctl', ['bootout', job]);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (jobAbsent(await run.run('launchctl', ['print', job]))) break;
+    await run.sleep(200);
+  }
+  // Undo a stop: launchd won't load a disabled job.
+  await run.run('launchctl', ['enable', job]);
+  let result = await run.run('launchctl', ['bootstrap', domainId, plist]);
+  for (let attempt = 0; result.code !== 0 && attempt < 5; attempt++) {
+    await run.sleep(1000);
+    result = await run.run('launchctl', ['bootstrap', domainId, plist]);
+  }
   if (result.code !== 0) throw new Error(`launchctl bootstrap failed: ${result.stderr.trim()}`);
 }
 
