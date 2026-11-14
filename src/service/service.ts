@@ -187,7 +187,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     },
     ...(options.filingSeconds !== undefined && { timeoutSeconds: options.filingSeconds }),
   });
-  const sessions = new SessionService({
+  const sessions: SessionService = new SessionService({
     install: config,
     workspaces: install.workspaces,
     state,
@@ -196,6 +196,12 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     stateDir: where.state,
     sessionEnv,
     aboutYouFile: where.aboutYou,
+    // A thread session hears from sessions through its conversation, like any message.
+    tell: (sessionId: string, text: string): Promise<void> => {
+      const key = state.threadKeyOf(sessionId);
+      if (key === undefined) return Promise.reject(new Error(`No conversation for ${sessionId}`));
+      return manager.tell(key, text);
+    },
     log,
     ...(options.startupSeconds !== undefined && { startupSeconds: options.startupSeconds }),
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
@@ -215,7 +221,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     if (!state.callingSession(request.session)) throw new Error(`No session ${request.session}`);
     return { session: request.session };
   };
-  const manager = new ConversationManager({
+  const manager: ConversationManager = new ConversationManager({
     install: config,
     bindings,
     channels,
@@ -348,6 +354,20 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
               ok: true,
               details: await sessions.show(sessions.caller(request.caller), request.id),
             };
+          case 'session-send': {
+            const sent = await sessions.send(sessions.caller(request.caller), {
+              id: request.id,
+              text: request.text,
+              ...(request.wait !== undefined && { wait: request.wait }),
+              ...(request.wait_seconds !== undefined && { waitSeconds: request.wait_seconds }),
+            });
+            return {
+              ok: true,
+              sent: sent.message,
+              ...(sent.answer !== null && { answer: sent.answer }),
+              message: sent.next,
+            };
+          }
           case 'session-end': {
             const ended = await sessions.end(sessions.caller(request.caller), request.id);
             return {
@@ -363,6 +383,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     );
   } catch (error) {
     for (const channel of started) await channel.stop().catch(() => undefined);
+    await sessions.stop();
     await manager.stop();
     await search.close();
     state.close();
@@ -404,6 +425,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       clearInterval(syncTimer);
       clearInterval(tidyTimer);
       for (const channel of channels.values()) await channel.stop().catch(() => undefined);
+      await sessions.stop();
       await manager.stop();
       filing.stop();
       await search.close();
@@ -437,6 +459,12 @@ async function openStore(
       // its record for good, so nothing starts until the file is fixed or removed.
       throw new Error(
         `Could not import ${where.conversations} into the session store: ${imported.problem}\nFix the file, or remove it to start its threads afresh, then run wheems restart.`,
+      );
+    }
+    const failed = state.failWaitingMessages(new Date().toISOString());
+    if (failed > 0) {
+      log(
+        `${String(failed)} ${failed === 1 ? 'message was' : 'messages were'} still waiting for an answer when the service last stopped; marked failed`,
       );
     }
     const match = state.matchRuntime(live);

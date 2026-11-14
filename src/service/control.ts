@@ -8,7 +8,7 @@ import { createConnection, createServer, type Server } from 'node:net';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { IndexStatus } from '../knowledge/search.js';
-import type { SessionRecord } from '../state/store.js';
+import type { MessageRecord, SessionRecord } from '../state/store.js';
 import type { SessionDetails } from './sessions.js';
 
 /**
@@ -68,6 +68,14 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('session-search'), caller: callerSchema, words: z.string() }),
   z.object({ op: z.literal('session-show'), caller: callerSchema, id: z.string().min(1) }),
   z.object({ op: z.literal('session-end'), caller: callerSchema, id: z.string().min(1) }),
+  z.object({
+    op: z.literal('session-send'),
+    caller: callerSchema,
+    id: z.string().min(1),
+    text: z.string(),
+    wait: z.boolean().optional(),
+    wait_seconds: z.number().int().positive().max(3600).optional(),
+  }),
 ]);
 
 export type ControlRequest = z.infer<typeof requestSchema>;
@@ -82,6 +90,9 @@ export type ControlResponse =
       session?: SessionRecord;
       sessions?: SessionRecord[];
       details?: SessionDetails;
+      /** The answer to a `session send --wait`. */
+      answer?: string;
+      sent?: MessageRecord;
     }
   | { ok: false; error: string };
 

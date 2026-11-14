@@ -29,6 +29,13 @@ change anything, including commands and config formats, without a migration path
   chief's from any of its threads, and each new thread is told its open ones. New config limits
   them: `sessions.max_open_per_owner` and `sessions.max_depth` in `workspace.yaml`, and
   `max_sessions` on an account in `install.yaml`.
+- `wheems session send <id> "…" [--wait]`: send a message into an ad-hoc session, resuming it
+  first if it has stopped. Its answer comes back to the sender as a message from Wheems (a
+  chief hears it in its own conversation, and answers on its channel), or with `--wait` is
+  printed. A session's purpose is answered back to its starter the same way. A chief or you may
+  send to any ad-hoc session; an ad-hoc session to the sessions it started and to its owner
+  (`send owner`). A wait that would make two sessions wait on each other is refused. Messages
+  and answers are kept under `.wheems/messages/`, and `session show` lists the latest.
 - Every agent session gets `WHEEMS_SESSION`, its session id; `wheems note`, `reply` and
   `skill propose` take it as well as `WHEEMS_CONVERSATION`.
 - An agent can't be called `adhoc`, the name ad-hoc sessions' folders use.

@@ -120,6 +120,22 @@ export interface SessionChange {
   endedAt?: string;
 }
 
+export type MessageState = 'sent' | 'answered' | 'failed';
+
+/** A message sent into a session with `wheems session send`, or its purpose at start. */
+export interface MessageRecord {
+  id: string;
+  workspace: string;
+  /** The sending session's id; null for the person. */
+  sender: string | null;
+  receiver: string;
+  messageFile: string;
+  answerFile: string | null;
+  state: MessageState;
+  sentAt: string;
+  answeredAt: string | null;
+}
+
 export interface SessionFilter {
   kind?: SessionKind;
   state?: SessionState;
@@ -245,6 +261,17 @@ export class StateStore {
       skipped: Object.keys(conversations).length - imported,
       renamedTo,
     };
+  }
+
+  /**
+   * At service start: messages still waiting for an answer lost whoever followed them when the
+   * service stopped, so they're marked failed. Returns how many.
+   */
+  failWaitingMessages(at: string): number {
+    const result = this.db
+      .prepare("UPDATE messages SET state = 'failed', answered_at = ? WHERE state = 'sent'")
+      .run(at);
+    return Number(result.changes);
   }
 
   /**
@@ -621,6 +648,64 @@ export class WorkspaceSessions {
     return depth;
   }
 
+  /** Records a message sent into one of this workspace's sessions. */
+  addMessage(message: {
+    id: string;
+    sender: string | null;
+    receiver: string;
+    messageFile: string;
+    sentAt: string;
+  }): MessageRecord {
+    this.db
+      .prepare(
+        `INSERT INTO messages (id, workspace, sender, receiver, message_file, state, sent_at)
+         VALUES (?, ?, ?, ?, ?, 'sent', ?)`,
+      )
+      .run(
+        message.id,
+        this.workspace,
+        message.sender,
+        message.receiver,
+        message.messageFile,
+        message.sentAt,
+      );
+    const added = this.message(message.id);
+    if (!added) throw new Error(`Message ${message.id} wasn't recorded`);
+    return added;
+  }
+
+  message(id: string): MessageRecord | undefined {
+    const row = this.db
+      .prepare(`${MESSAGE_SELECT} WHERE workspace = ? AND id = ?`)
+      .get(this.workspace, id);
+    return row === undefined ? undefined : toMessage(row);
+  }
+
+  /** Marks a sent message answered (with the file holding its answer, if any) or failed. */
+  finishMessage(
+    id: string,
+    state: 'answered' | 'failed',
+    answerFile: string | null,
+    at: string,
+  ): void {
+    this.db
+      .prepare(
+        "UPDATE messages SET state = ?, answer_file = ?, answered_at = ? WHERE workspace = ? AND id = ? AND state = 'sent'",
+      )
+      .run(state, answerFile, at, this.workspace, id);
+  }
+
+  /** A session's latest messages, sent or received, newest first. */
+  messages(sessionId: string, limit = 5): MessageRecord[] {
+    return this.db
+      .prepare(
+        `${MESSAGE_SELECT} WHERE workspace = ? AND (receiver = ? OR sender = ?)
+         ORDER BY sent_at DESC, id DESC LIMIT ?`,
+      )
+      .all(this.workspace, sessionId, sessionId, limit)
+      .map(toMessage);
+  }
+
   /**
    * Sessions whose title, purpose, summary, agent or project has every one of the words,
    * most recently active first.
@@ -699,6 +784,25 @@ function toConversation(row: Row): Conversation {
   conversation.pending = Number(row.pending);
   if (Number(row.noting) === 1) conversation.noting = true;
   return conversation;
+}
+
+const MESSAGE_SELECT = `SELECT id, workspace, sender, receiver, message_file, answer_file, state,
+  sent_at, answered_at FROM messages`;
+
+function toMessage(row: Row): MessageRecord {
+  const text = (value: SQLOutputValue | undefined) =>
+    value === null || value === undefined ? null : String(value);
+  return {
+    id: String(row.id),
+    workspace: String(row.workspace),
+    sender: text(row.sender),
+    receiver: String(row.receiver),
+    messageFile: String(row.message_file),
+    answerFile: text(row.answer_file),
+    state: String(row.state) as MessageState,
+    sentAt: String(row.sent_at),
+    answeredAt: text(row.answered_at),
+  };
 }
 
 function toSession(row: Row): SessionRecord {

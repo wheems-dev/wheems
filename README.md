@@ -284,27 +284,35 @@ wheems session new --title "Packaging suppliers" --purpose "Find five UK packagi
 - `wheems session list` and `wheems session search "…"` find sessions in the workspace, most
   recently active first. Search looks at titles, purposes, summaries and agent names. A session's
   summary is written by Wheems: its purpose at first, then the title of its latest note.
-- `wheems session show <id>` gives its details, its latest answer and the `hc attach` line to
-  watch it.
+- The chief talks to a session with `wheems session send <id> "…"`, and gets its answer back as
+  a message from Wheems in the conversation it sent from, then tells you what you need to know.
+  The answer to a session's purpose comes back the same way. With `--wait`, it waits for the
+  answer instead (up to ten minutes, or `--timeout <seconds>`). A stopped session is resumed
+  first, and each session takes one message at a time.
+- `wheems session show <id>` gives its details, its latest answer, its recent messages and the
+  `hc attach` line to watch it.
 - `wheems session end <id>` asks it for its note, then ends it. Only its owner or you can end
   one. An ended session stays in the store and in search, as a record.
 - You can run the same commands yourself, from a terminal; add `--workspace <id>` when there's
   more than one. Sessions you start are yours.
 
-Sessions only ever see their own workspace's sessions. Limits stop them multiplying or looping:
+Sessions only ever see their own workspace's sessions. A chief (or you) may send to any ad-hoc
+session in the workspace; an ad-hoc session only to the sessions it started and to its owner
+(`wheems session send owner "…"`). Limits stop them multiplying or looping:
 each owner may have three open (`sessions.max_open_per_owner`), a chief's session may start one
 level of sessions and those one more (`sessions.max_depth`), and an account may cap how many
-sessions run at once (`max_sessions` in `install.yaml`).
+sessions run at once (`max_sessions` in `install.yaml`). A `--wait` send that would make two
+sessions wait on each other is refused.
 
-A session's answers are never posted to a channel. Its last message of each turn is its answer,
-kept by its engine and shown by `wheems session show`; you can also watch it with `hc attach`.
+A session's answers are never posted to a channel. Its last message of each turn is its answer:
+it goes back to whoever sent the message, and `wheems session show` shows the latest; you can
+also watch it with `hc attach`. Messages and answers are kept as files under
+`.wheems/messages/<workspace>/`.
 Inside an ad-hoc session, `wheems reply` is refused, since there's no chat to reply in: it
 answers its owner instead.
 
 Sessions don't depend on Slack: they live in Wheems's core, and only a chief's conversation
 reaches you, through whatever channel it uses.
-
-Coming next: `wheems session send` to talk to a session.
 
 ## The knowledge loop
 
@@ -633,7 +641,8 @@ need it.
 | `wheems skill list [--json]`                                        | Lists the library and waiting proposals                                                                   |
 | `wheems session new [agent] --title --purpose [--workspace]`        | Starts an ad-hoc session, owned by you, and prints its id                                                 |
 | `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                             |
-| `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer, or ends one after asking for its note                   |
+| `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`                   |
+| `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note      |
 | `wheems skill show <name> [version]`                                | Prints a skill's `SKILL.md`                                                                               |
 | `wheems start`, `stop`, `restart`                                   | Starts, stops or restarts the background service                                                          |
 | `wheems status`                                                     | Whether the service is running, and where each workspace chats                                            |
