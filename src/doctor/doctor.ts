@@ -22,7 +22,7 @@ import { listProposals } from '../skills/proposals.js';
 import { compareVersions } from '../util/version.js';
 import { NODE_SUPPORTED, nodeVersionProblem } from '../util/node-support.js';
 import { fullTextSearchProblem } from '../util/sqlite.js';
-import { StateStore } from '../state/store.js';
+import { StateStore, readConversationsFile } from '../state/store.js';
 export { defaultHome } from '../home.js';
 
 export interface DoctorOptions {
@@ -429,12 +429,20 @@ async function sessionStoreChecks(
 ): Promise<HealthCheck[]> {
   const where = paths(options.home, options.env);
   const checks: HealthCheck[] = [];
-  if (await exists(where.conversations)) {
+  const legacy = await readConversationsFile(where.conversations);
+  if (legacy.status === 'unreadable') {
+    checks.push({
+      name: 'conversations.json',
+      status: 'fail',
+      message: `${tilde(where.conversations, options.env)} can't be read, so the service won't start until it's imported: ${legacy.problem}`,
+      hint: 'Fix the file, or remove it to start its threads afresh, then run wheems restart.',
+    });
+  } else if (legacy.status === 'read') {
     checks.push({
       name: 'conversations.json',
       status: 'warn',
       message: `${tilde(where.conversations, options.env)} hasn't been imported into the session store`,
-      hint: 'The service imports it when it starts: wheems restart. If it still stays, the service log (wheems logs) says why.',
+      hint: 'The service imports it when it starts: wheems restart.',
     });
   }
   if (!(await exists(where.store))) {

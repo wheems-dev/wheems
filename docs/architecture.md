@@ -470,8 +470,9 @@ does.
 - **Migrations in code.** The schema version is kept in `PRAGMA user_version` and migrations run at
   service start; a store from a newer Wheems is refused rather than written to. On the first
   start, `.wheems/conversations.json` is imported and renamed `conversations.json.imported`. An
-  import never replaces a thread already in the store, and a file that can't be read is left
-  where it is (its threads start afresh; doctor and the log say so).
+  import never replaces a thread already in the store. A file that can't be read is left where it
+  is and the service refuses to start, saying why, until it's fixed or removed: its threads'
+  sessions may still be running, and a thread started afresh would replace its record for good.
 - **In code**, `src/state/store.ts` holds every query. Those made for a caller go through
   `workspace(id)`, which filters each one by that workspace; the install-wide ones (writing
   agents, the import, matching Herdr, routing chat threads, whose keys carry their workspace)

@@ -335,8 +335,10 @@ async function openStore(
         `Imported ${String(imported.conversations)} ${imported.conversations === 1 ? 'conversation' : 'conversations'} into the session store${imported.skipped > 0 ? ` (${String(imported.skipped)} already there)` : ''}; the old file is ${imported.renamedTo}`,
       );
     } else if (imported.status === 'unreadable') {
-      log(
-        `Could not import ${where.conversations}, so it's left where it is and its threads start afresh: ${imported.problem}`,
+      // Its threads' sessions may still be running, and a thread started afresh would replace
+      // its record for good, so nothing starts until the file is fixed or removed.
+      throw new Error(
+        `Could not import ${where.conversations} into the session store: ${imported.problem}\nFix the file, or remove it to start its threads afresh, then run wheems restart.`,
       );
     }
     const match = state.matchRuntime(live);

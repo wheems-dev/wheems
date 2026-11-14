@@ -157,6 +157,41 @@ describe('the service', () => {
     expect((await runtime.list()).map((s) => s.name)).toEqual(['stray']);
   });
 
+  it("refuses to start while conversations.json can't be imported, then takes its threads up again once it's fixed", async () => {
+    await service?.stop();
+    service = undefined;
+    const where = paths(home, env);
+    const key = conversationKey('personal', 'slack', 'D1', '1700000000.000200');
+    const conversation = {
+      workspace: 'personal',
+      connection: 'slack',
+      channel: 'D1',
+      thread: '1700000000.000200',
+      sessionId: uuidFor(key),
+      sessionName: 'personal-still-on',
+      createdAt: '2026-11-13T10:00:00.000Z',
+      lastActiveAt: '2026-11-13T10:00:00.000Z',
+      lastAnswerId: 'answer-1',
+    };
+    // Its session is still running from before the upgrade.
+    await runtime.start({
+      name: 'personal-still-on',
+      command: ['fake-agent'],
+      labels: { wheems: 'conversation', workspace: 'personal' },
+    });
+    writeFileSync(where.conversations, `{"${key}": {"workspace": 1}}`);
+    await expect(startService()).rejects.toThrow(/Could not import .*conversations\.json/);
+    expect(existsSync(where.conversations)).toBe(true);
+    // Nothing answers in the meantime, so no thread can start afresh and replace its record.
+    await expect(request(where.socket, { op: 'ping' }, 500)).rejects.toThrow();
+
+    writeFileSync(where.conversations, JSON.stringify({ [key]: conversation }));
+    service = await startService();
+    const reply = await cliReply(key, ['still here']);
+    expect(reply).toMatchObject({ code: 0 });
+    expect(channel.sent.map((m) => m.text)).toEqual(['still here']);
+  });
+
   it('answers on its control socket, privately', async () => {
     const where = paths(home, env);
     expect(await request(where.socket, { op: 'ping' })).toEqual({ ok: true, version: '9.9.9' });

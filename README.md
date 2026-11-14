@@ -527,8 +527,9 @@ it's next needed.
 
 Only the service writes to the store. Its schema version is kept in the file and brought up to
 date when the service starts. The first time a Wheems with the store starts, it imports
-`.wheems/conversations.json` and renames it `conversations.json.imported`; a file it can't read
-is left where it is, its threads start afresh, and the log says why.
+`.wheems/conversations.json` and renames it `conversations.json.imported`. If it can't read the
+file, it leaves it where it is and won't start, and the log and `wheems doctor` say why: fix the
+file, or remove it to start its threads afresh, then run `wheems restart`.
 
 ## Doctor and validate
 
@@ -550,7 +551,7 @@ It exits with 1 when anything fails. `--json` prints the report as JSON.
 The session store check warns about a Herdr session with a Wheems label (`wheems=<session id>`)
 that the store has no record of. Wheems never adopts or removes one; stop it with `hc kill` if
 nothing needs it. It also warns when `.wheems/conversations.json` from an older Wheems is still
-waiting to be imported.
+waiting to be imported, and fails when it can't be read.
 
 `wheems validate` checks config files or a whole install folder, with line numbers:
 

@@ -271,6 +271,10 @@ describe('doctor', () => {
       .find((x) => x.title === 'Service')
       ?.checks.find((c) => c.name === 'unknown session');
     expect(unknown?.message).toContain('personal-stray');
+    writeFileSync(join(home, '.wheems', 'conversations.json'), '{"a": ');
+    const damaged = await runDoctor({ home, registry, quick: true, ...probes });
+    expect(statuses(damaged).Service).toContain('fail conversations.json');
+    expect(damaged.ok).toBe(false);
     expect((await runtime.list()).map((s) => s.name).sort()).toEqual([
       'personal-filer',
       'personal-known',

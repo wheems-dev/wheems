@@ -188,24 +188,14 @@ export class StateStore {
   /**
    * Imports the conversations a Wheems from before the store kept in `conversations.json`,
    * then renames it `conversations.json.imported`. Never replaces a thread already in the
-   * store. A file that can't be read is left where it is, and nothing is imported from it.
+   * store. A file that can't be read is left where it is, and nothing is imported from it: the
+   * service then refuses to start until it's fixed or removed, since its threads' sessions may
+   * still be running.
    */
   async importConversations(file: string): Promise<ImportResult> {
-    let raw: string;
-    try {
-      raw = await readFile(file, 'utf8');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'none' };
-      return { status: 'unreadable', problem: describe(error) };
-    }
-    let conversations: Record<string, Conversation>;
-    try {
-      const parsed = z.record(z.string(), conversationSchema).safeParse(JSON.parse(raw) as unknown);
-      if (!parsed.success) return { status: 'unreadable', problem: z.prettifyError(parsed.error) };
-      conversations = parsed.data;
-    } catch (error) {
-      return { status: 'unreadable', problem: describe(error) };
-    }
+    const read = await readConversationsFile(file);
+    if (read.status !== 'read') return read;
+    const conversations = read.conversations;
     let imported = 0;
     this.transaction(() => {
       for (const [key, conversation] of Object.entries(conversations)) {
@@ -514,6 +504,30 @@ export class WorkspaceSessions {
       )
       .all(this.workspace, query, this.workspace, limit)
       .map(toSession);
+  }
+}
+
+/** Reads `conversations.json` from a Wheems before the store, without changing it. */
+export async function readConversationsFile(
+  file: string,
+): Promise<
+  | { status: 'none' }
+  | { status: 'unreadable'; problem: string }
+  | { status: 'read'; conversations: Record<string, Conversation> }
+> {
+  let raw: string;
+  try {
+    raw = await readFile(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { status: 'none' };
+    return { status: 'unreadable', problem: describe(error) };
+  }
+  try {
+    const parsed = z.record(z.string(), conversationSchema).safeParse(JSON.parse(raw) as unknown);
+    if (!parsed.success) return { status: 'unreadable', problem: z.prettifyError(parsed.error) };
+    return { status: 'read', conversations: parsed.data };
+  } catch (error) {
+    return { status: 'unreadable', problem: describe(error) };
   }
 }
 

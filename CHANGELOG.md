@@ -16,7 +16,8 @@ change anything, including commands and config formats, without a migration path
   rather than leaving messages to go unanswered.
 - The session store, `.wheems/state.sqlite`: a record of each workspace's chief and of every
   session the service runs, kept with Node's built-in SQLite. It replaces `conversations.json`,
-  which the service imports the first time it starts and renames `conversations.json.imported`.
+  which the service imports the first time it starts and renames `conversations.json.imported`
+  (it won't start while the file can't be read).
   When the service starts, a session whose Herdr session has gone is marked stopped, and resumes
   when it's next needed. It's the first step towards `wheems session` in milestone 3.
 - `wheems doctor` reports a Herdr session with a Wheems label that the session store has no
