@@ -627,6 +627,30 @@ describe('wheems session', () => {
       expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
     });
 
+    it('stops or holds a turn it lost track of, so its late answer is never the next one', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+      const get = runtime.get.bind(runtime);
+      const stop = runtime.stop.bind(runtime);
+      const first = wheems(['session', 'send', session.id, 'Work slowly.', '--wait']);
+      await waitFor(async () =>
+        (await stored((s) => s.workspace('personal').messages(session.id))).some(
+          (m) => m.state === 'sent',
+        ),
+      );
+      // Herdr stops answering while the turn is followed, and the session can't be stopped.
+      runtime.get = () => Promise.reject(new Error("Herdr didn't answer"));
+      runtime.stop = () => Promise.reject(new Error("Herdr didn't answer"));
+      expect((await first).err).toContain("Herdr didn't answer");
+      const next = wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      await new Promise((r) => setTimeout(r, 100));
+      runtime.get = get;
+      runtime.stop = stop;
+      // The slow turn's late answer belongs to the first message, not this one.
+      expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
     it('keeps an answer it could not hand back, as a failed message', async () => {
       const parent = await newSession('parent');
       await settled(parent.id);

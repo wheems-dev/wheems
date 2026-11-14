@@ -692,7 +692,9 @@ export class SessionService {
       const live =
         target.herdrName !== null ? await this.options.runtime.get(target.herdrName) : null;
       if (live?.state !== 'live') {
-        const started = await this.admit(() => this.resume(workspace, target, engine, text));
+        const started = await this.admit(() =>
+          this.resume(workspace, target, engine, text, before),
+        );
         return await this.follow(workspace, targetId, message, started.id, 0, before);
       }
       if (engine.capabilities.status) {
@@ -709,6 +711,8 @@ export class SessionService {
         if (isDriverError(error, 'blocked')) {
           return fail(`it's waiting for an answer at the Mac: hc attach ${live.id}`);
         }
+        // The text may have gone in before the error: treat it as a turn that may be running.
+        if (!this.stopped) await this.cutShort(workspace, targetId, live.id, before);
         throw error;
       }
       return await this.follow(workspace, targetId, message, live.id, fromTurn, before);
@@ -737,6 +741,8 @@ export class SessionService {
         sessions.update(targetId, { state: 'idle', lastActiveAt: now }, 'working');
       }
     };
+    /** Whether the turn is known to be over, so an error after it needs no stopping. */
+    let turnOver = false;
     try {
       const target = sessions.session(targetId);
       if (!target) throw new Error('it has gone from the store');
@@ -754,6 +760,7 @@ export class SessionService {
         this.options.answerWaitSeconds,
       );
       if (this.stopped) return { answer: null, problem: 'the service stopped' };
+      turnOver = ended;
       // A turn still running would answer into the next message's turn, so it's stopped.
       const cutShort = ended
         ? null
@@ -786,8 +793,24 @@ export class SessionService {
       finish('answered', answerFile);
       return { answer, problem: null };
     } catch (error) {
+      // Following failed partway: the turn may still be running, so it's stopped or held.
+      if (!turnOver && !this.stopped) await this.cutShort(workspace, targetId, runtimeId, before);
       finish('failed', null);
       return { answer: null, problem: describe(error) };
+    }
+  }
+
+  /** Stops a turn that may still be running, or holds the session if that fails in any way. */
+  private async cutShort(
+    workspace: LoadedWorkspace,
+    targetId: string,
+    runtimeId: string,
+    before: string | null,
+  ): Promise<void> {
+    try {
+      await this.stopUnfinishedTurn(workspace, targetId, runtimeId, before);
+    } catch {
+      this.unfinished.set(targetId, { runtimeId, after: before });
     }
   }
 
@@ -873,6 +896,8 @@ export class SessionService {
     target: SessionRecord,
     engine: EngineDriver,
     text: string,
+    /** The answer before this message, for a hold if the launch fails partway. */
+    before: string | null,
   ): Promise<SessionInfo> {
     const name = target.agent?.split('/').at(-1);
     const agent = workspace.agents.find((a) => a.definition.name === name);
@@ -910,7 +935,10 @@ export class SessionService {
       this.options.log(`Resumed session ${target.id} (${started.id}) in ${workspace.id}`);
       return started;
     } catch (error) {
-      await this.stopRuntimeSession(herdrName);
+      if (!(await this.stopRuntimeSession(herdrName))) {
+        // It may be running with the message: nothing more goes in until that's over.
+        this.unfinished.set(target.id, { runtimeId: herdrName, after: before });
+      }
       throw error;
     }
   }
