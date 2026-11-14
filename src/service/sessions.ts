@@ -157,6 +157,11 @@ export class SessionService {
   /** Who's waiting on whom with `send --wait`: a session's id, then the ones it waits on. */
   private readonly waits = new Map<string, string[]>();
   private stopped = false;
+  /**
+   * Ad-hoc sessions whose turn didn't finish and couldn't be stopped: the runtime session, and
+   * the answer before that turn. Nothing more is typed into one until that turn is over.
+   */
+  private readonly unfinished = new Map<string, { runtimeId: string; after: string | null }>();
 
   constructor(options: SessionServiceOptions) {
     this.options = {
@@ -676,6 +681,13 @@ export class SessionService {
       const target = sessions.session(targetId);
       if (!target || target.state === 'ended') return fail('it has ended');
       const engine = this.engineOf(caller, target);
+      if (!(await this.untilFree(caller, target))) {
+        const runtimeId = this.unfinished.get(targetId)?.runtimeId ?? target.herdrName ?? '';
+        return fail(
+          `it's still busy with an earlier turn, which couldn't be stopped. See it with hc attach ${runtimeId}`,
+        );
+      }
+      // Taken once any earlier turn is over, so its late answer isn't taken for this one's.
       const before = (await this.answers(caller, target, null).catch(() => [])).at(-1)?.id ?? null;
       const live =
         target.herdrName !== null ? await this.options.runtime.get(target.herdrName) : null;
@@ -721,7 +733,9 @@ export class SessionService {
       if (this.stopped) return;
       const now = new Date().toISOString();
       sessions.finishMessage(message.id, state, answerFile, now);
-      sessions.update(targetId, { state: 'idle', lastActiveAt: now }, 'working');
+      if (!this.unfinished.has(targetId)) {
+        sessions.update(targetId, { state: 'idle', lastActiveAt: now }, 'working');
+      }
     };
     try {
       const target = sessions.session(targetId);
@@ -741,7 +755,9 @@ export class SessionService {
       );
       if (this.stopped) return { answer: null, problem: 'the service stopped' };
       // A turn still running would answer into the next message's turn, so it's stopped.
-      const cutShort = ended ? null : await this.stopUnfinishedTurn(workspace, targetId, runtimeId);
+      const cutShort = ended
+        ? null
+        : await this.stopUnfinishedTurn(workspace, targetId, runtimeId, before);
       // The engine may still be writing its record when the turn ends; give it a moment. A
       // turn that didn't end as expected may still have answered, such as one that took the
       // message in while it was busy.
@@ -784,6 +800,7 @@ export class SessionService {
     workspace: LoadedWorkspace,
     targetId: string,
     runtimeId: string,
+    before: string | null,
   ): Promise<string | null> {
     const live = await this.options.runtime.get(runtimeId).catch(() => null);
     if (live?.state !== 'live' || live.status === 'idle' || live.status === 'done') return null;
@@ -800,7 +817,50 @@ export class SessionService {
       return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it`;
     }
     this.options.log(`Session ${targetId} didn't finish its turn, and couldn't be stopped`);
+    // Held until that turn is over, or it can be stopped: see untilFree.
+    this.unfinished.set(targetId, { runtimeId: live.id, after: before });
     return `${why}, and it couldn't be stopped, so its answers may now be out of order. See it with hc attach ${live.id}`;
+  }
+
+  /**
+   * Waits, up to the time an answer gets, until a session is free for the next message: no
+   * earlier turn still running (for engines that report status), and any turn left unfinished
+   * over: answered, or stopped (tried again as it waits). False if it isn't free in time.
+   */
+  private async untilFree(caller: Caller, target: SessionRecord): Promise<boolean> {
+    const { runtime } = this.options;
+    const engine = this.engineOf(caller, target);
+    const deadline = Date.now() + this.options.answerWaitSeconds * 1000;
+    const name = target.herdrName ?? '';
+    while (!this.stopped) {
+      const left = this.unfinished.get(target.id);
+      const live = await runtime.get(left?.runtimeId ?? name).catch(() => null);
+      let free: boolean;
+      if (live?.state !== 'live') free = true;
+      else if (engine.capabilities.status) {
+        // Blocked counts as free: typing into it fails at once, saying why.
+        free = live.status !== 'working' && (left === undefined || live.status !== 'blocked');
+      } else {
+        free =
+          left === undefined ||
+          (await this.answers(caller, target, left.after).catch(() => [])).length > 0;
+      }
+      if (!free && left !== undefined && (await this.stopRuntimeSession(left.runtimeId))) {
+        this.sessions(caller).update(target.id, { state: 'stopped' }, 'working');
+        free = true;
+      }
+      if (free) {
+        this.unfinished.delete(target.id);
+        return true;
+      }
+      if (Date.now() > deadline) return false;
+      if (live?.state === 'live' && engine.capabilities.status && left === undefined) {
+        await runtime.wait(live.id, { timeoutSeconds: Math.min(60, secondsLeft(deadline)) });
+      } else {
+        await sleep(this.options.answerPollMs);
+      }
+    }
+    return false;
   }
 
   /** Starts a stopped ad-hoc session again, resuming its engine session, with a message. */
@@ -999,7 +1059,7 @@ export class SessionService {
     const now = new Date().toISOString();
     for (const session of open) {
       // A message being followed keeps its session's state itself.
-      if (this.inbox.has(session.id)) continue;
+      if (this.inbox.has(session.id) || this.unfinished.has(session.id)) continue;
       const runtime = live.get(session.herdrName);
       let state: SessionState = session.state;
       if (runtime === undefined) state = 'stopped';

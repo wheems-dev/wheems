@@ -429,7 +429,8 @@ message arrives as `Wheems: message from <sender>:` and the text.
   before has been answered, and its answer is the session's answers since it was typed, so
   answers are never mixed up between senders. A turn that doesn't finish (no answer within an
   hour, or stuck waiting for an answer at the Mac) is stopped, so a late answer can't be taken for
-  the next message's; the next message resumes the session. Answers handed back to an ad-hoc session queue in
+  the next message's; the next message resumes the session. If it can't be stopped, nothing more
+  is typed into it until that turn is over, or a later try to stop it works. Answers handed back to an ad-hoc session queue in
   its inbox in the same way.
 - **An ad-hoc session can send to its owner** with `wheems session send owner "…"`, to tell it
   something unasked, such as what came of work it handed on. For a chief, that's the thread that

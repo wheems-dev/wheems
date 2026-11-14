@@ -603,6 +603,24 @@ describe('wheems session', () => {
       expect(next.out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
     });
 
+    it("holds the next message while a turn it couldn't stop is unfinished", async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('permission') ? 'block' : 'answer');
+      const stop = runtime.stop.bind(runtime);
+      runtime.stop = () => Promise.reject(new Error("Herdr didn't answer"));
+      const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
+      expect(blocked.err).toContain("couldn't be stopped");
+      // Until it can be stopped, the next message waits rather than joining that turn.
+      const next = wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      await new Promise((r) => setTimeout(r, 300));
+      expect((await stored((s) => s.workspace('personal').messages(session.id)))[0]?.state).toBe(
+        'sent',
+      );
+      runtime.stop = stop;
+      expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
     it('keeps an answer it could not hand back, as a failed message', async () => {
       const parent = await newSession('parent');
       await settled(parent.id);
