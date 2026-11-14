@@ -7,7 +7,7 @@
  * for the service itself: writing agents from config, importing `conversations.json`, matching
  * the store against Herdr at start, and routing chat threads, whose keys carry their workspace.
  */
-import { mkdir, readFile, rename } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from 'node:sqlite';
 import { z } from 'zod';
@@ -121,12 +121,15 @@ export interface SessionChange {
 }
 
 export type MessageState = 'sent' | 'answered' | 'failed';
+/** A message sent (or a session's purpose), or an answer handed back to its sender. */
+export type MessageKind = 'message' | 'handback';
 
 /** A message sent into a session with `wheems session send`, or its purpose at start. */
 export interface MessageRecord {
   id: string;
   workspace: string;
-  /** The sending session's id; null for the person. */
+  kind: MessageKind;
+  /** The sending session's id; null for the person. For a hand-back, the session that answered. */
   sender: string | null;
   receiver: string;
   messageFile: string;
@@ -189,7 +192,12 @@ export class StateStore {
    */
   static async open(file: string, options: { readOnly?: boolean } = {}): Promise<StateStore> {
     const readOnly = options.readOnly === true;
-    if (!readOnly) await mkdir(dirname(file), { recursive: true });
+    if (!readOnly) {
+      await mkdir(dirname(file), { recursive: true });
+      // Made owner-only before SQLite opens it: its -wal and -shm files take the database's mode.
+      await writeFile(file, '', { flag: 'a', mode: 0o600 });
+      await ownerOnly(file);
+    }
     const db = await openDatabase(file, { readOnly });
     try {
       if (readOnly) {
@@ -202,6 +210,8 @@ export class StateStore {
       } else {
         db.exec('PRAGMA foreign_keys = ON');
         migrate(db);
+        // Stores from before this, and their -wal and -shm files, were readable by everyone.
+        for (const companion of [`${file}-wal`, `${file}-shm`]) await ownerOnly(companion);
       }
     } catch (error) {
       db.close();
@@ -265,13 +275,21 @@ export class StateStore {
 
   /**
    * At service start: messages still waiting for an answer lost whoever followed them when the
-   * service stopped, so they're marked failed. Returns how many.
+   * service stopped, so they're marked failed. Returns them as they were, in every workspace,
+   * so their senders can be told.
    */
-  failWaitingMessages(at: string): number {
-    const result = this.db
-      .prepare("UPDATE messages SET state = 'failed', answered_at = ? WHERE state = 'sent'")
-      .run(at);
-    return Number(result.changes);
+  failWaitingMessages(at: string): MessageRecord[] {
+    let lost: MessageRecord[] = [];
+    this.transaction(() => {
+      lost = this.db
+        .prepare(`${MESSAGE_SELECT} WHERE state = 'sent' ORDER BY sent_at, id`)
+        .all()
+        .map(toMessage);
+      this.db
+        .prepare("UPDATE messages SET state = 'failed', answered_at = ? WHERE state = 'sent'")
+        .run(at);
+    });
+    return lost;
   }
 
   /**
@@ -651,6 +669,7 @@ export class WorkspaceSessions {
   /** Records a message sent into one of this workspace's sessions. */
   addMessage(message: {
     id: string;
+    kind?: MessageKind;
     sender: string | null;
     receiver: string;
     messageFile: string;
@@ -658,12 +677,13 @@ export class WorkspaceSessions {
   }): MessageRecord {
     this.db
       .prepare(
-        `INSERT INTO messages (id, workspace, sender, receiver, message_file, state, sent_at)
-         VALUES (?, ?, ?, ?, ?, 'sent', ?)`,
+        `INSERT INTO messages (id, workspace, kind, sender, receiver, message_file, state, sent_at)
+         VALUES (?, ?, ?, ?, ?, ?, 'sent', ?)`,
       )
       .run(
         message.id,
         this.workspace,
+        message.kind ?? 'message',
         message.sender,
         message.receiver,
         message.messageFile,
@@ -786,8 +806,8 @@ function toConversation(row: Row): Conversation {
   return conversation;
 }
 
-const MESSAGE_SELECT = `SELECT id, workspace, sender, receiver, message_file, answer_file, state,
-  sent_at, answered_at FROM messages`;
+const MESSAGE_SELECT = `SELECT id, workspace, kind, sender, receiver, message_file, answer_file,
+  state, sent_at, answered_at FROM messages`;
 
 function toMessage(row: Row): MessageRecord {
   const text = (value: SQLOutputValue | undefined) =>
@@ -795,6 +815,7 @@ function toMessage(row: Row): MessageRecord {
   return {
     id: String(row.id),
     workspace: String(row.workspace),
+    kind: String(row.kind) as MessageKind,
     sender: text(row.sender),
     receiver: String(row.receiver),
     messageFile: String(row.message_file),
@@ -830,6 +851,15 @@ function toSession(row: Row): SessionRecord {
     lastActiveAt: String(row.last_active_at),
     endedAt: text(row.ended_at),
   };
+}
+
+/** Makes a file readable and writable by its owner only, if it exists. */
+async function ownerOnly(file: string): Promise<void> {
+  try {
+    await chmod(file, 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 function describe(error: unknown): string {

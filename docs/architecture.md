@@ -466,7 +466,11 @@ message arrives as `Wheems: message from <sender>:` and the text.
 
 A send is a plain message and its answer, both kept as files under
 `.wheems/messages/<workspace>/` and recorded in the store's `messages` table. A message still
-waiting for its answer when the service stops is marked failed when it next starts. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
+waiting for its answer when the service stops is marked failed when it next starts, and its
+sender is told, the way answers reach it: `Wheems: your message to session <id> ("<title>") was
+lost when Wheems restarted. Send it again if you still need it.` (a chief hears it in its
+conversation). An answer that was being handed back is delivered again. The person's own
+messages are only marked; `wheems session show` lists them. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
 `task.md`) instead of a fresh one, so the task stays the one hand-off: a brief, a result, the same
 checks and the same run record. The only difference is that the session receiving it keeps its
 context.
@@ -536,7 +540,8 @@ none named, the session runs the owner's own agent file.
 ### The session store
 
 `.wheems/state.sqlite`, one per install, using Node's built-in `node:sqlite` as the search index
-does.
+does. It and its `-wal` and `-shm` files are owner-only (0600), like the secrets; the service
+mends older ones when it starts.
 
 - **Herdr says whether a session is alive; the store says what it's for.** The store doesn't copy
   Herdr's live state. Every session Wheems starts is labelled `wheems=<session id>` in Herdr, and

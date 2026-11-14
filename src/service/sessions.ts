@@ -18,6 +18,7 @@ import {
 import {
   SESSION_LABEL,
   sessionLabels,
+  type MessageKind,
   type MessageRecord,
   type SessionFilter,
   type SessionKind,
@@ -644,6 +645,7 @@ export class SessionService {
     sender: string | null,
     receiver: string,
     text: string,
+    kind: MessageKind = 'message',
   ): Promise<MessageRecord> {
     const id = randomUUID();
     const dir = join(this.options.stateDir, 'messages', workspace.id);
@@ -652,6 +654,7 @@ export class SessionService {
     await writeFile(file, `${text}\n`);
     return this.options.state.workspace(workspace.id).addMessage({
       id,
+      kind,
       sender,
       receiver,
       messageFile: file,
@@ -968,30 +971,76 @@ export class SessionService {
       outcome.answer !== null
         ? `Wheems: answer from ${who}:\n\n${outcome.answer}`
         : `Wheems: no answer from ${who}, because ${outcome.problem}. See it with wheems session show ${targetId}.`;
-    // Kept as a message from the session that answered, so it's never lost, even undelivered.
+    await this.passBack(workspace, from, targetId, text);
+  }
+
+  /**
+   * Delivers a message from Wheems about a session (`aboutId`) to another (`to`): typed into an
+   * ad-hoc session through its inbox, or told to a chief's conversation. Kept as a hand-back
+   * from `aboutId`, so it's never lost, even undelivered, and can be delivered again after a
+   * restart.
+   */
+  private async passBack(
+    workspace: LoadedWorkspace,
+    to: SessionRecord,
+    aboutId: string,
+    text: string,
+  ): Promise<void> {
+    const sessions = this.options.state.workspace(workspace.id);
     let message: MessageRecord | undefined;
     const failed = (problem: string) => {
       if (message) sessions.finishMessage(message.id, 'failed', null, new Date().toISOString());
       this.options.log(
-        `Couldn't hand the answer from ${who} back to ${fromId}: ${problem}${message ? ` (kept as message ${message.id})` : ''}`,
+        `Couldn't pass a message from session ${aboutId} on to ${to.id}: ${problem}${message ? ` (kept as message ${message.id})` : ''}`,
       );
     };
     try {
-      message = await this.record(workspace, targetId, from.id, text);
-      if (from.kind === 'thread') {
+      message = await this.record(workspace, aboutId, to.id, text, 'handback');
+      if (to.kind === 'thread') {
         if (!this.options.tell) throw new Error("its conversation can't be reached");
-        await this.options.tell(from.id, text);
+        await this.options.tell(to.id, text);
         sessions.finishMessage(message.id, 'answered', null, new Date().toISOString());
-      } else if (from.kind === 'adhoc') {
+      } else if (to.kind === 'adhoc') {
         const kept = message;
-        const delivered = await this.enqueue(from.id, () =>
-          this.deliver(workspace, from.id, kept, text),
+        const delivered = await this.enqueue(to.id, () =>
+          this.deliver(workspace, to.id, kept, text),
         );
         // The service may have stopped meanwhile, leaving the message for its next start.
         if (delivered.answer === null && !this.isStopping()) failed(delivered.problem);
       }
     } catch (error) {
       if (!this.isStopping()) failed(describe(error));
+    }
+  }
+
+  /**
+   * After a restart: tells the sender of each message lost while it waited for its answer that
+   * it was lost, and delivers again each answer that was being handed back. Messages from the
+   * person are only marked, as before; the person reads them with `wheems session show`.
+   */
+  async tellLost(lost: readonly MessageRecord[]): Promise<void> {
+    for (const message of lost) {
+      if (this.stopped) return;
+      const workspace = this.options.workspaces.find((w) => w.id === message.workspace);
+      if (!workspace?.config) continue;
+      const sessions = this.options.state.workspace(workspace.id);
+      try {
+        if (message.kind === 'handback') {
+          const to = sessions.session(message.receiver);
+          if (!to || to.state === 'ended' || message.sender === null) continue;
+          const text = (await readFile(message.messageFile, 'utf8')).trim();
+          if (text !== '') await this.passBack(workspace, to, message.sender, text);
+          continue;
+        }
+        if (message.sender === null) continue;
+        const from = sessions.session(message.sender);
+        if (!from || from.state === 'ended') continue;
+        const target = sessions.session(message.receiver);
+        const text = `Wheems: your message to session ${message.receiver} ("${target?.title ?? ''}") was lost when Wheems restarted. Send it again if you still need it.`;
+        await this.passBack(workspace, from, message.receiver, text);
+      } catch (error) {
+        this.options.log(`Couldn't pass on lost message ${message.id}: ${describe(error)}`);
+      }
     }
   }
 

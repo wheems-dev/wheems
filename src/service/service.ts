@@ -25,7 +25,7 @@ import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
 import { SessionService } from './sessions.js';
 import { writeNote } from '../knowledge/notes.js';
-import { StateStore, type StandingAgent } from '../state/store.js';
+import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
 
 export interface ServiceOptions {
@@ -97,7 +97,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     throw new Error(`Herdr core is not ready: ${runtimeFailures.map((c) => c.message).join('; ')}`);
   }
 
-  const state = await openStore(where, install.workspaces, await runtime.list(), log);
+  const { state, lost } = await openStore(where, install.workspaces, await runtime.list(), log);
 
   const channels = new Map<string, ChannelDriver>();
   const channelFor = (connection: string): ChannelDriver => {
@@ -421,6 +421,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const listening = server;
   log(`Wheems ${options.version} is running from ${options.home}`);
   await manager.recover();
+  // Senders of messages lost in the restart hear so, now the chats are connected.
+  void sessions.tellLost(lost);
   manager.startNotes();
   // Files edited, and notes that landed, while the service was away.
   void search.syncAll();
@@ -473,9 +475,10 @@ async function openStore(
   workspaces: LoadedWorkspace[],
   live: SessionInfo[],
   log: (message: string) => void,
-): Promise<StateStore> {
+): Promise<{ state: StateStore; lost: MessageRecord[] }> {
   await requireFullTextSearch();
   const state = await StateStore.open(where.store);
+  let lost: MessageRecord[];
   try {
     state.writeAgents(standingAgents(workspaces));
     const imported = await state.importConversations(where.conversations);
@@ -490,10 +493,10 @@ async function openStore(
         `Could not import ${where.conversations} into the session store: ${imported.problem}\nFix the file, or remove it to start its threads afresh, then run wheems restart.`,
       );
     }
-    const failed = state.failWaitingMessages(new Date().toISOString());
-    if (failed > 0) {
+    lost = state.failWaitingMessages(new Date().toISOString());
+    if (lost.length > 0) {
       log(
-        `${String(failed)} ${failed === 1 ? 'message was' : 'messages were'} still waiting for an answer when the service last stopped; marked failed`,
+        `${String(lost.length)} ${lost.length === 1 ? 'message was' : 'messages were'} still waiting for an answer when the service last stopped; marked failed, and their senders will be told`,
       );
     }
     const match = state.matchRuntime(live);
@@ -511,7 +514,7 @@ async function openStore(
     state.close();
     throw error;
   }
-  return state;
+  return { state, lost };
 }
 
 /**
