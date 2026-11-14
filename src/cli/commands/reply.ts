@@ -3,6 +3,7 @@ import type { Command } from 'commander';
 import { defaultHome, paths } from '../../home.js';
 import { request } from '../../service/control.js';
 import type { Io } from '../program.js';
+import { speakerFrom } from '../caller.js';
 
 export function registerReply(program: Command, io: Io): void {
   program
@@ -11,12 +12,7 @@ export function registerReply(program: Command, io: Io): void {
     .argument('[text...]', 'the reply; "-" or nothing reads it from standard input')
     .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .action(async (words: string[], options: { home?: string }) => {
-      const conversation = io.env.WHEEMS_CONVERSATION;
-      if (conversation === undefined || conversation === '') {
-        throw new Error(
-          'wheems reply works inside a conversation started by Wheems (WHEEMS_CONVERSATION is not set).',
-        );
-      }
+      const from = speakerFrom(io.env, 'wheems reply');
       const text = (
         words.length === 0 || (words.length === 1 && words[0] === '-')
           ? await io.stdin()
@@ -24,7 +20,7 @@ export function registerReply(program: Command, io: Io): void {
       ).trim();
       if (text === '') throw new Error('Nothing to reply.');
       const where = paths(resolve(options.home ?? defaultHome(io.env)), io.env);
-      const answer = await request(where.socket, { op: 'reply', conversation, text });
+      const answer = await request(where.socket, { op: 'reply', ...from, text });
       if (!answer.ok) throw new Error(answer.error);
       io.out('Sent.\n');
     });

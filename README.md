@@ -40,6 +40,7 @@ Wheems was formerly called Opinr.
 - [Set up](#set-up)
 - [Workspaces and agents](#workspaces-and-agents)
 - [Talking to agents](#talking-to-agents)
+- [Sessions](#sessions)
 - [The knowledge loop](#the-knowledge-loop)
 - [Search](#search)
 - [Skills and review](#skills-and-review)
@@ -258,6 +259,52 @@ Message the Slack app (or the workspace's channel). Each message you send starts
   stopped to make room, and its conversation resumes where it left off when you next reply.
 - If an agent hasn't started on a message, perhaps because it's waiting for an answer at the
   Mac, Wheems tells you in the thread, with the `hc attach` command to use.
+
+## Sessions
+
+Besides a session per chat thread, a chief can start **ad-hoc sessions**: other agent sessions
+that work on one thing and stay open until they're ended, so the chief can come back to them.
+You only ever talk to your chief. Ad-hoc sessions have no channel or thread of their own: they
+work behind the chief, and it tells you what you need to know.
+Ask your chief "open a session to research packaging suppliers and keep it going", and it runs:
+
+```bash
+wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers, with prices and minimum orders."
+```
+
+- The session starts working on its purpose at once, in Herdr, and stays open until it's ended.
+  It runs the chief's own agent file, or another of the workspace's agents
+  (`wheems session new researcher …`).
+- A session the chief starts is owned by the chief, whichever thread started it, so it's the
+  chief's from any of its threads. Each new thread's session is told the chief's open sessions
+  when it starts.
+- Each ad-hoc session runs in a folder of its own, `.wheems/sessions/<workspace>/adhoc/<id>/`, where
+  its engine's instructions file is written, so it never replaces the chief's. (So no agent can be
+  called `adhoc`.)
+- `wheems session list` and `wheems session search "…"` find sessions in the workspace, most
+  recently active first. Search looks at titles, purposes, summaries and agent names. A session's
+  summary is written by Wheems: its purpose at first, then the title of its latest note.
+- `wheems session show <id>` gives its details, its latest answer and the `hc attach` line to
+  watch it.
+- `wheems session end <id>` asks it for its note, then ends it. Only its owner or you can end
+  one. An ended session stays in the store and in search, as a record.
+- You can run the same commands yourself, from a terminal; add `--workspace <id>` when there's
+  more than one. Sessions you start are yours.
+
+Sessions only ever see their own workspace's sessions. Limits stop them multiplying or looping:
+each owner may have three open (`sessions.max_open_per_owner`), a chief's session may start one
+level of sessions and those one more (`sessions.max_depth`), and an account may cap how many
+sessions run at once (`max_sessions` in `install.yaml`).
+
+A session's answers are never posted to a channel. Its last message of each turn is its answer,
+kept by its engine and shown by `wheems session show`; you can also watch it with `hc attach`.
+Inside an ad-hoc session, `wheems reply` is refused, since there's no chat to reply in: it
+answers its owner instead.
+
+Sessions don't depend on Slack: they live in Wheems's core, and only a chief's conversation
+reaches you, through whatever channel it uses.
+
+Coming next: `wheems session send` to talk to a session.
 
 ## The knowledge loop
 
@@ -584,6 +631,9 @@ need it.
 | `wheems kb search <query...> [--workspace] [--limit] [--json]`      | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)                   |
 | `wheems kb reindex [--workspace]`                                   | Rebuilds search indexes, every workspace's by default                                                     |
 | `wheems skill list [--json]`                                        | Lists the library and waiting proposals                                                                   |
+| `wheems session new [agent] --title --purpose [--workspace]`        | Starts an ad-hoc session, owned by you, and prints its id                                                 |
+| `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                             |
+| `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer, or ends one after asking for its note                   |
 | `wheems skill show <name> [version]`                                | Prints a skill's `SKILL.md`                                                                               |
 | `wheems start`, `stop`, `restart`                                   | Starts, stops or restarts the background service                                                          |
 | `wheems status`                                                     | Whether the service is running, and where each workspace chats                                            |
@@ -591,7 +641,7 @@ need it.
 | `wheems service run`, `uninstall`                                   | Runs the service in this terminal, or removes it from launchd                                             |
 | `wheems slack manifest`                                             | Prints the Slack app manifest                                                                             |
 
-**For agents** (these work only inside a conversation Wheems started)
+**For agents** (these work only inside a session Wheems started)
 
 | Command                                | What it does                                                  |
 | -------------------------------------- | ------------------------------------------------------------- |
@@ -599,6 +649,7 @@ need it.
 | `wheems note "…"` or `wheems note -`   | Saves a note to the workspace's inbox                         |
 | `wheems kb search "…"`                 | Searches the agent's own workspace                            |
 | `wheems skill propose <name> [-]`      | Proposes a skill, read from standard input, for you to review |
+| `wheems session …`                     | The session commands above, in the agent's own workspace      |
 
 ## Configuration reference
 
@@ -646,7 +697,7 @@ machines:
     local: true
 
 accounts: # what pays for models
-  claude-subscription: { driver: claude }
+  claude-subscription: { driver: claude, max_sessions: 6 } # optional: most sessions at once
 
 connections: # chat apps and services, connected once and shared by every workspace
   slack:
@@ -674,6 +725,9 @@ channels:
   chat: { connection: slack, direct: true } # or { connection: slack, channel: acme-chat }
 identity: { name: Personal chief of staff, icon: ':house:' } # how its posts appear
 skill_budget: 20 # doctor warns past this many skills
+sessions: # limits on ad-hoc sessions; each defaults as shown
+  max_open_per_owner: 3 # open sessions one owner (a chief, a session or you) may have
+  max_depth: 2 # a chief's session starts one level, and those one more
 knowledge:
   note_after_idle: 30 # minutes quiet before the agent is asked for a note; 0 is off
   tidy_at: '03:00' # the nightly tidy, local time; false is off
@@ -714,7 +768,8 @@ skills:
 | `WHEEMS_HOME`         | The install folder (default `~/wheems`)                                                 |
 | `WHEEMS_SECRETS`      | The secrets file (default `~/.config/wheems/secrets.json`, or under `$XDG_CONFIG_HOME`) |
 | `WHEEMS_WORKSPACE`    | The workspace `wheems kb search` searches. Wheems sets it in every agent session        |
-| `WHEEMS_CONVERSATION` | The conversation an agent's commands belong to. Wheems sets it in every agent session   |
+| `WHEEMS_CONVERSATION` | The chat thread a thread session's commands belong to. Wheems sets it in those sessions |
+| `WHEEMS_SESSION`      | The session an agent's commands come from. Wheems sets it in every agent session        |
 | `WHEEMS_NO_ANIMATION` | Set to anything to stop the cloud winking on the welcome screen and in `wheems setup`   |
 
 ### Config the schemas accept but nothing uses yet

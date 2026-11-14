@@ -8,19 +8,66 @@ import { createConnection, createServer, type Server } from 'node:net';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { IndexStatus } from '../knowledge/search.js';
+import type { SessionRecord } from '../state/store.js';
+import type { SessionDetails } from './sessions.js';
+
+/**
+ * Who's calling: the ids Wheems put in a session's environment (`WHEEMS_SESSION`, and
+ * `WHEEMS_CONVERSATION` for thread sessions), or neither for the person at a terminal, who may
+ * name the workspace. That's convenience, not proof, on a machine with one person.
+ */
+const callerSchema = z.object({
+  session: z.string().min(1).optional(),
+  conversation: z.string().min(1).optional(),
+  workspace: z.string().min(1).optional(),
+});
+
+const sessionStates = z.enum(['starting', 'working', 'idle', 'stopped', 'ended']);
 
 export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('ping') }),
   z.object({ op: z.literal('status') }),
-  z.object({ op: z.literal('reply'), conversation: z.string().min(1), text: z.string().min(1) }),
-  z.object({ op: z.literal('note'), conversation: z.string().min(1), text: z.string().min(1) }),
+  z.object({
+    op: z.literal('reply'),
+    conversation: z.string().min(1).optional(),
+    session: z.string().min(1).optional(),
+    text: z.string().min(1),
+  }),
+  z.object({
+    op: z.literal('note'),
+    conversation: z.string().min(1).optional(),
+    session: z.string().min(1).optional(),
+    text: z.string().min(1),
+  }),
   z.object({ op: z.literal('reindex'), workspace: z.string().min(1) }),
   z.object({
     op: z.literal('propose-skill'),
-    conversation: z.string().min(1),
+    conversation: z.string().min(1).optional(),
+    session: z.string().min(1).optional(),
     name: z.string().min(1),
     text: z.string().min(1),
   }),
+  z.object({
+    op: z.literal('session-new'),
+    caller: callerSchema,
+    agent: z.string().min(1).optional(),
+    title: z.string(),
+    purpose: z.string(),
+    project: z.string().min(1).optional(),
+  }),
+  z.object({
+    op: z.literal('session-list'),
+    caller: callerSchema,
+    mine: z.boolean().optional(),
+    agent: z.string().min(1).optional(),
+    project: z.string().min(1).optional(),
+    state: sessionStates.optional(),
+    kind: z.enum(['thread', 'adhoc', 'task']).optional(),
+    all: z.boolean().optional(),
+  }),
+  z.object({ op: z.literal('session-search'), caller: callerSchema, words: z.string() }),
+  z.object({ op: z.literal('session-show'), caller: callerSchema, id: z.string().min(1) }),
+  z.object({ op: z.literal('session-end'), caller: callerSchema, id: z.string().min(1) }),
 ]);
 
 export type ControlRequest = z.infer<typeof requestSchema>;
@@ -32,6 +79,9 @@ export type ControlResponse =
       index?: IndexStatus;
       message?: string;
       status?: ServiceReport;
+      session?: SessionRecord;
+      sessions?: SessionRecord[];
+      details?: SessionDetails;
     }
   | { ok: false; error: string };
 

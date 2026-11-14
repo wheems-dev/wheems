@@ -83,16 +83,49 @@ export interface SessionRecord {
   summary: string | null;
   state: SessionState;
   herdrName: string | null;
+  engineSessionId: string | null;
+  folder: string | null;
+  /** When the current engine session started, and the tag on its first message, to find its id. */
+  launchStartedAt: string | null;
+  launchTag: string | null;
+  launchedAt: string | null;
   createdAt: string;
   lastActiveAt: string;
   endedAt: string | null;
+}
+
+/** A new ad-hoc session's row. */
+export interface NewSession {
+  id: string;
+  project: string | null;
+  agent: string;
+  owner: string | null;
+  parent: string | null;
+  title: string;
+  purpose: string;
+  herdrName: string;
+  folder: string;
+  createdAt: string;
+}
+
+/** Fields of a session that change while it runs. */
+export interface SessionChange {
+  state?: SessionState;
+  summary?: string;
+  engineSessionId?: string;
+  launchStartedAt?: string;
+  launchTag?: string | null;
+  launchedAt?: string;
+  lastActiveAt?: string;
+  endedAt?: string;
 }
 
 export interface SessionFilter {
   kind?: SessionKind;
   state?: SessionState;
   agent?: string;
-  owner?: string;
+  /** null for sessions the person owns. */
+  owner?: string | null;
   project?: string;
 }
 
@@ -251,6 +284,21 @@ export class StateStore {
       }
       return byId.get(value) === undefined;
     });
+  }
+
+  /**
+   * The session a caller says it is, from the id Wheems put in its environment, in whichever
+   * workspace it belongs to. Who's calling decides the workspace, never an argument.
+   */
+  callingSession(id: string): SessionRecord | undefined {
+    const row = this.db.prepare(`${SESSION_SELECT} WHERE id = ?`).get(id);
+    return row === undefined ? undefined : toSession(row);
+  }
+
+  /** The conversation key of a thread session, for callers that know only its session id. */
+  threadKeyOf(sessionId: string): string | undefined {
+    const row = this.db.prepare('SELECT key FROM threads WHERE session = ?').get(sessionId);
+    return row === undefined ? undefined : String(row.key);
   }
 
   /** Whether a live runtime session is one of the store's chat-thread sessions. */
@@ -480,13 +528,97 @@ export class WorkspaceSessions {
       ['project', filter.project],
     ] as const) {
       if (value === undefined) continue;
-      where.push(`${column} = ?`);
+      // IS matches null too: the person's sessions have no owner.
+      where.push(`${column} IS ?`);
       values.push(value);
     }
     return this.db
       .prepare(`${SESSION_SELECT} WHERE ${where.join(' AND ')} ORDER BY last_active_at DESC, id`)
       .all(...values)
       .map(toSession);
+  }
+
+  /** Records a new ad-hoc session, starting. */
+  create(session: NewSession): SessionRecord {
+    this.db
+      .prepare(
+        `INSERT INTO sessions (id, workspace, project, agent, kind, owner, parent, title, purpose,
+           summary, state, herdr_name, folder, created_at, last_active_at)
+         VALUES (?, ?, ?, ?, 'adhoc', ?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?)`,
+      )
+      .run(
+        session.id,
+        this.workspace,
+        session.project,
+        session.agent,
+        session.owner,
+        session.parent,
+        session.title,
+        session.purpose,
+        // The summary is written by code: the purpose at first, then the latest note's title.
+        session.purpose,
+        session.herdrName,
+        session.folder,
+        session.createdAt,
+        session.createdAt,
+      );
+    const created = this.session(session.id);
+    if (!created) throw new Error(`Session ${session.id} wasn't recorded`);
+    return created;
+  }
+
+  /**
+   * Changes a session in this workspace. Does nothing for one that isn't here, or, with
+   * `ifState`, for one no longer in that state, so a change worked out from an earlier read
+   * never overwrites a newer one.
+   */
+  update(id: string, change: SessionChange, ifState?: SessionState): void {
+    const columns: [string, SQLInputValue | undefined][] = [
+      ['state', change.state],
+      ['summary', change.summary],
+      ['engine_session_id', change.engineSessionId],
+      ['launch_started_at', change.launchStartedAt],
+      ['launch_tag', change.launchTag],
+      ['launched_at', change.launchedAt],
+      ['last_active_at', change.lastActiveAt],
+      ['ended_at', change.endedAt],
+    ];
+    const set = columns.filter(([, value]) => value !== undefined);
+    if (set.length === 0) return;
+    this.db
+      .prepare(
+        `UPDATE sessions SET ${set.map(([column]) => `${column} = ?`).join(', ')} WHERE workspace = ? AND id = ?${ifState !== undefined ? ' AND state = ?' : ''}`,
+      )
+      .run(
+        ...set.map(([, value]) => value ?? null),
+        this.workspace,
+        id,
+        ...(ifState !== undefined ? [ifState] : []),
+      );
+  }
+
+  /** How many ad-hoc sessions an owner (null for the person) has open: not ended. */
+  openCount(owner: string | null): number {
+    const row = this.db
+      .prepare(
+        "SELECT count(*) AS n FROM sessions WHERE workspace = ? AND kind = 'adhoc' AND state != 'ended' AND owner IS ?",
+      )
+      .get(this.workspace, owner);
+    return Number(row?.n ?? 0);
+  }
+
+  /**
+   * How many levels of ad-hoc sessions lead to this one: 0 for a thread session, 1 for one a
+   * chief's thread or the person started, and one more for each ad-hoc session above it.
+   */
+  depth(id: string): number {
+    let depth = 0;
+    let current = this.session(id);
+    while (current?.kind === 'adhoc' && depth < 100) {
+      depth++;
+      current = current.parent === null ? undefined : this.session(current.parent);
+    }
+    return depth;
   }
 
   /**
@@ -537,7 +669,8 @@ const THREAD_SELECT = `SELECT t.key, t.workspace, t.connection, t.channel, t.thr
   FROM threads t JOIN sessions s ON s.id = t.session`;
 
 const SESSION_SELECT = `SELECT id, workspace, project, agent, kind, owner, parent, title, purpose,
-  summary, state, herdr_name, created_at, last_active_at, ended_at FROM sessions`;
+  summary, state, herdr_name, engine_session_id, folder, launch_started_at, launch_tag,
+  launched_at, created_at, last_active_at, ended_at FROM sessions`;
 
 function toConversation(row: Row): Conversation {
   const optional = (value: SQLOutputValue | undefined) =>
@@ -584,6 +717,11 @@ function toSession(row: Row): SessionRecord {
     summary: text(row.summary),
     state: String(row.state) as SessionState,
     herdrName: text(row.herdr_name),
+    engineSessionId: text(row.engine_session_id),
+    folder: text(row.folder),
+    launchStartedAt: text(row.launch_started_at),
+    launchTag: text(row.launch_tag),
+    launchedAt: text(row.launched_at),
     createdAt: String(row.created_at),
     lastActiveAt: String(row.last_active_at),
     endedAt: text(row.ended_at),

@@ -5,6 +5,7 @@ import { request } from '../../service/control.js';
 import { listLibrary, readSkill } from '../../skills/library.js';
 import { listProposals } from '../../skills/proposals.js';
 import type { Io } from '../program.js';
+import { speakerFrom } from '../caller.js';
 
 const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 
@@ -25,18 +26,17 @@ export function registerSkill(program: Command, io: Io): void {
           'Pipe the SKILL.md in on standard input, with "-" or nothing after the name.',
         );
       }
-      const conversation = io.env.WHEEMS_CONVERSATION;
-      if (conversation === undefined || conversation === '') {
-        throw new Error(
-          'wheems skill propose works inside a conversation started by Wheems (WHEEMS_CONVERSATION is not set). To add a skill yourself, put it in library/skills/<name>/1/SKILL.md.',
-        );
-      }
+      const from = speakerFrom(
+        io.env,
+        'wheems skill propose',
+        ' To add a skill yourself, put it in library/skills/<name>/1/SKILL.md.',
+      );
       const text = (await io.stdin()).trim();
       if (text === '') throw new Error('Pipe the SKILL.md in on standard input.');
       const home = resolve(options.home ?? defaultHome(io.env));
       const answer = await request(paths(home, io.env).socket, {
         op: 'propose-skill',
-        conversation,
+        ...from,
         name,
         text,
       });

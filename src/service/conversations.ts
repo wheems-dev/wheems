@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative } from 'node:path';
-import { NOTE_REQUEST, withBuiltins } from '../agents/builtin.js';
+import { dirname } from 'node:path';
+import { NOTE_REQUEST, withBuiltins, type SessionBuiltins } from '../agents/builtin.js';
 import type { LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import {
@@ -11,12 +11,7 @@ import {
   type MessageRef,
 } from '../contracts/channel.js';
 import { isDriverError } from '../contracts/driver.js';
-import {
-  conversationTag,
-  type EngineDriver,
-  type FinalMessage,
-  type LaunchPlan,
-} from '../contracts/engine.js';
+import { conversationTag, type EngineDriver, type FinalMessage } from '../contracts/engine.js';
 import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 import {
   ABOUT_YOU_LIMIT,
@@ -26,6 +21,7 @@ import {
   writeNote,
 } from '../knowledge/notes.js';
 import { sessionLabels } from '../state/store.js';
+import { launchSession } from './launch.js';
 import type { Conversation, ConversationStore } from './store.js';
 
 export interface Binding {
@@ -69,6 +65,14 @@ export interface ConversationManagerOptions {
   noteSweepMs?: number;
   /** How long an agent gets to write a note it was asked for. */
   noteTurnSeconds?: number;
+  /**
+   * The generated Sessions section for a chief's new thread session: the open sessions its
+   * owner (the chief's agent id) has. Left out when not given.
+   */
+  sessionsSection?: (
+    workspace: LoadedWorkspace,
+    owner: string,
+  ) => SessionBuiltins['sessions'] | undefined;
   /** Called when a note lands in a workspace's inbox, to file it. */
   onNote?: (workspace: string) => void;
   /**
@@ -116,9 +120,10 @@ export class ConversationManager {
   private readonly options: Required<
     Omit<
       ConversationManagerOptions,
-      'writeFile' | 'log' | 'aboutYouFile' | 'onNote' | 'trustProblem'
+      'writeFile' | 'log' | 'aboutYouFile' | 'onNote' | 'trustProblem' | 'sessionsSection'
     >
   > & {
+    sessionsSection: ConversationManagerOptions['sessionsSection'];
     aboutYouFile: string | undefined;
     onNote: ((workspace: string) => void) | undefined;
     trustProblem: (engine: string, dir: string) => Promise<string | null>;
@@ -148,6 +153,7 @@ export class ConversationManager {
       noteTurnSeconds: 600,
       aboutYouFile: undefined,
       onNote: undefined,
+      sessionsSection: undefined,
       trustProblem: () => Promise.resolve(null),
       log: () => undefined,
       writeFile: async (path, content) => {
@@ -551,53 +557,42 @@ export class ConversationManager {
           : null,
       brief: await readCapped(knowledgePaths(workspace.dir).brief, BRIEF_LIMIT),
     };
-    const plan = await engine.prepare(
-      { ...agent.definition, instructions: withBuiltins(agent.definition.instructions, knowledge) },
-      {
-        workspace: { id: workspace.id, dir: workspace.dir },
-        sessionDir: workspace.dir,
-        account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
-        session: {
-          id: uuidFor(key),
-          resume,
-          task: launchTag !== undefined ? `${event.text}\n\n${launchTag}` : event.text,
-          engineId,
-        },
-      },
+    const sessions = this.options.sessionsSection?.(
+      workspace,
+      `${workspace.id}/${agent.definition.name}`,
     );
-    await this.writePlanFiles(plan);
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
-    const started = await this.options.runtime.start({
-      name: sessionName,
-      command: plan.command,
-      cwd: plan.cwd,
+    const started = await launchSession({
+      runtime: this.options.runtime,
+      engine,
+      agent: {
+        ...agent.definition,
+        instructions: withBuiltins(agent.definition.instructions, knowledge, {
+          ...(sessions && { sessions }),
+        }),
+      },
+      workspace: { id: workspace.id, dir: workspace.dir },
+      sessionDir: workspace.dir,
+      account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
+      session: {
+        id: uuidFor(key),
+        name: sessionName,
+        resume,
+        task: launchTag !== undefined ? `${event.text}\n\n${launchTag}` : event.text,
+        engineId,
+      },
       env: {
-        ...plan.env,
         ...this.options.sessionEnv,
         WHEEMS_WORKSPACE: workspace.id,
         WHEEMS_CONVERSATION: key,
+        WHEEMS_SESSION: uuidFor(key),
       },
       labels: sessionLabels(uuidFor(key), workspace.id),
+      untilReady: (id) => this.untilReady(id),
+      typeDelayMs: this.options.typeDelayMs,
+      writeFile: this.options.writeFile,
     });
-    const text = plan.typeAfterStart;
-    if (text !== undefined) {
-      // The engine can't take this message at launch; type it once the program is ready.
-      if (engine.capabilities.status) await this.untilReady(started.id);
-      else await sleep(this.options.typeDelayMs);
-      await this.options.runtime.send(started.id, text);
-    }
     return started;
-  }
-
-  private async writePlanFiles(plan: LaunchPlan): Promise<void> {
-    for (const file of plan.files) {
-      const target = join(plan.cwd, file.path);
-      const rel = relative(plan.cwd, target);
-      if (isAbsolute(file.path) || rel.startsWith('..')) {
-        throw new Error(`The engine planned a file outside its folder: ${file.path}`);
-      }
-      await this.options.writeFile(target, file.content);
-    }
   }
 
   /** Follows the turn a message started, and tells the person if it ends badly or silently. */

@@ -20,6 +20,18 @@ change anything, including commands and config formats, without a migration path
   (it won't start while the file can't be read).
   When the service starts, a session whose Herdr session has gone is marked stopped, and resumes
   when it's next needed. It's the first step towards `wheems session` in milestone 3.
+- `wheems session new`, `list`, `search`, `show` and `end`: a chief, a session or you can start
+  ad-hoc sessions that work on one thing and stay open until ended, find them by full-text
+  search, see one's latest answer, and end one after it's asked for its note. Sessions work
+  behind their chief and never post to a channel: you only talk to the chief. Each runs in a
+  folder of its own, `.wheems/sessions/<workspace>/adhoc/<id>/`, and sees only its own
+  workspace's sessions. A chief's sessions are the
+  chief's from any of its threads, and each new thread is told its open ones. New config limits
+  them: `sessions.max_open_per_owner` and `sessions.max_depth` in `workspace.yaml`, and
+  `max_sessions` on an account in `install.yaml`.
+- Every agent session gets `WHEEMS_SESSION`, its session id; `wheems note`, `reply` and
+  `skill propose` take it as well as `WHEEMS_CONVERSATION`.
+- An agent can't be called `adhoc`, the name ad-hoc sessions' folders use.
 - `wheems doctor` reports a Herdr session with a Wheems label that the session store has no
   record of, and a `conversations.json` still waiting to be imported.
 
