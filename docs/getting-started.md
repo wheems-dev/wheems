@@ -64,17 +64,19 @@ app serves every workspace, so you do this once:
 **Workspaces** creates a workspace with its chief of staff, such as `personal`, on the engine and
 model you choose.
 The first chats in the Slack app's direct messages; others chat in a channel you invite the app
-to. Claude Code and Codex ask once whether to trust a new folder, and nobody can answer that from
-Slack, so setup offers to open the engine there: say yes, then press Ctrl+C twice to come back.
+to. Claude Code and Codex ask once whether to trust a folder, and nobody can answer that from
+Slack, so setup offers to open the engine in your install folder: say yes, then press Ctrl+C
+twice to come back. That covers every workspace in the install, so it's asked only once.
 
 **Service** runs Wheems in the background under launchd, now and at every login, with the Node.js
-you ran setup with. Afterwards, `wheems service status`, `wheems service logs` and
-`wheems service restart` look after it; restart it after changing config.
+you ran setup with. Nothing answers in chat until it runs, so setup asks again if you leave
+without starting it. Afterwards, `wheems status`, `wheems logs` and `wheems restart` look after
+it; restart it after changing config. `wheems stop` stops it until `wheems start`.
 
 **Check everything** runs `wheems doctor`.
 
 Each part also has its own command for scripts: `wheems init <workspace> [--engine codex]
-[--model gpt-6.1-sol]`, `wheems service install` and `wheems doctor`.
+[--model gpt-6.1-sol]`, `wheems start` and `wheems doctor`.
 
 ## 3. Chat
 
@@ -92,5 +94,6 @@ changes to `about-you.md` suggested from their notes. Nothing changes until you 
 Overnight, Wheems writes `knowledge/reports/contradictions.md` and `knowledge/reports/stale.md`,
 pages that disagree and pages that look out of date.
 
-If something isn't right, run `wheems doctor`. It checks Node.js, Herdr core, Claude Code, the
-folder trust, Slack and the service.
+If nothing answers, run `wheems status`: it says whether the service is running and where each
+workspace chats. For everything else, run `wheems doctor`. It checks Node.js, Herdr core, Claude
+Code, the folder trust, Slack and the service.

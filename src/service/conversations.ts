@@ -70,6 +70,12 @@ export interface ConversationManagerOptions {
   noteTurnSeconds?: number;
   /** Called when a note lands in a workspace's inbox, to file it. */
   onNote?: (workspace: string) => void;
+  /**
+   * Why an engine can't start a session in a folder it hasn't been told to trust, said to the
+   * person; null when it can. Checked before each new session, since the trust question
+   * would only wait at the Mac where nobody in chat can answer it.
+   */
+  trustProblem?: (engine: string, dir: string) => Promise<string | null>;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -107,10 +113,14 @@ interface Watch {
  */
 export class ConversationManager {
   private readonly options: Required<
-    Omit<ConversationManagerOptions, 'writeFile' | 'log' | 'aboutYouFile' | 'onNote'>
+    Omit<
+      ConversationManagerOptions,
+      'writeFile' | 'log' | 'aboutYouFile' | 'onNote' | 'trustProblem'
+    >
   > & {
     aboutYouFile: string | undefined;
     onNote: ((workspace: string) => void) | undefined;
+    trustProblem: (engine: string, dir: string) => Promise<string | null>;
     writeFile: (path: string, content: string) => Promise<void>;
     log: (message: string) => void;
   };
@@ -137,6 +147,7 @@ export class ConversationManager {
       noteTurnSeconds: 600,
       aboutYouFile: undefined,
       onNote: undefined,
+      trustProblem: () => Promise.resolve(null),
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -410,8 +421,16 @@ export class ConversationManager {
       return;
     }
 
+    const engineName = this.chiefOfStaff(binding).definition.engine;
+    const untrusted = await this.options.trustProblem(engineName, binding.workspace.dir);
+    if (untrusted !== null) {
+      this.options.log(`Conversation ${key}: not started, ${engineName} doesn't trust the folder`);
+      await this.unmark(channel, seen);
+      await this.notice(key, binding, replyThread(event), untrusted);
+      return;
+    }
     if (session) await this.options.runtime.remove(session.id).catch(() => undefined);
-    const engine = this.options.engine(this.chiefOfStaff(binding).definition.engine);
+    const engine = this.options.engine(engineName);
     // An engine that chooses its own ids can only resume once its id has been found.
     const engineId = engine.findSession ? (existing?.engineSessionId ?? null) : uuidFor(key);
     const resume = existing !== undefined && engineId !== null;

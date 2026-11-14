@@ -76,3 +76,19 @@ export function codexTrustedFolders(toml: string): Set<string> {
   }
   return trusted;
 }
+
+/**
+ * How to trust the install folder, once, for an engine: a trusted folder covers every folder
+ * in it, so this covers every workspace there is and every one added later. `command` is the
+ * engine's own command (its setup's `trust`); `home` is the install folder.
+ */
+export function trustAdvice(label: string, command: string[], home: string): string {
+  return `At the Mac, run \`cd ${shellPath(home)} && ${command.join(' ')}\` and answer yes. ${label} then trusts every workspace in your install, including ones you add later.`;
+}
+
+/** A path as it can be typed into a shell, keeping a leading ~ outside the quotes. */
+export function shellPath(path: string): string {
+  if (/^[\w~/.-]+$/.test(path)) return path;
+  const [prefix, rest] = path.startsWith('~/') ? ['~/', path.slice(2)] : ['', path];
+  return `${prefix}'${rest.replaceAll("'", `'\\''`)}'`;
+}

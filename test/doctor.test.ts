@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DriverRegistry } from '../src/contracts/registry.js';
 import { defaultHome, runDoctor, trustedIn, type DoctorReport } from '../src/doctor/doctor.js';
+import { shellPath, trustAdvice } from '../src/util/trust.js';
 import { HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
 import { formatReport } from '../src/cli/program.js';
 import { fakeHc, type FakeHc } from './helpers/hc.js';
@@ -357,6 +358,14 @@ describe('doctor', () => {
       message: '1 skill proposal and 1 change to about-you.md wait for review',
       hint: 'Run: wheems review',
     });
+  });
+
+  it('advises trusting the install folder once, quoting a path a shell would split', () => {
+    expect(trustAdvice('Claude Code', ['claude'], '~/wheems')).toBe(
+      'At the Mac, run `cd ~/wheems && claude` and answer yes. Claude Code then trusts every workspace in your install, including ones you add later.',
+    );
+    expect(shellPath('~/My Wheems')).toBe("~/'My Wheems'");
+    expect(shellPath("/tmp/it's")).toBe("'/tmp/it'\\''s'");
   });
 
   it('counts a folder as trusted when Claude Code trusted it or a folder around it', () => {

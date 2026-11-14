@@ -31,7 +31,8 @@ import {
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
 import { SetupCancelled } from '../contracts/setup.js';
-import { paths } from '../home.js';
+import { paths, tilde } from '../home.js';
+import { shellPath } from '../util/trust.js';
 import { packageVersion } from './version.js';
 
 export { packageVersion };
@@ -216,24 +217,26 @@ export function createProgram(io: Io): Command {
           ...(options.name !== undefined && { name: options.name }),
           ...(options.channel !== undefined && { channel: options.channel }),
         });
-        const trust = setup.trust;
+        // A trusted install folder covers every workspace in it; ask only when it isn't.
+        const trust =
+          setup.trust !== null && (await setup.trusted?.(home)) !== true ? setup.trust : null;
         io.out(
           [
             `Created ${dir}, with its chief of staff on ${entry.label}`,
             '',
             ...(trust !== null
               ? [
-                  `${entry.label} asks once whether to trust a new folder, and nobody can answer it from Slack.`,
-                  'Answer it now: run the two lines below, say yes, then quit it.',
+                  `${entry.label} asks once whether to trust a folder, and nobody can answer it from Slack.`,
+                  'Answer it now for your install folder, which covers every workspace in it: run the two lines below, say yes, then quit it.',
                   '',
-                  `  cd ${shellPath(dir)}`,
+                  `  cd ${shellPath(tilde(home, io.env))}`,
                   `  ${trust.join(' ')}`,
                   '',
                 ]
               : []),
             options.channel !== undefined
-              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: wheems service restart`
-              : 'Then message the bot in Slack. If the service is already running, restart it first: wheems service restart',
+              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: wheems restart`
+              : 'Then message the bot in Slack. If the service is already running, restart it first: wheems restart',
             '',
           ].join('\n'),
         );
@@ -257,10 +260,6 @@ export function createProgram(io: Io): Command {
   registerReview(program, io);
 
   return program;
-}
-
-function shellPath(path: string): string {
-  return /^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
 /**

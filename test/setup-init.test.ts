@@ -21,6 +21,7 @@ describe('wheems setup', () => {
   let env: NodeJS.ProcessEnv;
   let calls: string[];
   let running: boolean;
+  const trustedFolders = new Set<string>();
   /** The fake world: which engine CLIs exist and which are signed in. */
   let installed: Set<string>;
   let signedIn: Set<string>;
@@ -32,6 +33,7 @@ describe('wheems setup', () => {
     env = { WHEEMS_SECRETS: join(root, 'config', 'secrets.json') };
     calls = [];
     running = false;
+    trustedFolders.clear();
   });
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
@@ -81,6 +83,7 @@ describe('wheems setup', () => {
     signIn: [name, 'login'],
     signedIn: () => Promise.resolve(signedIn.has(name)),
     trust,
+    trusted: (dir) => Promise.resolve(trustedFolders.has(dir)),
     defaultModel,
     account,
   });
@@ -170,7 +173,8 @@ describe('wheems setup', () => {
     expect(calls).toEqual([
       'copy display_information:',
       'open https://api.slack.com/apps?new_app=1',
-      `run claude in ${join(home, 'workspaces', 'personal')}`,
+      // Trusting the install folder covers every workspace in it.
+      `run claude in ${home}`,
       'install service',
       'doctor',
     ]);
@@ -278,6 +282,7 @@ describe('wheems setup', () => {
       'gpt-6.1-sol',
       false, // open Codex to trust the folder
       'done',
+      true, // nothing answers in chat yet: start the service
     ]);
     await setup({ home, env, ui, registry: registry(), actions });
     expect(ui.remaining()).toBe(0);
@@ -285,6 +290,8 @@ describe('wheems setup', () => {
       'run npm install -g codex-cli',
       'run codex login',
     ]);
+    // Done, with a chat channel and no service, offers to start it rather than go quiet.
+    expect(calls.at(-1)).toBe('install service');
     const which = ui.shown.find((s) => s.message === 'Which engine?');
     expect(which?.choices?.map((c) => [c.value, c.hint])).toEqual([
       ['claude-code', '1.0.0 · signed in'],
@@ -301,6 +308,31 @@ describe('wheems setup', () => {
       account: 'chatgpt-subscription',
     });
     expect(crossCheck(install, { engines: ['claude-code', 'codex'] })).toEqual([]);
+  });
+
+  it('skips the trust step when the engine already trusts the install folder', async () => {
+    trustedFolders.add(home);
+    const ui = scriptedUi([
+      'channels',
+      'slack',
+      false,
+      'xoxb-good',
+      'xapp-good',
+      'UMEMBER1',
+      'workspaces',
+      'personal',
+      'Personal',
+      'direct',
+      'claude-opus-5-5', // no trust question follows
+      'done',
+      false, // don't start the service
+    ]);
+    await setup({ home, env, ui, registry: registry(), actions });
+    expect(ui.remaining()).toBe(0);
+    expect(calls.filter((c) => c.startsWith('run'))).toEqual([]);
+    expect(ui.shown.some((s) => s.kind === 'info' && s.message.includes('wheems start'))).toBe(
+      true,
+    );
   });
 
   it('keeps a new workspace when only its trust step is cancelled', async () => {
@@ -321,11 +353,13 @@ describe('wheems setup', () => {
         'claude-opus-5-5',
         CANCEL,
         'done',
+        false, // don't start the service
       ]),
       registry: registry(),
       actions,
     });
     expect((await loadInstall(home)).workspaces.map((w) => w.id)).toEqual(['personal']);
+    expect(calls).not.toContain('install service');
   });
 
   it('goes back to the menu when a step is cancelled, saving nothing from it', async () => {
@@ -439,6 +473,7 @@ describe('wheems setup', () => {
         'claude-opus-5-5',
         false,
         'done',
+        false, // don't start the service
       ]),
       registry: registry(),
       actions,
@@ -539,6 +574,8 @@ describe('launchd', () => {
       logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });
     expect(plist).toContain('<string>dev.wheems.service</string>');
+    // Without it, launchd throttles the job's CPU and disk, and it takes seconds to start.
+    expect(plist).toContain('<key>ProcessType</key>\n  <string>Interactive</string>');
     expect(plist).toContain(
       '<string>/opt/homebrew/opt/node@22/bin/node</string>\n    <string>/Users/me/Projects/wheems/dist/cli/main.js</string>\n    <string>service</string>\n    <string>run</string>',
     );

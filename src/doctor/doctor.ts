@@ -3,7 +3,8 @@ import { randomBytes } from 'node:crypto';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { LoadedInstall } from '../config/load.js';
-import { paths } from '../home.js';
+import { paths, tilde } from '../home.js';
+import { trustAdvice } from '../util/trust.js';
 import { readSecrets } from '../secrets.js';
 import { request } from '../service/control.js';
 import { serviceStatus } from '../service/launchd.js';
@@ -140,6 +141,7 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
     if (!chief) continue;
     const engine = chief.definition.engine;
     const label = catalog.find((e) => e.name === engine)?.label ?? engine;
+    const trustCommand = catalog.find((e) => e.name === engine)?.engine?.trust ?? null;
     const trusted = await trustOf(engine, workspace.dir);
     if (trusted === true) {
       checks.push({
@@ -151,8 +153,11 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
       checks.push({
         name: `${workspace.id} folder`,
         status: 'warn',
-        message: `${label} hasn't been told to trust the workspace folder, so its first session will wait for that answer at the Mac`,
-        hint: 'Open the engine in that folder once and say yes, or run wheems setup.',
+        message: `${label} hasn't been told to trust the workspace folder, so it can't answer in chat`,
+        hint:
+          trustCommand !== null
+            ? trustAdvice(label, trustCommand, tilde(options.home, options.env))
+            : 'Open the engine in the install folder once and say yes, or run wheems setup.',
       });
     }
   }
@@ -246,7 +251,7 @@ async function channelMembership(
         name,
         status: 'fail',
         message: `The app can't see ${chat.channel}`,
-        hint: 'Check the name in workspace.yaml, invite the app to the channel, then run wheems service restart.',
+        hint: 'Check the name in workspace.yaml, invite the app to the channel, then run wheems restart.',
       });
       continue;
     }
@@ -399,7 +404,7 @@ async function serviceCheck(options: DoctorOptions): Promise<HealthCheck> {
     name: 'service',
     status: 'warn',
     message: installed ? 'Installed, but not answering' : 'Not running, so nothing answers in chat',
-    hint: installed ? 'See wheems service logs.' : 'Run wheems service install.',
+    hint: installed ? 'See why: wheems logs' : 'Start it with: wheems start',
   };
 }
 

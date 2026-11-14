@@ -11,6 +11,7 @@ import type { IndexStatus } from '../knowledge/search.js';
 
 export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('ping') }),
+  z.object({ op: z.literal('status') }),
   z.object({ op: z.literal('reply'), conversation: z.string().min(1), text: z.string().min(1) }),
   z.object({ op: z.literal('note'), conversation: z.string().min(1), text: z.string().min(1) }),
   z.object({ op: z.literal('reindex'), workspace: z.string().min(1) }),
@@ -24,8 +25,27 @@ export const requestSchema = z.discriminatedUnion('op', [
 
 export type ControlRequest = z.infer<typeof requestSchema>;
 export type ControlResponse =
-  | { ok: true; version?: string; path?: string; index?: IndexStatus; message?: string }
+  | {
+      ok: true;
+      version?: string;
+      path?: string;
+      index?: IndexStatus;
+      message?: string;
+      status?: ServiceReport;
+    }
   | { ok: false; error: string };
+
+/** What the running service says about itself, for `wheems status`. */
+export interface ServiceReport {
+  version: string;
+  pid: number;
+  startedAt: string;
+  home: string;
+  /** The chat connections it connected to when it started. */
+  connections: string[];
+  /** Where each workspace's chat comes from, and why it doesn't, if it doesn't. */
+  workspaces: { id: string; chat: string | null; problem?: string }[];
+}
 
 export type ControlHandler = (request: ControlRequest) => Promise<ControlResponse>;
 
@@ -108,7 +128,7 @@ export function request(
       clearTimeout(timer);
       reject(
         error.code === 'ENOENT' || error.code === 'ECONNREFUSED'
-          ? new Error('The Wheems service is not running (wheems service status)')
+          ? new Error('The Wheems service is not running: start it with wheems start')
           : error,
       );
     });

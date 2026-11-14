@@ -144,7 +144,7 @@ describe('the welcome screen', () => {
     const env = { HOME: '/elsewhere' };
     expect(await welcomeStatus(home, env, () => Promise.resolve(false))).toEqual([
       { mark: '✓', text: `1 workspace, 1 agent in ${home}` },
-      { mark: '!', text: "The service isn't running: wheems service install" },
+      { mark: '!', text: "The service isn't running: wheems start" },
       { mark: '-', text: 'Search by keyword only (wheems setup → Knowledge for meaning)' },
     ]);
 

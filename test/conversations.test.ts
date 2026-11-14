@@ -31,6 +31,7 @@ describe('conversations', () => {
       startupSeconds?: number;
       noteSweepMs?: number;
       noteTurnSeconds?: number;
+      trustProblem?: (engine: string, dir: string) => Promise<string | null>;
     } = {},
   ) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
@@ -49,6 +50,7 @@ describe('conversations', () => {
       ...(options.maxLiveSessions !== undefined && { maxLiveSessions: options.maxLiveSessions }),
       ...(options.noteSweepMs !== undefined && { noteSweepMs: options.noteSweepMs }),
       ...(options.noteTurnSeconds !== undefined && { noteTurnSeconds: options.noteTurnSeconds }),
+      ...(options.trustProblem !== undefined && { trustProblem: options.trustProblem }),
       aboutYouFile: join(home, 'about-you.md'),
     });
   };
@@ -734,6 +736,32 @@ describe('conversations', () => {
     await dm('hello');
     await settle();
     expect(posts().at(-1)?.text).toMatch(/hasn't started on this yet.*hc attach/);
+  });
+
+  it("says at once when the engine doesn't trust the folder, and starts nothing", async () => {
+    await manager.stop();
+    let trusted = false;
+    const asked: string[] = [];
+    make({
+      trustProblem: (engine, dir) => {
+        asked.push(`${engine} ${dir}`);
+        return Promise.resolve(trusted ? null : 'Trust the install folder first.');
+      },
+    });
+    const first = await dm('hello');
+    await settle();
+    expect(asked).toEqual([
+      `${install.workspaces[0]!.agents[0]!.definition.engine} ${install.workspaces[0]!.dir}`,
+    ]);
+    expect(posts()).toEqual([{ thread: first, text: '_Wheems:_ Trust the install folder first.' }]);
+    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toEqual([]);
+    expect([...(channel.reactions.get(`D1/${first}`) ?? [])]).toEqual([]);
+
+    // Once trusted at the Mac, the same thread starts as usual.
+    trusted = true;
+    await dm('hello again', first);
+    await settle();
+    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toHaveLength(1);
   });
 
   it('says so when the session exits without replying', async () => {
