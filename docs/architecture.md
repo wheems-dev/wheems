@@ -53,7 +53,7 @@ Part of using the terminal once, then everything else in chat (built):
 
 - **Setup ends with a hello.** When setup finishes and the service runs, the first chief (the one
   in direct messages, else the first in a channel) greets the person through the channel driver.
-  It says it's set up, and that inviting it to any channel adds another chief. This happens
+  It says it's set up and how to talk to it; once channel onboarding (pull request #31) is in, it also says that inviting it to any channel adds another chief (`INVITES_SET_UP_CHIEFS`). This happens
   once per install (`.wheems/greeted.json`), through the service's `greet` control
   request. If it can't be sent, setup says why. To write first in direct messages, a driver
   offers the optional `openDirect(userId)`; Slack's is `conversations.open`, under the `im:write`

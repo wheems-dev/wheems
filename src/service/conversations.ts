@@ -1157,7 +1157,13 @@ export class ConversationManager {
     }
     said.add(problem);
     this.problems.set(workspace, said);
-    await this.notice(key, binding, thread, text);
+    try {
+      await this.notice(key, binding, thread, text);
+    } catch (error) {
+      // Not said after all: the next message tries again.
+      said.delete(problem);
+      throw error;
+    }
   }
 
   /** A workspace's problem is fixed (or all of them, when the chief answers). */

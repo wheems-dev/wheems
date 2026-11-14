@@ -7,8 +7,7 @@ change anything, including commands and config formats, without a migration path
 
 **Added**
 
-- Setup ends with your first chief of staff saying hello in chat, once per install: it's set up,
-  and inviting it to any channel adds another chief. If it can't, setup says why.
+- Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, and how to talk to it. If it can't, setup says why.
 - `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before
   each fix: trusting the install folder, starting the service, rebuilding a stale search index,
   and a near-miss channel name in `workspace.yaml`. It never changes the chat app's settings or

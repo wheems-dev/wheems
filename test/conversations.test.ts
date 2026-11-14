@@ -799,6 +799,19 @@ describe('conversations', () => {
     expect(posts().at(-1)?.text).toBe('_Wheems:_ Trust the install folder first.');
   });
 
+  it('says a problem again when saying it failed, as when Slack was down', async () => {
+    await manager.stop();
+    make({ trustProblem: () => Promise.resolve('Trust the install folder first.') });
+    const send = channel.send.bind(channel);
+    channel.send = () => Promise.reject(new Error('Slack is down'));
+    await dm('hello');
+    await settle();
+    channel.send = send;
+    await dm('anyone?');
+    await settle();
+    expect(posts().map((p) => p.text)).toEqual(['_Wheems:_ Trust the install folder first.']);
+  });
+
   it("says when the engine isn't signed in, with the step that fixes it, and starts nothing", async () => {
     await manager.stop();
     const asked: string[] = [];

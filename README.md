@@ -130,8 +130,7 @@ any time.
 | Check everything | Runs `wheems doctor` (`wheems doctor --fix` offers fixes).                                                                                                                                     |
 
 When you choose **Done** with the service running, your first chief of staff (the one in direct
-messages) says hello in chat. It says it's set up, and that inviting it to any channel adds
-another chief. That happens once per install; if the greeting can't be sent, setup says why.
+messages) says hello in chat. It says it's set up and how to talk to it (and, once channel onboarding is in, that inviting it to any channel adds another chief). That happens once per install; if the greeting can't be sent, setup says why.
 
 ### Connecting Slack
 

@@ -519,6 +519,13 @@ async function openStore(
  * messages if there is one, else the first that chats in a channel. Says where, or throws why it
  * couldn't.
  */
+/**
+ * Whether inviting the app to a channel sets up a chief there, so the greeting can say so. That
+ * arrives with channel onboarding (pull request #31); until then the greeting leaves it out
+ * rather than promise what this build doesn't do.
+ */
+export const INVITES_SET_UP_CHIEFS: boolean = false;
+
 async function greet(
   config: InstallConfig,
   bindings: Binding[],
@@ -544,9 +551,12 @@ async function greet(
   const workspace = binding.workspace;
   const name = workspace.config?.name ?? workspace.id;
   const identity = workspace.config?.identity;
+  const invite = INVITES_SET_UP_CHIEFS
+    ? "\n\nTo add another chief of staff, for a team, a client or a project, invite me to any channel. I'll ask for a name there and set one up."
+    : '';
   await driver.send({
     channel,
-    text: `Hi! I'm ${name}'s chief of staff, and I'm set up. Message me here whenever you need something: each message starts a conversation, and replies in its thread carry it on.\n\nTo add another chief of staff, for a team, a client or a project, invite me to any channel. I'll ask for a name there and set one up.`,
+    text: `Hi! I'm ${name}'s chief of staff, and I'm set up. Message me here whenever you need something: each message starts a conversation, and replies in its thread carry it on.${invite}`,
     ...(identity && driver.capabilities.identities && { identity }),
   });
   return {
