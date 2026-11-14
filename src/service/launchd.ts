@@ -2,7 +2,7 @@
  * Runs the service under launchd on macOS, as a user agent that starts at login
  * and restarts if it stops. Linux (systemd) arrives with the always-on milestone (10).
  */
-import { access, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { runCommand } from '../util/process.js';
@@ -94,9 +94,19 @@ export async function installService(spec: ServiceSpec): Promise<void> {
 
 export async function uninstallService(): Promise<void> {
   ensureMac();
-  await runCommand('launchctl', ['bootout', `${domain()}/${LABEL}`]);
+  await bootout();
   await runCommand('launchctl', ['enable', `${domain()}/${LABEL}`]);
   await rm(plistPath(), { force: true });
+}
+
+/** Unloads the service. Unloading one that isn't loaded is fine; failing to unload isn't. */
+async function bootout(): Promise<void> {
+  const result = await runCommand('launchctl', ['bootout', `${domain()}/${LABEL}`]);
+  if (result.code !== 0 && (await serviceStatus()).loaded) {
+    throw new Error(
+      `launchctl bootout failed, so the service is still running: ${result.stderr.trim()}`,
+    );
+  }
 }
 
 /**
@@ -105,8 +115,37 @@ export async function uninstallService(): Promise<void> {
  */
 export async function stopService(): Promise<void> {
   ensureMac();
-  await runCommand('launchctl', ['disable', `${domain()}/${LABEL}`]);
-  await runCommand('launchctl', ['bootout', `${domain()}/${LABEL}`]);
+  // Disabled first, so a stop that fails halfway can't leave it to come back at login unnoticed.
+  const disabled = await runCommand('launchctl', ['disable', `${domain()}/${LABEL}`]);
+  if (disabled.code !== 0) {
+    throw new Error(
+      `launchctl disable failed, so the service would start again at login: ${disabled.stderr.trim()}`,
+    );
+  }
+  await bootout();
+}
+
+/** The install folder the service was installed for, from its plist; null when there's none. */
+export async function installedHome(): Promise<string | null> {
+  const text = await readFile(plistPath(), 'utf8').catch(() => null);
+  return text === null ? null : homeInPlist(text);
+}
+
+/** The `--home` argument in a plist made by renderPlist. */
+export function homeInPlist(plist: string): string | null {
+  const array = /<key>ProgramArguments<\/key>\s*<array>([\s\S]*?)<\/array>/.exec(plist)?.[1];
+  if (array === undefined) return null;
+  const args = [...array.matchAll(/<string>([^<]*)<\/string>/g)].map((m) => unxml(m[1] ?? ''));
+  const at = args.indexOf('--home');
+  return at === -1 ? null : (args[at + 1] ?? null);
+}
+
+function unxml(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
 }
 
 /** Whether launchd has the service's plist, running or stopped. */

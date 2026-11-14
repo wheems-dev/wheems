@@ -13,7 +13,7 @@ import { StubEngine } from '../src/testing/index.js';
 import { crossCheck } from '../src/config/check.js';
 import { loadInstall } from '../src/config/load.js';
 import { readSecrets } from '../src/secrets.js';
-import { parseLaunchctlPrint, renderPlist } from '../src/service/launchd.js';
+import { homeInPlist, parseLaunchctlPrint, renderPlist } from '../src/service/launchd.js';
 
 describe('wheems setup', () => {
   let root: string;
@@ -566,6 +566,17 @@ describe('wheems init', () => {
 });
 
 describe('launchd', () => {
+  it('reads back the install folder a plist was written for, so a restart keeps it', () => {
+    const plist = renderPlist({
+      node: '/opt/homebrew/opt/node@22/bin/node',
+      cli: '/x/dist/cli/main.js',
+      home: '/Users/me/Work & "Play"/wheems',
+      logFile: '/Users/me/wheems/.wheems/logs/service.log',
+    });
+    expect(homeInPlist(plist)).toBe('/Users/me/Work & "Play"/wheems');
+    expect(homeInPlist('<plist><dict></dict></plist>')).toBeNull();
+  });
+
   it('writes a user agent that runs the service and restarts it', () => {
     const plist = renderPlist({
       node: '/opt/homebrew/opt/node@22/bin/node',

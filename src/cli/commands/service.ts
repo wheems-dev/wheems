@@ -8,6 +8,7 @@ import { defaultHome, paths, tilde, type Paths } from '../../home.js';
 import { request, type ServiceReport } from '../../service/control.js';
 import {
   installService,
+  installedHome,
   plistPath,
   serviceInstalled,
   serviceStatus,
@@ -181,6 +182,16 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
     await printStatus(where, io);
     return;
   }
+  // Checked before the running copy is replaced, so a wrong folder doesn't stop a working one.
+  const hasInstall = await readFile(where.install).then(
+    () => true,
+    () => false,
+  );
+  if (!hasInstall) {
+    throw new Error(
+      `No install at ${tilde(where.home, io.env)}: run wheems setup, or give the install folder with --home.`,
+    );
+  }
   io.out(
     `${restart ? 'Restarting' : 'Starting'} with Node.js ${process.versions.node} and Wheems from ${tilde(cliPath(), io.env)}\n`,
   );
@@ -230,6 +241,14 @@ export function registerService(program: Command, io: Io): void {
   const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
   const where = (options: { home?: string }) =>
     paths(resolve(options.home ?? defaultHome(io.env)), io.env);
+  /**
+   * The install the service commands act on: --home, then $WHEEMS_HOME, then the one the
+   * service was started for, so restarting it doesn't move it to ~/wheems.
+   */
+  const serviceWhere = async (options: { home?: string }) => {
+    if (options.home !== undefined || (io.env.WHEEMS_HOME ?? '') !== '') return where(options);
+    return paths((await installedHome()) ?? defaultHome(io.env), io.env);
+  };
 
   /** Adds the everyday commands to a command: the top level, and `wheems service`. */
   const lifecycle = (parent: Command) => {
@@ -237,7 +256,9 @@ export function registerService(program: Command, io: Io): void {
       .command('start')
       .description('Start the service, so your agents answer in chat, now and at every login')
       .option(homeOption, homeHelp)
-      .action((options: { home?: string }) => start(where(options), io, false));
+      .action(async (options: { home?: string }) => {
+        await start(await serviceWhere(options), io, false);
+      });
     parent
       .command('stop')
       .description('Stop the service; it stays stopped until wheems start')
@@ -246,13 +267,15 @@ export function registerService(program: Command, io: Io): void {
       .command('restart')
       .description('Restart the service, after changing config or updating Wheems')
       .option(homeOption, homeHelp)
-      .action((options: { home?: string }) => start(where(options), io, true));
+      .action(async (options: { home?: string }) => {
+        await start(await serviceWhere(options), io, true);
+      });
     parent
       .command('status')
       .description('Show whether the service is running, and where each workspace chats')
       .option(homeOption, homeHelp)
       .action(async (options: { home?: string }) => {
-        if (!(await printStatus(where(options), io))) process.exitCode = 1;
+        if (!(await printStatus(await serviceWhere(options), io))) process.exitCode = 1;
       });
     parent
       .command('logs')
@@ -260,9 +283,9 @@ export function registerService(program: Command, io: Io): void {
       .option(homeOption, homeHelp)
       .option('-n, --lines <n>', 'how many lines', '50')
       .option('-f, --follow', 'keep printing new lines as they come, until Ctrl+C')
-      .action((options: { home?: string; lines: string; follow?: boolean }) =>
-        logs(where(options), io, options),
-      );
+      .action(async (options: { home?: string; lines: string; follow?: boolean }) => {
+        await logs(await serviceWhere(options), io, options);
+      });
   };
 
   lifecycle(program);
@@ -296,7 +319,9 @@ export function registerService(program: Command, io: Io): void {
     .command('install')
     .description('The same as wheems start')
     .option(homeOption, homeHelp)
-    .action((options: { home?: string }) => start(where(options), io, false));
+    .action(async (options: { home?: string }) => {
+      await start(await serviceWhere(options), io, false);
+    });
 
   service
     .command('uninstall')
