@@ -169,6 +169,56 @@ describe('setting Wheems up by inviting it to a channel', () => {
     expect(existsSync(join(home, 'workspaces', 'marketing'))).toBe(false);
   });
 
+  it('lets only one of two channels take a name at once', async () => {
+    await start();
+    await channel.join({ id: 'C0ONE00001', name: 'one' }, 'UME');
+    await channel.join({ id: 'C0TWO00001', name: 'two' }, 'UME');
+    const [one] = posts('C0ONE00001');
+    const [two] = posts('C0TWO00001');
+    await Promise.all([
+      channel.receive({
+        channel: 'C0ONE00001',
+        threadId: one!.messageId,
+        text: 'Marketing',
+        userId: 'UME',
+      }),
+      channel.receive({
+        channel: 'C0TWO00001',
+        threadId: two!.messageId,
+        text: 'Marketing',
+        userId: 'UME',
+      }),
+    ]);
+    const answers = [posts('C0ONE00001').at(-1)?.text, posts('C0TWO00001').at(-1)?.text];
+    expect(answers.filter((t) => t?.startsWith('Done: Marketing is set up'))).toHaveLength(1);
+    expect(
+      answers.filter((t) => t?.includes("There's already a workspace called marketing")),
+    ).toHaveLength(1);
+  });
+
+  it('never lets two inits make one workspace', async () => {
+    const results = await Promise.allSettled([
+      initWorkspace({ home, id: 'twice', channel: 'a' }),
+      initWorkspace({ home, id: 'twice', channel: 'b' }),
+    ]);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+  });
+
+  it('asks again after a lookup failed while it was invited', async () => {
+    await initWorkspace({ home, id: 'marketing', channel: 'marketing-chat' });
+    await start();
+    const channelName = channel.channelName!;
+    const resolveChannel = channel.resolveChannel!;
+    channel.channelName = () => Promise.reject(new Error('Slack is down'));
+    channel.resolveChannel = () => Promise.reject(new Error('Slack is down'));
+    await channel.join({ id: 'C0MKTCHAT1', name: 'marketing-chat' }, null);
+    expect(posts('C0MKTCHAT1')).toEqual([]);
+    channel.channelName = channelName;
+    channel.resolveChannel = resolveChannel;
+    await channel.receive({ channel: 'C0MKTCHAT1', text: 'hello again', userId: 'UME' });
+    await waitFor(() => posts('C0MKTCHAT1').at(-1)?.text === 'echo: hello again');
+  });
+
   it("picks up a workspace whose channel it couldn't see once it's invited there", async () => {
     await initWorkspace({ home, id: 'marketing', channel: 'marketing-chat' });
     await start();

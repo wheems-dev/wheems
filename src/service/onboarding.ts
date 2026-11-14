@@ -65,6 +65,8 @@ export class Onboarding {
   /** Channels already checked against the waiting workspaces, outside a join. */
   private readonly checked = new Set<string>();
   private readonly queues = new Map<string, Promise<void>>();
+  /** Workspace ids being created, so two channels can't both take one name at once. */
+  private readonly creating = new Set<string>();
 
   constructor(options: OnboardingOptions) {
     this.options = { log: () => undefined, ...options };
@@ -168,7 +170,7 @@ export class Onboarding {
       }
       return;
     }
-    if (this.options.workspaces.some((w) => w.id === parsed.id)) {
+    if (this.creating.has(parsed.id) || this.options.workspaces.some((w) => w.id === parsed.id)) {
       await this.say(
         connection,
         event.channel,
@@ -177,10 +179,12 @@ export class Onboarding {
       );
       return;
     }
-    const driver = this.driver(connection);
-    const channelName = (await driver.channelName?.(event.channel).catch(() => null)) ?? null;
+    // Taken now, with nothing awaited since the check, until it's made or has failed.
+    this.creating.add(parsed.id);
     let workspace: LoadedWorkspace;
     try {
+      const driver = this.driver(connection);
+      const channelName = (await driver.channelName?.(event.channel).catch(() => null)) ?? null;
       workspace = await this.options.create({
         connection,
         channelId: event.channel,
@@ -189,6 +193,7 @@ export class Onboarding {
         name: parsed.name,
       });
     } catch (error) {
+      this.creating.delete(parsed.id);
       await this.say(
         connection,
         event.channel,
@@ -197,6 +202,8 @@ export class Onboarding {
       );
       throw error;
     }
+    // Loaded into the workspaces now, so the id stays taken there.
+    this.creating.delete(parsed.id);
     this.offers.delete(`${connection}:${event.channel}`);
     this.bind({ workspace, connection, channel: event.channel });
     this.options.log(`Set up workspace ${workspace.id} in ${event.channel} on ${connection}`);
@@ -222,20 +229,26 @@ export class Onboarding {
     if (candidates.length === 0) return undefined;
     const key = `${connection}:${channel}`;
     if (!joined && this.checked.has(key)) return undefined;
-    this.checked.add(key);
     const driver = this.driver(connection);
     const name = (await driver.channelName?.(channel).catch(() => null)) ?? null;
+    /** False when a lookup failed or couldn't say: then the next event asks again. */
+    let conclusive = name !== null || driver.channelName === undefined;
     for (const candidate of candidates) {
       const wanted = candidate.channel.replace(/^#/, '');
-      const matches =
-        wanted === channel ||
-        (name !== null && wanted === name) ||
-        (name === null && (await driver.resolveChannel?.(wanted).catch(() => null)) === channel);
+      let matches = wanted === channel || (name !== null && wanted === name);
+      if (!matches && name === null && driver.resolveChannel) {
+        try {
+          matches = (await driver.resolveChannel(wanted)) === channel;
+        } catch {
+          conclusive = false;
+        }
+      }
       if (matches) {
         this.options.waiting.splice(this.options.waiting.indexOf(candidate), 1);
         return candidate;
       }
     }
+    if (conclusive) this.checked.add(key);
     return undefined;
   }
 

@@ -74,6 +74,16 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
     engine: options.engine ?? DEFAULT_ENGINE,
   };
   await ensureAccount(where.install, template.engine.account, options.accountDriver ?? 'claude');
+  // Made exclusively: if another init made it meanwhile, this one stops rather than overwrite it.
+  await mkdir(where.workspaces, { recursive: true });
+  try {
+    await mkdir(dir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(`Workspace ${options.id} already exists at ${dir}`, { cause: error });
+    }
+    throw error;
+  }
   await mkdir(join(dir, 'agents'), { recursive: true });
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));
   await writeFile(join(dir, 'skills.yaml'), SKILLS_YAML);
