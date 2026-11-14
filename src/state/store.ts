@@ -274,22 +274,15 @@ export class StateStore {
   }
 
   /**
-   * At service start: messages still waiting for an answer lost whoever followed them when the
-   * service stopped, so they're marked failed. Returns them as they were, in every workspace,
-   * so their senders can be told.
+   * At service start: messages still waiting for an answer, in every workspace, oldest first.
+   * Whoever followed them went when the service stopped; they're left as they are until each is
+   * dealt with, so another restart meanwhile loses none.
    */
-  failWaitingMessages(at: string): MessageRecord[] {
-    let lost: MessageRecord[] = [];
-    this.transaction(() => {
-      lost = this.db
-        .prepare(`${MESSAGE_SELECT} WHERE state = 'sent' ORDER BY sent_at, id`)
-        .all()
-        .map(toMessage);
-      this.db
-        .prepare("UPDATE messages SET state = 'failed', answered_at = ? WHERE state = 'sent'")
-        .run(at);
-    });
-    return lost;
+  waitingMessages(): MessageRecord[] {
+    return this.db
+      .prepare(`${MESSAGE_SELECT} WHERE state = 'sent' ORDER BY sent_at, id`)
+      .all()
+      .map(toMessage);
   }
 
   /**
@@ -522,18 +515,7 @@ export class StateStore {
   }
 
   private transaction(work: () => void): void {
-    if (this.db.isTransaction) {
-      work();
-      return;
-    }
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
-      work();
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
+    inTransaction(this.db, work);
   }
 }
 
@@ -701,6 +683,23 @@ export class WorkspaceSessions {
     return row === undefined ? undefined : toMessage(row);
   }
 
+  /**
+   * Marks a lost message failed and records the notice that tells its sender, in one step, so
+   * the notice is kept (and delivered after another restart) if the original is marked.
+   */
+  replaceWithNotice(
+    lostId: string,
+    notice: { id: string; sender: string; receiver: string; messageFile: string; sentAt: string },
+  ): MessageRecord {
+    inTransaction(this.db, () => {
+      this.finishMessage(lostId, 'failed', null, notice.sentAt);
+      this.addMessage({ ...notice, kind: 'handback' });
+    });
+    const added = this.message(notice.id);
+    if (!added) throw new Error(`Notice ${notice.id} wasn't recorded`);
+    return added;
+  }
+
   /** Marks a sent message answered (with the file holding its answer, if any) or failed. */
   finishMessage(
     id: string,
@@ -851,6 +850,22 @@ function toSession(row: Row): SessionRecord {
     lastActiveAt: String(row.last_active_at),
     endedAt: text(row.ended_at),
   };
+}
+
+/** Runs work in a transaction, or in the one already open. */
+function inTransaction(db: DatabaseSync, work: () => void): void {
+  if (db.isTransaction) {
+    work();
+    return;
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    work();
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 /** Makes a file readable and writable by its owner only, if it exists. */

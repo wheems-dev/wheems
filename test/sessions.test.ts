@@ -745,6 +745,37 @@ describe('wheems session', () => {
         );
       });
 
+      it('keeps notices through another restart, and delivers them side by side', async () => {
+        const a = await newSession('a');
+        const c = await newSession('c');
+        await settled(a.id);
+        await settled(c.id);
+        const b = await newSession('b', { WHEEMS_SESSION: a.id });
+        const d = await newSession('d', { WHEEMS_SESSION: c.id });
+        await settled(b.id);
+        await settled(d.id);
+        // The work is slow, and so is taking in the news that it was lost.
+        behave = (line) =>
+          line.includes('slowly') || line.startsWith('Wheems: your message')
+            ? 'slow-answer'
+            : 'answer';
+        await wheems(['session', 'send', b.id, 'Work slowly.'], { WHEEMS_SESSION: a.id });
+        await wheems(['session', 'send', d.id, 'Work slowly.'], { WHEEMS_SESSION: c.id });
+        await waitFor(async () =>
+          (await stored((s) => s.workspace('personal').messages(d.id))).some(
+            (m) => m.state === 'sent',
+          ),
+        );
+        const toA = `Wheems: your message to session ${b.id} ("b") was lost`;
+        const toC = `Wheems: your message to session ${d.id} ("d") was lost`;
+        await restart();
+        // Both arrive while the other is still being taken in.
+        await waitFor(() => heard(toA).length === 1 && heard(toC).length === 1);
+        await restart();
+        // Neither had been taken in when the service stopped again, so both come again.
+        await waitFor(() => heard(toA).length === 2 && heard(toC).length === 2);
+      });
+
       it("tells the person's messages to no one, and only marks them", async () => {
         const session = await newSession('packaging');
         await settled(session.id);

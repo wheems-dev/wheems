@@ -469,7 +469,9 @@ A send is a plain message and its answer, both kept as files under
 waiting for its answer when the service stops is marked failed when it next starts, and its
 sender is told, the way answers reach it: `Wheems: your message to session <id> ("<title>") was
 lost when Wheems restarted. Send it again if you still need it.` (a chief hears it in its
-conversation). An answer that was being handed back is delivered again. The person's own
+conversation). An answer that was being handed back is delivered again. Each notice is kept
+before its message is marked, in one step, and they're delivered side by side, so another
+restart loses none and no sender waits on another's turn. The person's own
 messages are only marked; `wheems session show` lists them. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
 `task.md`) instead of a fresh one, so the task stays the one hand-off: a brief, a result, the same
 checks and the same run record. The only difference is that the session receiving it keeps its

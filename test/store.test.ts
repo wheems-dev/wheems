@@ -377,10 +377,33 @@ describe('session store', () => {
       expect(personal.messages('id-personal-suppliers', 1).map((m) => m.id)).toEqual(['m2']);
       expect(state.workspace('acme').message('m1')).toBeUndefined();
       expect(state.workspace('acme').messages('id-personal-packaging')).toEqual([]);
-      expect(state.failWaitingMessages('2026-11-14T12:00:00.000Z')).toEqual([
+      // At start, the ones still waiting are found, and left as they are.
+      expect(state.waitingMessages()).toEqual([
         expect.objectContaining({ id: 'm2', kind: 'message', state: 'sent' }),
       ]);
+      // A lost one is marked failed and its sender's notice kept, together.
+      const notice = personal.replaceWithNotice('m2', {
+        id: 'n2',
+        sender: 'id-personal-suppliers',
+        receiver: 'id-personal-packaging',
+        messageFile: '/m/n2.md',
+        sentAt: '2026-11-14T12:00:00.000Z',
+      });
+      expect(notice).toMatchObject({ kind: 'handback', state: 'sent' });
       expect(personal.message('m2')?.state).toBe('failed');
+      expect(state.waitingMessages().map((m) => m.id)).toEqual(['n2']);
+      // If the notice can't be kept, the message isn't marked either.
+      message('m3', '2026-11-14T13:00:00.000Z');
+      expect(() =>
+        personal.replaceWithNotice('m3', {
+          id: 'n2',
+          sender: 'id-personal-suppliers',
+          receiver: 'id-personal-packaging',
+          messageFile: '/m/n2.md',
+          sentAt: '2026-11-14T13:00:00.000Z',
+        }),
+      ).toThrow();
+      expect(personal.message('m3')?.state).toBe('sent');
     });
 
     it('searches by agent within the workspace only', () => {

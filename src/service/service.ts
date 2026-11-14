@@ -422,7 +422,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   log(`Wheems ${options.version} is running from ${options.home}`);
   await manager.recover();
   // Senders of messages lost in the restart hear so, now the chats are connected.
-  void sessions.tellLost(lost);
+  void sessions.recoverLost(lost);
   manager.startNotes();
   // Files edited, and notes that landed, while the service was away.
   void search.syncAll();
@@ -493,10 +493,11 @@ async function openStore(
         `Could not import ${where.conversations} into the session store: ${imported.problem}\nFix the file, or remove it to start its threads afresh, then run wheems restart.`,
       );
     }
-    lost = state.failWaitingMessages(new Date().toISOString());
+    // Read before the control socket opens, so no message sent from now on is among them.
+    lost = state.waitingMessages();
     if (lost.length > 0) {
       log(
-        `${String(lost.length)} ${lost.length === 1 ? 'message was' : 'messages were'} still waiting for an answer when the service last stopped; marked failed, and their senders will be told`,
+        `${String(lost.length)} ${lost.length === 1 ? 'message was' : 'messages were'} still waiting for an answer when the service last stopped; their senders will be told`,
       );
     }
     const match = state.matchRuntime(live);
