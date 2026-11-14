@@ -1,11 +1,20 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionInfo } from '../src/contracts/runtime.js';
 import { ConversationStore, type Conversation } from '../src/service/store.js';
-import { SCHEMA_VERSION } from '../src/state/schema.js';
+import { MIGRATIONS, SCHEMA_VERSION } from '../src/state/schema.js';
 import { StateStore, sessionLabels, type StandingAgent } from '../src/state/store.js';
 
 const conversation = (thread: string, workspace = 'personal'): Conversation => ({
@@ -71,6 +80,38 @@ describe('session store', () => {
       db.close();
       state = await StateStore.open(file);
       expect(state.conversations()).toEqual([]);
+    });
+
+    it('keeps the store and its -wal and -shm files owner-only, mending ones from before', async () => {
+      const mode = (f: string) => statSync(f).mode & 0o777;
+      await new ConversationStore(state).set('k', conversation('packaging', 'personal'));
+      for (const f of [file, `${file}-wal`, `${file}-shm`]) expect(mode(f)).toBe(0o600);
+      state.close();
+      for (const f of [file, `${file}-wal`, `${file}-shm`]) {
+        if (existsSync(f)) chmodSync(f, 0o644);
+      }
+      state = await StateStore.open(file);
+      for (const f of [file, `${file}-wal`, `${file}-shm`]) {
+        if (existsSync(f)) expect(mode(f)).toBe(0o600);
+      }
+      expect(mode(file)).toBe(0o600);
+    });
+
+    it('marks the messages of a store from before kinds as messages', async () => {
+      state.close();
+      const old = join(dir, 'v1.sqlite');
+      const db = new DatabaseSync(old);
+      db.exec(MIGRATIONS[0] ?? '');
+      db.exec('PRAGMA user_version = 1');
+      db.exec(
+        "INSERT INTO sessions (id, workspace, kind, state, created_at, last_active_at) VALUES ('s', 'personal', 'adhoc', 'idle', 't', 't')",
+      );
+      db.exec(
+        "INSERT INTO messages (id, workspace, sender, receiver, message_file, state, sent_at) VALUES ('m', 'personal', NULL, 's', '/m.md', 'sent', 't')",
+      );
+      db.close();
+      state = await StateStore.open(old);
+      expect(state.workspace('personal').message('m')).toMatchObject({ kind: 'message' });
     });
 
     it('refuses a store from a newer Wheems, and doctor refuses one at another version', async () => {
@@ -336,8 +377,33 @@ describe('session store', () => {
       expect(personal.messages('id-personal-suppliers', 1).map((m) => m.id)).toEqual(['m2']);
       expect(state.workspace('acme').message('m1')).toBeUndefined();
       expect(state.workspace('acme').messages('id-personal-packaging')).toEqual([]);
-      expect(state.failWaitingMessages('2026-11-14T12:00:00.000Z')).toBe(1);
+      // At start, the ones still waiting are found, and left as they are.
+      expect(state.waitingMessages()).toEqual([
+        expect.objectContaining({ id: 'm2', kind: 'message', state: 'sent' }),
+      ]);
+      // A lost one is marked failed and its sender's notice kept, together.
+      const notice = personal.replaceWithNotice('m2', {
+        id: 'n2',
+        sender: 'id-personal-suppliers',
+        receiver: 'id-personal-packaging',
+        messageFile: '/m/n2.md',
+        sentAt: '2026-11-14T12:00:00.000Z',
+      });
+      expect(notice).toMatchObject({ kind: 'handback', state: 'sent' });
       expect(personal.message('m2')?.state).toBe('failed');
+      expect(state.waitingMessages().map((m) => m.id)).toEqual(['n2']);
+      // If the notice can't be kept, the message isn't marked either.
+      message('m3', '2026-11-14T13:00:00.000Z');
+      expect(() =>
+        personal.replaceWithNotice('m3', {
+          id: 'n2',
+          sender: 'id-personal-suppliers',
+          receiver: 'id-personal-packaging',
+          messageFile: '/m/n2.md',
+          sentAt: '2026-11-14T13:00:00.000Z',
+        }),
+      ).toThrow();
+      expect(personal.message('m3')?.state).toBe('sent');
     });
 
     it('searches by agent within the workspace only', () => {

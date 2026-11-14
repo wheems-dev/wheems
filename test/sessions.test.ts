@@ -668,6 +668,127 @@ describe('wheems session', () => {
       expect(show.out).toContain('failed: Wheems: answer from session');
     });
 
+    describe('after a restart', () => {
+      const restart = async () => {
+        await service?.stop();
+        await start();
+      };
+      const heard = (start: string) =>
+        [...received.values()].flat().filter((line) => line.startsWith(start));
+
+      it('tells an ad-hoc sender its message was lost', async () => {
+        const parent = await newSession('parent');
+        await settled(parent.id);
+        const asParent = { WHEEMS_SESSION: parent.id };
+        const child = await newSession('child', asParent);
+        await settled(child.id);
+        behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+        expect((await wheems(['session', 'send', child.id, 'Work slowly.'], asParent)).err).toBe(
+          '',
+        );
+        await waitFor(async () =>
+          (await stored((s) => s.workspace('personal').messages(child.id))).some(
+            (m) => m.state === 'sent',
+          ),
+        );
+        await restart();
+        const lost = `Wheems: your message to session ${child.id} ("child") was lost when Wheems restarted. Send it again if you still need it.`;
+        await waitFor(() => heard(lost).length === 1);
+        const messages = await stored((s) => s.workspace('personal').messages(parent.id, 10));
+        expect(messages.find((m) => m.receiver === child.id)?.state).toBe('failed');
+        expect(messages.find((m) => m.receiver === parent.id)).toMatchObject({
+          kind: 'handback',
+          sender: child.id,
+        });
+      });
+
+      it('tells a chief in its conversation, like any answer', async () => {
+        const chief = await chiefThread();
+        behave = (line) =>
+          line.startsWith('hello') ? 'reply' : line.includes('slowly') ? 'slow-answer' : 'answer';
+        const before = channel.sent.length;
+        // Its purpose is its first message, and is lost while it works on it.
+        const created = await newSession('slowly', chief);
+        await restart();
+        await waitFor(
+          () =>
+            heard(`Wheems: your message to session ${created.id} ("slowly") was lost`).length === 1,
+        );
+        // The chief answered in its thread.
+        await waitFor(() => channel.sent.length > before);
+      });
+
+      it('delivers again an answer that was being handed back', async () => {
+        const parent = await newSession('parent');
+        await settled(parent.id);
+        const child = await newSession('child', { WHEEMS_SESSION: parent.id });
+        await settled(child.id);
+        await service?.stop();
+        service = undefined;
+        const file = join(home, '.wheems', 'messages', 'personal', 'handed-back.md');
+        writeFileSync(file, `Wheems: answer from session ${child.id} ("child"):\n\nFound three.\n`);
+        const state = await StateStore.open(paths(home, env).store);
+        state.workspace('personal').addMessage({
+          id: 'handed-back',
+          kind: 'handback',
+          sender: child.id,
+          receiver: parent.id,
+          messageFile: file,
+          sentAt: new Date().toISOString(),
+        });
+        state.close();
+        await start();
+        await waitFor(
+          () =>
+            heard(`Wheems: answer from session ${child.id} ("child"):\n\nFound three.`).length ===
+            1,
+        );
+      });
+
+      it('keeps notices through another restart, and delivers them side by side', async () => {
+        const a = await newSession('a');
+        const c = await newSession('c');
+        await settled(a.id);
+        await settled(c.id);
+        const b = await newSession('b', { WHEEMS_SESSION: a.id });
+        const d = await newSession('d', { WHEEMS_SESSION: c.id });
+        await settled(b.id);
+        await settled(d.id);
+        // The work is slow, and so is taking in the news that it was lost.
+        behave = (line) =>
+          line.includes('slowly') || line.startsWith('Wheems: your message')
+            ? 'slow-answer'
+            : 'answer';
+        await wheems(['session', 'send', b.id, 'Work slowly.'], { WHEEMS_SESSION: a.id });
+        await wheems(['session', 'send', d.id, 'Work slowly.'], { WHEEMS_SESSION: c.id });
+        await waitFor(async () =>
+          (await stored((s) => s.workspace('personal').messages(d.id))).some(
+            (m) => m.state === 'sent',
+          ),
+        );
+        const toA = `Wheems: your message to session ${b.id} ("b") was lost`;
+        const toC = `Wheems: your message to session ${d.id} ("d") was lost`;
+        await restart();
+        // Both arrive while the other is still being taken in.
+        await waitFor(() => heard(toA).length === 1 && heard(toC).length === 1);
+        await restart();
+        // Neither had been taken in when the service stopped again, so both come again.
+        await waitFor(() => heard(toA).length === 2 && heard(toC).length === 2);
+      });
+
+      it("tells the person's messages to no one, and only marks them", async () => {
+        const session = await newSession('packaging');
+        await settled(session.id);
+        behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+        await wheems(['session', 'send', session.id, 'Work slowly.']);
+        await restart();
+        const messages = await stored((s) => s.workspace('personal').messages(session.id));
+        expect(messages[0]).toMatchObject({ sender: null, state: 'failed' });
+        await new Promise((r) => setTimeout(r, 100));
+        expect(heard('Wheems: your message')).toEqual([]);
+      });
+    });
+
     it('refuses messages to an ended session', async () => {
       const session = await newSession('packaging');
       await settled(session.id);

@@ -69,6 +69,12 @@ change anything, including commands and config formats, without a migration path
 
 **Fixed**
 
+- A message still waiting for its answer when the service restarted was marked failed without a
+  word. Its sender is now told, as answers reach it (a chief in its conversation), and an answer
+  that was being handed back is delivered again.
+- The session store, `.wheems/state.sqlite`, and its `-wal` and `-shm` files were created
+  readable by everyone. They're now owner-only, and the service mends existing ones when it
+  starts.
 - Under launchd, the service took about ten seconds to start, because launchd throttles the CPU
   and disk of a job that doesn't say what kind it is. It now runs as an interactive job and starts
   in about a second. `wheems start` waits up to 30 seconds and, if it still doesn't answer, prints

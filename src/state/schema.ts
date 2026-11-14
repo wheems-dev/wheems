@@ -96,6 +96,12 @@ export const MIGRATIONS: readonly string[] = [
     DELETE FROM session_search WHERE session = old.id;
   END;
   `,
+  // 2: what a message is: one sent with wheems session send (or a purpose), or an answer
+  // handed back to its sender, which can be delivered again after a restart.
+  `
+  ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'message'
+    CHECK (kind IN ('message', 'handback'));
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
