@@ -4,3 +4,4 @@ dist-check/
 coverage/
 *.log
 .DS_Store
+.tmp/
