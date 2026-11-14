@@ -47,6 +47,34 @@ TypeScript first.
 - It reads Herdr's JSON output, never screen text.
 - Herdr stays a separate install that `wheems setup` manages.
 
+## When something's wrong, say so in chat
+
+Part of using the terminal once, then everything else in chat (built):
+
+- **Setup ends with a hello.** When setup finishes and the service runs, the first chief (the one
+  in direct messages, else the first in a channel) greets the person through the channel driver.
+  It says it's set up, and that inviting it to any channel adds another chief. This happens
+  once per install (`.wheems/greeted.json`), through the service's `greet` control
+  request. If it can't be sent, setup says why. To write first in direct messages, a driver
+  offers the optional `openDirect(userId)`; Slack's is `conversations.open`, under the `im:write`
+  scope it already has.
+- **A chief that can't answer says so**, in the thread, with what's wrong and the one step that
+  fixes it:
+  - the engine doesn't trust the folder, or isn't signed in. The engine's own `signedIn()` is
+    asked before a session starts, and a yes is kept for ten minutes;
+  - it's waiting at the Mac, or hasn't started on the message;
+  - it hit an error, or its session failed to start.
+
+  Each problem is said at most once per workspace, until it's fixed: when the chief answers
+  again, or the check that failed passes. Later messages only log it. It's channel-agnostic: a
+  notice is a post through the `ChannelDriver`.
+
+- **`wheems doctor --fix`.** Doctor attaches a fix to each check it can fix safely, and `--fix`
+  asks before running each one. The fixes: trusting the install folder (it opens the engine
+  there), starting or restarting the service, rebuilding a stale search index, and correcting a
+  near-miss channel name in `workspace.yaml` from the channels the app can see (the optional
+  `listChannels`). It never changes the chat app's settings or tokens.
+
 ## Installing on a new machine
 
 ```bash

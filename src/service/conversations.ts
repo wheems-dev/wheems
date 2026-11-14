@@ -81,6 +81,8 @@ export interface ConversationManagerOptions {
    * would only wait at the Mac where nobody in chat can answer it.
    */
   trustProblem?: (engine: string, dir: string) => Promise<string | null>;
+  /** Why an engine can't start because it isn't signed in, with the step that fixes it, or null. */
+  signInProblem?: (engine: string) => Promise<string | null>;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -120,13 +122,20 @@ export class ConversationManager {
   private readonly options: Required<
     Omit<
       ConversationManagerOptions,
-      'writeFile' | 'log' | 'aboutYouFile' | 'onNote' | 'trustProblem' | 'sessionsSection'
+      | 'writeFile'
+      | 'log'
+      | 'aboutYouFile'
+      | 'onNote'
+      | 'trustProblem'
+      | 'signInProblem'
+      | 'sessionsSection'
     >
   > & {
     sessionsSection: ConversationManagerOptions['sessionsSection'];
     aboutYouFile: string | undefined;
     onNote: ((workspace: string) => void) | undefined;
     trustProblem: (engine: string, dir: string) => Promise<string | null>;
+    signInProblem: (engine: string) => Promise<string | null>;
     writeFile: (path: string, content: string) => Promise<void>;
     log: (message: string) => void;
   };
@@ -136,6 +145,11 @@ export class ConversationManager {
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
+  /**
+   * Why each workspace's chief can't answer, as already said in chat: each problem is said once,
+   * until the chief answers again, so a person isn't told the same thing on every message.
+   */
+  private readonly problems = new Map<string, Set<Problem>>();
   private sweepTimer: NodeJS.Timeout | undefined;
   private sweeping = false;
   private trimming: Promise<void> = Promise.resolve();
@@ -155,6 +169,7 @@ export class ConversationManager {
       onNote: undefined,
       sessionsSection: undefined,
       trustProblem: () => Promise.resolve(null),
+      signInProblem: () => Promise.resolve(null),
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -210,11 +225,12 @@ export class ConversationManager {
     return this.enqueue(key, () =>
       this.deliver(key, binding, message).catch((error: unknown) => {
         this.options.log(`Conversation ${key}: ${describe(error)}`);
-        return this.notice(
+        return this.problem(
           key,
           binding,
           replyThread(event),
-          `Something went wrong: ${describe(error)}`,
+          'failed',
+          `I couldn't start on this: ${describe(error)}. At the Mac, run \`wheems doctor --fix\` to find and fix what's wrong.`,
         );
       }),
     );
@@ -300,6 +316,8 @@ export class ConversationManager {
   /** Posts an agent's reply (`wheems reply`) into its conversation's thread. */
   async reply(key: string, text: string): Promise<void> {
     await this.post(key, text);
+    const workspace = (await this.options.store.get(key))?.workspace;
+    if (workspace !== undefined) this.solved(workspace);
     this.lastReply.set(key, { at: Date.now(), text: text.trim() });
   }
 
@@ -459,7 +477,7 @@ export class ConversationManager {
       } catch (error) {
         if (!isDriverError(error, 'blocked')) throw error;
         if (seen) await this.unmark(channel, seen);
-        await this.notice(key, binding, replyThread(event), blockedText(session));
+        await this.problem(key, binding, replyThread(event), 'blocked', blockedText(session));
       }
       return;
     }
@@ -469,9 +487,18 @@ export class ConversationManager {
     if (untrusted !== null) {
       this.options.log(`Conversation ${key}: not started, ${engineName} doesn't trust the folder`);
       if (seen) await this.unmark(channel, seen);
-      await this.notice(key, binding, replyThread(event), untrusted);
+      await this.problem(key, binding, replyThread(event), 'untrusted', untrusted);
       return;
     }
+    this.solved(binding.workspace.id, 'untrusted');
+    const signedOut = await this.options.signInProblem(engineName).catch(() => null);
+    if (signedOut !== null) {
+      this.options.log(`Conversation ${key}: not started, ${engineName} isn't signed in`);
+      if (seen) await this.unmark(channel, seen);
+      await this.problem(key, binding, replyThread(event), 'signed-out', signedOut);
+      return;
+    }
+    this.solved(binding.workspace.id, 'signed-out');
     if (session) await this.options.runtime.remove(session.id).catch(() => undefined);
     const engine = this.options.engine(engineName);
     // An engine that chooses its own ids can only resume once its id has been found.
@@ -685,7 +712,7 @@ export class ConversationManager {
     const unmarkSeen = async () => {
       for (const message of watch.seen.splice(0)) await this.unmark(channel, message);
     };
-    const done = async (text: string | null) => {
+    const done = async (text: string | null, problem?: Problem) => {
       // Close before any await, so a message arriving from here on is followed afresh.
       watch.closed = true;
       if (this.watches.get(key) === watch) this.watches.delete(key);
@@ -694,7 +721,9 @@ export class ConversationManager {
       for (const message of watch.queued.splice(0)) {
         if (message) await this.unmark(channel, message);
       }
-      if (text !== null) await this.notice(key, binding, thread, text);
+      if (text === null) return;
+      if (problem) await this.problem(key, binding, thread, problem, text);
+      else await this.notice(key, binding, thread, text);
     };
 
     if (!watch.engine.capabilities.status) {
@@ -740,9 +769,12 @@ export class ConversationManager {
             : 'The session ended without replying.',
         );
       }
-      if (session.status === 'blocked') return done(blockedText(session));
+      if (session.status === 'blocked') return done(blockedText(session), 'blocked');
       if (session.status === 'error') {
-        return done(`The agent hit an error. Its session is \`${session.id}\` in Herdr.`);
+        return done(
+          `The agent hit an error, so it can't answer. See what happened at the Mac: \`hc attach ${session.id}\`.`,
+          'error',
+        );
       }
       if (session.turn > watch.fromTurn && session.status !== 'working') {
         const answered = await this.postAnswers(key, watch);
@@ -775,6 +807,7 @@ export class ConversationManager {
           if (followingUp) return done(null);
           return done(
             `The agent hasn't started on this yet. It may be waiting for an answer at the Mac: \`hc attach ${session.id}\`.`,
+            'not-started',
           );
         }
         if (session.status === null) {
@@ -821,6 +854,9 @@ export class ConversationManager {
       await this.post(key, answer.text);
     }
     await this.options.store.answered(key, fresh[fresh.length - 1]?.id ?? '', fresh.length);
+    // The chief answered: whatever stopped it before is fixed.
+    const workspace = (await this.options.store.get(key))?.workspace;
+    if (workspace !== undefined) this.solved(workspace);
     return fresh.length;
   }
 
@@ -1102,6 +1138,34 @@ export class ConversationManager {
     return (this.lastReply.get(key)?.at ?? 0) >= since;
   }
 
+  /**
+   * Says why the chief can't answer, unless that was already said for this workspace and
+   * hasn't been fixed since. Then it's only logged.
+   */
+  private async problem(
+    key: string,
+    binding: Binding,
+    thread: string,
+    problem: Problem,
+    text: string,
+  ): Promise<void> {
+    const workspace = binding.workspace.id;
+    const said = this.problems.get(workspace) ?? new Set<Problem>();
+    if (said.has(problem)) {
+      this.options.log(`Conversation ${key}: still ${problem}; already said in chat`);
+      return;
+    }
+    said.add(problem);
+    this.problems.set(workspace, said);
+    await this.notice(key, binding, thread, text);
+  }
+
+  /** A workspace's problem is fixed (or all of them, when the chief answers). */
+  private solved(workspace: string, problem?: Problem): void {
+    if (problem === undefined) this.problems.delete(workspace);
+    else this.problems.get(workspace)?.delete(problem);
+  }
+
   private async notice(key: string, binding: Binding, thread: string, text: string): Promise<void> {
     const channel = this.channel(binding.connection);
     const conversation = await this.options.store.get(key);
@@ -1149,6 +1213,9 @@ export function sessionNameFor(workspace: string, key: string): string {
 function needsNote(conversation: Conversation): boolean {
   return conversation.lastActiveAt > (conversation.notedAt ?? '');
 }
+
+/** Why a chief can't answer: each is said in chat once until it's fixed. */
+type Problem = 'untrusted' | 'signed-out' | 'blocked' | 'not-started' | 'error' | 'failed';
 
 function blockedText(session: SessionInfo): string {
   return `The agent is waiting for an answer at the Mac, such as a permission prompt: \`hc attach ${session.id}\`.`;

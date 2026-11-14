@@ -34,6 +34,7 @@ describe('conversations', () => {
       noteSweepMs?: number;
       noteTurnSeconds?: number;
       trustProblem?: (engine: string, dir: string) => Promise<string | null>;
+      signInProblem?: (engine: string) => Promise<string | null>;
     } = {},
   ) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
@@ -53,6 +54,7 @@ describe('conversations', () => {
       ...(options.noteSweepMs !== undefined && { noteSweepMs: options.noteSweepMs }),
       ...(options.noteTurnSeconds !== undefined && { noteTurnSeconds: options.noteTurnSeconds }),
       ...(options.trustProblem !== undefined && { trustProblem: options.trustProblem }),
+      ...(options.signInProblem !== undefined && { signInProblem: options.signInProblem }),
       aboutYouFile: join(home, 'about-you.md'),
     });
   };
@@ -730,15 +732,14 @@ describe('conversations', () => {
     ]);
   });
 
-  it('says so when the agent is waiting for a person at the Mac, and when a message arrives meanwhile', async () => {
+  it('says once when the agent is waiting for a person at the Mac, not on every message', async () => {
     behaviour = () => 'block';
     const first = await dm('deploy');
     await settle();
     expect(posts().at(-1)?.text).toMatch(/waiting for an answer at the Mac/);
     await dm('well?', first);
     await settle();
-    expect(posts()).toHaveLength(2);
-    expect(posts().at(-1)?.text).toMatch(/waiting for an answer at the Mac/);
+    expect(posts()).toHaveLength(1);
   });
 
   it('says so when a new session never starts, such as at a folder trust question', async () => {
@@ -774,6 +775,46 @@ describe('conversations', () => {
     await dm('hello again', first);
     await settle();
     expect(await runtime.list({ labels: { workspace: 'personal' } })).toHaveLength(1);
+  });
+
+  it("says once that the chief can't answer, until it answers again", async () => {
+    await manager.stop();
+    let trusted = false;
+    make({
+      trustProblem: () => Promise.resolve(trusted ? null : 'Trust the install folder first.'),
+    });
+    await dm('hello');
+    await settle();
+    await dm('anyone?');
+    await settle();
+    expect(posts().map((p) => p.text)).toEqual(['_Wheems:_ Trust the install folder first.']);
+    // Fixed at the Mac: it answers, and a later problem is said again.
+    trusted = true;
+    await dm('hello again');
+    await settle();
+    expect(posts().at(-1)?.text).toBe('echo: hello again');
+    trusted = false;
+    await dm('and now?');
+    await settle();
+    expect(posts().at(-1)?.text).toBe('_Wheems:_ Trust the install folder first.');
+  });
+
+  it("says when the engine isn't signed in, with the step that fixes it, and starts nothing", async () => {
+    await manager.stop();
+    const asked: string[] = [];
+    make({
+      signInProblem: (engine) => {
+        asked.push(engine);
+        return Promise.resolve("Claude Code isn't signed in. At the Mac, run `claude login`.");
+      },
+    });
+    await dm('hello');
+    await settle();
+    expect(asked).toHaveLength(1);
+    expect(posts().map((p) => p.text)).toEqual([
+      "_Wheems:_ Claude Code isn't signed in. At the Mac, run `claude login`.",
+    ]);
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toEqual([]);
   });
 
   it('says so when the session exits without replying', async () => {

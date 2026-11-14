@@ -221,6 +221,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     if (!state.callingSession(request.session)) throw new Error(`No session ${request.session}`);
     return { session: request.session };
   };
+  /** When each engine last said it was signed in: asked again after ten minutes. */
+  const signedInAt = new Map<string, number>();
   const manager: ConversationManager = new ConversationManager({
     install: config,
     bindings,
@@ -236,6 +238,20 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       if (!entry || !setup?.trusted || setup.trust === null) return null;
       if ((await setup.trusted(dir)) !== false) return null;
       return `${entry.label} hasn't been told to trust this workspace's folder, so it can't start. ${trustAdvice(entry.label, setup.trust, tilde(options.home, env))} Then send your message again.`;
+    },
+    signInProblem: async (engine) => {
+      const entry = options.registry.catalog('engine').find((e) => e.name === engine);
+      const setup = entry?.engine;
+      if (!entry || !setup || setup.signIn === null) return null;
+      const known = signedInAt.get(engine);
+      if (known !== undefined && Date.now() - known < 10 * 60_000) return null;
+      // Only a plain no counts: an engine that can't tell is given the benefit of the doubt.
+      if ((await setup.signedIn()) !== false) {
+        signedInAt.set(engine, Date.now());
+        return null;
+      }
+      signedInAt.delete(engine);
+      return `${entry.label} isn't signed in, so I can't answer. At the Mac, run \`${setup.signIn.join(' ')}\` and sign in (or wheems setup, then Engines), then send your message again.`;
     },
     aboutYouFile: where.aboutYou,
     noteSweepMs: options.noteSweepMs ?? 60_000,

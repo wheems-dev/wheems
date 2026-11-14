@@ -75,6 +75,10 @@ it; restart it after changing config. `wheems stop` stops it until `wheems start
 
 **Check everything** runs `wheems doctor`.
 
+When you choose **Done** with the service running, your chief of staff says hello in Slack's
+direct messages: that's how you know it works, and where to find it. If it can't, setup says
+why.
+
 Each part also has its own command for scripts: `wheems init <workspace> [--engine codex]
 [--model gpt-6.1-sol]`, `wheems start` and `wheems doctor`.
 
@@ -94,6 +98,11 @@ changes to `about-you.md` suggested from their notes. Nothing changes until you 
 Overnight, Wheems writes `knowledge/reports/contradictions.md` and `knowledge/reports/stale.md`,
 pages that disagree and pages that look out of date.
 
-If nothing answers, run `wheems status`: it says whether the service is running and where each
-workspace chats. For everything else, run `wheems doctor`. It checks Node.js, Herdr core, Claude
+If your chief can't answer, it says so in the thread, with the one step that fixes it: an engine
+that isn't signed in or doesn't trust the folder, a question waiting at the Mac, or a session
+that failed to start. It says each problem once, until it's fixed.
+
+If nothing answers at all, run `wheems status`: it says whether the service is running and where
+each workspace chats. For everything else, run `wheems doctor`, or `wheems doctor --fix`, which
+offers to fix what it safely can and asks before each fix. It checks Node.js, Herdr core, Claude
 Code, the folder trust, Slack and the service.

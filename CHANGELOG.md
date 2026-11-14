@@ -7,6 +7,17 @@ change anything, including commands and config formats, without a migration path
 
 **Added**
 
+- Setup ends with your first chief of staff saying hello in chat, once per install: it's set up,
+  and inviting it to any channel adds another chief. If it can't, setup says why.
+- `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before
+  each fix: trusting the install folder, starting the service, rebuilding a stale search index,
+  and a near-miss channel name in `workspace.yaml`. It never changes the chat app's settings or
+  tokens.
+- A chief that can't answer says so in the thread, with the one step that fixes it, once per
+  problem until it's fixed: an engine that isn't signed in (newly checked before a session
+  starts) or doesn't trust the folder, a question waiting at the Mac, an error, or a session that
+  failed to start.
+
 - `wheems start`, `stop`, `restart`, `status` and `logs` look after the background service. `stop`
   keeps it stopped, even after you log in again, until `wheems start`. `status` shows the version,
   how long it has been up, and where each workspace chats, with what stops one from chatting (a
