@@ -3,6 +3,17 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- The cloud on the welcome screen and in `wheems setup` is now the mascot's outline, with its eye
+  and smile, instead of a solid shape whose face got lost. It's left out when the output isn't a
+  terminal (piped or saved to a file) and when the terminal is narrower than 53 columns, so only
+  the name, tagline and status are shown.
+- The cloud winks once when it appears, in an interactive terminal. Set `WHEEMS_NO_ANIMATION` to
+  stop it; it never winks in CI, in a dumb terminal, or when the output isn't a terminal.
+
 ## 0.0.2
 
 Fixes from the first preview, a welcome screen, and checks that catch common set-up problems.

@@ -19,7 +19,15 @@ import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { ensureInstall, setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
-import { renderWelcome, welcomeStatus } from './welcome.js';
+import {
+  canWink,
+  renderWelcomeHead,
+  renderWelcomeTail,
+  SHOW_CURSOR,
+  showCloud,
+  welcomeStatus,
+  wink,
+} from './welcome.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
 import { SetupCancelled } from '../contracts/setup.js';
@@ -33,6 +41,8 @@ export interface Io {
   err: (text: string) => void;
   env: NodeJS.ProcessEnv;
   color: boolean;
+  /** The terminal's width, or undefined when the output isn't a terminal. */
+  columns?: number | undefined;
   registry: () => DriverRegistry;
   stdin: () => Promise<string>;
 }
@@ -115,8 +125,13 @@ export function createProgram(io: Io): Command {
       const registry = io.registry();
       const ui = clackUi();
       io.out(
-        renderWelcome({ version: packageVersion(), status: [], color: io.color, hints: false }),
+        renderWelcomeHead({
+          version: packageVersion(),
+          color: io.color,
+          cloud: showCloud(io.columns),
+        }),
       );
+      if (canWink(io.columns, io.env)) await winkOnce(io);
       ui.intro(' Wheems setup ');
       try {
         await setup({
@@ -248,18 +263,44 @@ function shellPath(path: string): string {
   return /^[\w./-]+$/.test(path) ? path : `'${path.replaceAll("'", `'\\''`)}'`;
 }
 
+/**
+ * The cloud winks once. Ctrl+C meanwhile still gives the terminal its cursor back before
+ * stopping, as it would have done without the wink.
+ */
+async function winkOnce(io: Io): Promise<void> {
+  const interrupted = () => {
+    io.out(SHOW_CURSOR);
+    process.exit(130);
+  };
+  process.once('SIGINT', interrupted);
+  try {
+    await wink({ version: packageVersion(), color: io.color, write: io.out });
+  } finally {
+    process.off('SIGINT', interrupted);
+  }
+}
+
 /** Runs the CLI and returns the exit code. With no command, it shows the welcome screen. */
 export async function run(argv: string[], io: Io): Promise<number> {
   if (argv.length === 0) {
     const home = resolve(defaultHome(io.env));
     // The welcome never fails: a problem reading the install becomes one of its lines.
-    const status = await welcomeStatus(home, io.env).catch((error: unknown) => [
+    // The status is read while the cloud is drawn and winks.
+    const reading = welcomeStatus(home, io.env).catch((error: unknown) => [
       {
         mark: '!' as const,
         text: `Couldn't read the install at ${home}: ${error instanceof Error ? error.message : String(error)}. Run wheems doctor.`,
       },
     ]);
-    io.out(renderWelcome({ version: packageVersion(), status, color: io.color }));
+    io.out(
+      renderWelcomeHead({
+        version: packageVersion(),
+        color: io.color,
+        cloud: showCloud(io.columns),
+      }),
+    );
+    if (canWink(io.columns, io.env)) await winkOnce(io);
+    io.out(renderWelcomeTail({ status: await reading, color: io.color }));
     return 0;
   }
   const program = createProgram(io);
