@@ -6,12 +6,17 @@ import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, packageVersion, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
 import {
+  canWink,
   CLOUD,
+  HIDE_CURSOR,
   renderWelcome,
+  SHOW_CURSOR,
   showCloud,
   TAGLINE,
   WELCOME_WIDTH,
   welcomeStatus,
+  wink,
+  WINK_TIMING,
 } from '../src/cli/welcome.js';
 import { proposeSkill } from '../src/skills/proposals.js';
 
@@ -79,6 +84,51 @@ describe('the welcome screen', () => {
     expect(showCloud(120)).toBe(true);
   });
 
+  it('winks: shuts the eye, opens it, and redraws only that row', async () => {
+    const written: string[] = [];
+    const slept: number[] = [];
+    await wink({
+      version: '0.0.1',
+      color: false,
+      write: (t) => written.push(t),
+      sleep: (ms) => {
+        slept.push(ms);
+        return Promise.resolve();
+      },
+    });
+    expect(slept).toEqual([WINK_TIMING.before, WINK_TIMING.shut]);
+    expect(written[0]).toBe(HIDE_CURSOR);
+    expect(written.at(-1)).toBe(SHOW_CURSOR);
+    // Five rows up from under the cloud is the eye's row, with the tagline beside it.
+    const shut = ` ██▀  ▄▄           ▀█▄▄    ${TAGLINE}`;
+    const open = ` ██▀  ██           ▀█▄▄    ${TAGLINE}`;
+    expect(written[1]).toBe(`\x1b[5A\r\x1b[2K${shut}\x1b[5B\r`);
+    expect(written[2]).toBe(`\x1b[5A\r\x1b[2K${open}\x1b[5B\r`);
+    expect(written).toHaveLength(4);
+  });
+
+  it('gives the cursor back even if the wink fails', async () => {
+    const written: string[] = [];
+    await expect(
+      wink({
+        version: '0.0.1',
+        color: false,
+        write: (t) => written.push(t),
+        sleep: () => Promise.reject(new Error('interrupted')),
+      }),
+    ).rejects.toThrow('interrupted');
+    expect(written).toEqual([HIDE_CURSOR, SHOW_CURSOR]);
+  });
+
+  it('winks only for a person at a wide enough terminal', () => {
+    expect(canWink(80, {})).toBe(true);
+    expect(canWink(undefined, {})).toBe(false);
+    expect(canWink(WELCOME_WIDTH - 1, {})).toBe(false);
+    expect(canWink(80, { TERM: 'dumb' })).toBe(false);
+    expect(canWink(80, { CI: 'true' })).toBe(false);
+    expect(canWink(80, { WHEEMS_NO_ANIMATION: '1' })).toBe(false);
+  });
+
   it('says to run setup when there is no install', async () => {
     expect(await welcomeStatus(join(home, 'nowhere'), { HOME: home })).toEqual([
       { mark: '!', text: 'No install at ~/nowhere yet: run wheems setup' },
@@ -134,7 +184,7 @@ describe('the welcome screen', () => {
     expect(out).not.toContain(CLOUD[0]);
   });
 
-  it('draws the cloud with no command in a wide terminal', async () => {
+  it('draws the cloud with no command in a wide terminal, and winks before the status', async () => {
     let out = '';
     await run([], {
       ...defaultIo(),
@@ -145,6 +195,23 @@ describe('the welcome screen', () => {
       columns: 80,
     });
     expect(out).toContain(CLOUD[0]);
+    const shown = out.indexOf(SHOW_CURSOR);
+    expect(out.indexOf(HIDE_CURSOR)).toBeGreaterThan(out.indexOf(CLOUD.at(-1) ?? ''));
+    expect(shown).toBeLessThan(out.indexOf('No install at ~/none yet'));
+  });
+
+  it("doesn't wink for someone who has turned animation off", async () => {
+    let out = '';
+    await run([], {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: () => undefined,
+      env: { WHEEMS_HOME: join(home, 'none'), HOME: home, WHEEMS_NO_ANIMATION: '1' },
+      color: false,
+      columns: 80,
+    });
+    expect(out).toContain(CLOUD[0]);
+    expect(out).not.toContain('\x1b[');
   });
 
   it("still greets when the install can't be read, and says why", async () => {

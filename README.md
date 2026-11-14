@@ -665,6 +665,7 @@ skills:
 | `WHEEMS_SECRETS`      | The secrets file (default `~/.config/wheems/secrets.json`, or under `$XDG_CONFIG_HOME`) |
 | `WHEEMS_WORKSPACE`    | The workspace `wheems kb search` searches. Wheems sets it in every agent session        |
 | `WHEEMS_CONVERSATION` | The conversation an agent's commands belong to. Wheems sets it in every agent session   |
+| `WHEEMS_NO_ANIMATION` | Set to anything to stop the cloud winking on the welcome screen and in `wheems setup`   |
 
 ### Config the schemas accept but nothing uses yet
 

@@ -11,6 +11,8 @@ change anything, including commands and config formats, without a migration path
   and smile, instead of a solid shape whose face got lost. It's left out when the output isn't a
   terminal (piped or saved to a file) and when the terminal is narrower than 53 columns, so only
   the name, tagline and status are shown.
+- The cloud winks once when it appears, in an interactive terminal. Set `WHEEMS_NO_ANIMATION` to
+  stop it; it never winks in CI, in a dumb terminal, or when the output isn't a terminal.
 
 ## 0.0.2
 
