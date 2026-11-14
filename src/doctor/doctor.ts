@@ -1,8 +1,9 @@
 import { homedir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { access } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { LoadedInstall } from '../config/load.js';
+import type { LoadedInstall, LoadedWorkspace } from '../config/load.js';
+import { parseDocument } from 'yaml';
 import { paths, tilde } from '../home.js';
 import { trustAdvice } from '../util/trust.js';
 import { readSecrets } from '../secrets.js';
@@ -41,11 +42,36 @@ export interface DoctorOptions {
   fullTextSearch?: () => Promise<string | null>;
   /** Whether the service is installed and answering. */
   service?: (home: string) => Promise<{ installed: boolean; answering: boolean }>;
+  /** Given, doctor attaches a safe fix to each check it can fix, for `wheems doctor --fix`. */
+  fixes?: DoctorFixes;
+}
+
+/** A safe fix for a failing check, run only after the person says yes (`wheems doctor --fix`). */
+export interface Fix {
+  /** What it will do, said before asking, such as "Start the service, as wheems start does". */
+  what: string;
+  /** Does it, and says what came of it. */
+  run(): Promise<string>;
+}
+
+/** A check, with a fix when doctor was given `fixes` and knows a safe one. */
+export interface DoctorCheck extends HealthCheck {
+  fix?: Fix;
+}
+
+/** What fixes may do outside the install folder. None touches the chat app's settings or tokens. */
+export interface DoctorFixes {
+  /** Starts (or restarts) the service, as `wheems start` does; true once it answers. */
+  startService(): Promise<boolean>;
+  /** Runs a command on the person's terminal, in a folder; its exit code. */
+  run(command: string[], cwd: string): Promise<number | null>;
+  /** Has the running service rebuild a workspace's search index. */
+  reindex(workspace: string): Promise<void>;
 }
 
 export interface DoctorSection {
   title: string;
-  checks: HealthCheck[];
+  checks: DoctorCheck[];
 }
 
 export interface DoctorReport {
@@ -128,8 +154,10 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
   return { ok, sections };
 }
 
-async function agentChecks(install: LoadedInstall, options: DoctorOptions): Promise<HealthCheck[]> {
-  const checks: HealthCheck[] = [];
+async function agentChecks(install: LoadedInstall, options: DoctorOptions): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = [];
+  /** Trusting the install folder covers every workspace in it: one fix per engine. */
+  const trustFixed = new Set<string>();
   const engines = new Set(
     install.workspaces.flatMap((w) => w.agents.map((a) => a.definition.engine)),
   );
@@ -160,6 +188,20 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
         message: `${label} trusts the workspace folder`,
       });
     } else if (trusted === false) {
+      const fixes = options.fixes;
+      const fix: Fix | undefined =
+        fixes && trustCommand !== null && !trustFixed.has(engine)
+          ? {
+              what: `Open ${label} in ${tilde(options.home, options.env)} so you can answer its question: say yes to trusting the folder, then press Ctrl+C twice to come back. That covers every workspace`,
+              run: async () => {
+                await fixes.run(trustCommand, options.home);
+                return (await trustOf(engine, workspace.dir)) === true
+                  ? `${label} trusts the install folder now.`
+                  : `${label} still doesn't trust it. Run wheems doctor --fix again, and say yes when it asks.`;
+              },
+            }
+          : undefined;
+      if (fix) trustFixed.add(engine);
       checks.push({
         name: `${workspace.id} folder`,
         status: 'warn',
@@ -168,6 +210,7 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
           trustCommand !== null
             ? trustAdvice(label, trustCommand, tilde(options.home, options.env))
             : 'Open the engine in the install folder once and say yes, or run wheems setup.',
+        ...(fix && { fix }),
       });
     }
   }
@@ -226,7 +269,7 @@ async function channelChecks(
       const health = await driver.check();
       checks.push(...health.map((c) => ({ ...c, name: `${connection}: ${c.name}` })));
       if (health.every((c) => c.status !== 'fail')) {
-        checks.push(...(await channelMembership(install, connection, driver)));
+        checks.push(...(await channelMembership(install, connection, driver, options)));
       }
     } catch (error) {
       checks.push({
@@ -249,19 +292,22 @@ async function channelMembership(
   install: LoadedInstall,
   connection: string,
   driver: ChannelDriver,
-): Promise<HealthCheck[]> {
-  const checks: HealthCheck[] = [];
+  options: DoctorOptions,
+): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = [];
   for (const workspace of install.workspaces) {
     const chat = workspace.config?.channels.chat;
     if (!chat || chat.connection !== connection || !('channel' in chat)) continue;
     const name = `${workspace.id} chat channel`;
     const id = driver.resolveChannel ? await driver.resolveChannel(chat.channel) : chat.channel;
     if (id === null) {
+      const fix = options.fixes ? await channelNameFix(workspace, chat.channel, driver) : undefined;
       checks.push({
         name,
         status: 'fail',
         message: `The app can't see ${chat.channel}`,
         hint: 'Check the name in workspace.yaml, invite the app to the channel, then run wheems restart.',
+        ...(fix && { fix }),
       });
       continue;
     }
@@ -284,6 +330,57 @@ async function channelMembership(
     );
   }
   return checks;
+}
+
+/**
+ * When a configured channel name is a near miss for one the app can see (a typo, or a channel
+ * renamed slightly), a fix that writes the right name into workspace.yaml. Only local config
+ * changes: nothing in the chat app.
+ */
+async function channelNameFix(
+  workspace: LoadedWorkspace,
+  configured: string,
+  driver: ChannelDriver,
+): Promise<Fix | undefined> {
+  if (!driver.listChannels) return undefined;
+  const wanted = configured.replace(/^#/, '').toLowerCase();
+  const visible = await driver.listChannels().catch(() => []);
+  let best: { name: string; distance: number } | undefined;
+  for (const channel of visible) {
+    const distance = editDistance(wanted, channel.name.toLowerCase());
+    if (distance <= 2 && (best === undefined || distance < best.distance)) {
+      best = { name: channel.name, distance };
+    }
+  }
+  if (!best) return undefined;
+  const name = best.name;
+  const file = join(workspace.dir, 'workspace.yaml');
+  return {
+    what: `Change ${workspace.id}'s chat channel in workspace.yaml from ${configured} to #${name}, a channel the app can see`,
+    run: async () => {
+      const doc = parseDocument(await readFile(file, 'utf8'));
+      doc.setIn(['channels', 'chat', 'channel'], name);
+      await writeFile(file, doc.toString());
+      return `${workspace.id} now chats in #${name}. Restart the service to use it: wheems restart`;
+    },
+  };
+}
+
+/** How many single-character edits turn one string into another. */
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        (previous[j] ?? 0) + 1,
+        (current[j - 1] ?? 0) + 1,
+        (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length] ?? 0;
 }
 
 /** What waits for the person in `wheems review`. Never a failure: it's for their attention. */
@@ -354,7 +451,25 @@ async function knowledgeChecks(
         .index(workspace.id)
         .status()
         .catch((error: unknown) => error);
-      checks.push(indexCheck(workspace.id, status));
+      const check: DoctorCheck = indexCheck(workspace.id, status);
+      const fixes = options.fixes;
+      // An index not built yet is the service's to build when it starts; one it can't read,
+      // or built for another model, is worth rebuilding now.
+      const rebuild =
+        check.status === 'warn' &&
+        check.hint?.includes('wheems kb reindex') === true &&
+        check.message !== 'Not built yet';
+      if (fixes && rebuild) {
+        const id = workspace.id;
+        check.fix = {
+          what: `Rebuild ${id}'s search index, as wheems kb reindex does (the service must be running)`,
+          run: async () => {
+            await fixes.reindex(id);
+            return `${id}'s search index is rebuilt.`;
+          },
+        };
+      }
+      checks.push(check);
     }
   } finally {
     await search.close();
@@ -406,15 +521,42 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
   };
 }
 
-async function serviceCheck(options: DoctorOptions): Promise<HealthCheck> {
+async function serviceCheck(options: DoctorOptions): Promise<DoctorCheck> {
   const probe = options.service ?? probeService;
   const { installed, answering } = await probe(options.home);
   if (answering) return { name: 'service', status: 'pass', message: 'Running and answering' };
+  const fixes = options.fixes;
   return {
     name: 'service',
     status: 'warn',
     message: installed ? 'Installed, but not answering' : 'Not running, so nothing answers in chat',
     hint: installed ? 'See why: wheems logs' : 'Start it with: wheems start',
+    ...(fixes && {
+      fix: {
+        what: installed
+          ? 'Restart the service, as wheems restart does'
+          : 'Start the service, now and at every login, as wheems start does',
+        run: async () =>
+          (await fixes.startService())
+            ? 'The service is running and answering.'
+            : "The service started but hasn't answered yet. See why: wheems logs",
+      },
+    }),
+  };
+}
+
+/** Restarting the service brings the session store up to date and imports what waits. */
+function restartFix(options: DoctorOptions, why: string): { fix: Fix } | Record<string, never> {
+  const fixes = options.fixes;
+  if (!fixes) return {};
+  return {
+    fix: {
+      what: `Restart the service, which ${why}`,
+      run: async () =>
+        (await fixes.startService())
+          ? 'The service restarted and is answering.'
+          : "The service restarted but hasn't answered yet. See why: wheems logs",
+    },
   };
 }
 
@@ -443,6 +585,7 @@ async function sessionStoreChecks(
       status: 'warn',
       message: `${tilde(where.conversations, options.env)} hasn't been imported into the session store`,
       hint: 'The service imports it when it starts: wheems restart.',
+      ...restartFix(options, 'imports it'),
     });
   }
   if (!(await exists(where.store))) {
@@ -462,6 +605,7 @@ async function sessionStoreChecks(
       status: 'warn',
       message: error instanceof Error ? error.message : String(error),
       hint: 'wheems restart brings it up to date.',
+      ...restartFix(options, 'brings it up to date'),
     });
     return checks;
   }

@@ -40,11 +40,20 @@ export interface ChannelDriver extends Driver<'channel'> {
    */
   resolveChannel?(nameOrId: string): Promise<string | null>;
 
+  /** Optional: the channels the app can see, to suggest one when a name in config is wrong. */
+  listChannels?(): Promise<{ id: string; name: string }[]>;
+
   /**
    * Optional: whether the app is a member of a channel, so messages there reach it. Null when it
    * can't tell. Seeing a channel isn't enough: Slack lists public channels the app isn't in.
    */
   isMember?(channelId: string): Promise<boolean | null>;
+
+  /**
+   * Optional: the channel id of the app's direct messages with a person, opening them if need
+   * be, so Wheems can write to them first, as setup's greeting does.
+   */
+  openDirect?(userId: string): Promise<string>;
 }
 
 export interface MessageRef {

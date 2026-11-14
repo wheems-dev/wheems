@@ -1,4 +1,4 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:net';
 import { join } from 'node:path';
 import { crossCheck } from '../config/check.js';
@@ -221,6 +221,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     if (!state.callingSession(request.session)) throw new Error(`No session ${request.session}`);
     return { session: request.session };
   };
+  /** When each engine last said it was signed in: asked again after ten minutes. */
+  const signedInAt = new Map<string, number>();
   const manager: ConversationManager = new ConversationManager({
     install: config,
     bindings,
@@ -236,6 +238,20 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       if (!entry || !setup?.trusted || setup.trust === null) return null;
       if ((await setup.trusted(dir)) !== false) return null;
       return `${entry.label} hasn't been told to trust this workspace's folder, so it can't start. ${trustAdvice(entry.label, setup.trust, tilde(options.home, env))} Then send your message again.`;
+    },
+    signInProblem: async (engine) => {
+      const entry = options.registry.catalog('engine').find((e) => e.name === engine);
+      const setup = entry?.engine;
+      if (!entry || !setup || setup.signIn === null) return null;
+      const known = signedInAt.get(engine);
+      if (known !== undefined && Date.now() - known < 10 * 60_000) return null;
+      // Only a plain no counts: an engine that can't tell is given the benefit of the doubt.
+      if ((await setup.signedIn()) !== false) {
+        signedInAt.set(engine, Date.now());
+        return null;
+      }
+      signedInAt.delete(engine);
+      return `${entry.label} isn't signed in, so I can't answer. At the Mac, run \`${setup.signIn.join(' ')}\` and sign in (or wheems setup, then Engines), then send your message again.`;
     },
     aboutYouFile: where.aboutYou,
     noteSweepMs: options.noteSweepMs ?? 60_000,
@@ -368,6 +384,19 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
               message: sent.next,
             };
           }
+          case 'greet': {
+            const marker = join(where.state, 'greeted.json');
+            if (request.once === true && (await exists(marker))) {
+              return { ok: true, skipped: true, message: 'It has greeted you before.' };
+            }
+            const greeted = await greet(config, bindings, channels);
+            await mkdir(where.state, { recursive: true });
+            await writeFile(
+              marker,
+              `${JSON.stringify({ workspace: greeted.workspace, at: new Date().toISOString() })}\n`,
+            );
+            return { ok: true, message: greeted.place };
+          }
           case 'session-end': {
             const ended = await sessions.end(sessions.caller(request.caller), request.id);
             return {
@@ -483,6 +512,67 @@ async function openStore(
     throw error;
   }
   return state;
+}
+
+/**
+ * The first chief greets the person in chat, through the channel driver: the chief in direct
+ * messages if there is one, else the first that chats in a channel. Says where, or throws why it
+ * couldn't.
+ */
+/**
+ * Whether inviting the app to a channel sets up a chief there, so the greeting can say so. That
+ * arrives with channel onboarding (pull request #31); until then the greeting leaves it out
+ * rather than promise what this build doesn't do.
+ */
+export const INVITES_SET_UP_CHIEFS: boolean = false;
+
+async function greet(
+  config: InstallConfig,
+  bindings: Binding[],
+  channels: Map<string, ChannelDriver>,
+): Promise<{ workspace: string; place: string }> {
+  const binding = bindings.find((b) => b.channel === null) ?? bindings[0];
+  if (!binding) throw new Error('No workspace chats anywhere yet: run wheems setup (Workspaces).');
+  const driver = channels.get(binding.connection);
+  if (!driver) throw new Error(`${binding.connection} isn't connected`);
+  let channel = binding.channel;
+  if (channel === null) {
+    const person = config.connections[binding.connection]?.allowed_users[0];
+    if (person === undefined) {
+      throw new Error(
+        `no one is in ${binding.connection}'s allowed_users yet: run wheems setup (Channels).`,
+      );
+    }
+    if (!driver.openDirect) {
+      throw new Error(`${binding.connection} can't start direct messages.`);
+    }
+    channel = await driver.openDirect(person);
+  }
+  const workspace = binding.workspace;
+  const name = workspace.config?.name ?? workspace.id;
+  const identity = workspace.config?.identity;
+  const invite = INVITES_SET_UP_CHIEFS
+    ? "\n\nTo add another chief of staff, for a team, a client or a project, invite me to any channel. I'll ask for a name there and set one up."
+    : '';
+  await driver.send({
+    channel,
+    text: `Hi! I'm ${name}'s chief of staff, and I'm set up. Message me here whenever you need something: each message starts a conversation, and replies in its thread carry it on.${invite}`,
+    ...(identity && driver.capabilities.identities && { identity }),
+  });
+  return {
+    workspace: workspace.id,
+    place:
+      binding.channel === null
+        ? `in direct messages on ${binding.connection}`
+        : `in ${binding.channel} on ${binding.connection}`,
+  };
+}
+
+async function exists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 /** Each workspace's chief of staff, as the store records standing agents. */

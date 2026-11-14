@@ -26,6 +26,8 @@ describe('wheems setup', () => {
   let env: NodeJS.ProcessEnv;
   let calls: string[];
   let running: boolean;
+  /** What the service says when asked to greet. */
+  let greeting: { ok: boolean; message: string; skipped?: boolean };
   const trustedFolders = new Set<string>();
   /** The fake world: which engine CLIs exist and which are signed in. */
   let installed: Set<string>;
@@ -38,6 +40,7 @@ describe('wheems setup', () => {
     env = { WHEEMS_SECRETS: join(root, 'config', 'secrets.json') };
     calls = [];
     running = false;
+    greeting = { ok: true, message: 'in direct messages on slack' };
     trustedFolders.clear();
   });
   afterEach(() => {
@@ -118,6 +121,10 @@ describe('wheems setup', () => {
       calls.push('doctor');
       return Promise.resolve({ ok: true, report: 'Doctor passed.' });
     },
+    greet: (): Promise<{ ok: boolean; message: string; skipped?: boolean }> => {
+      calls.push('greet');
+      return Promise.resolve(greeting);
+    },
   };
 
   it('walks through a channel, a workspace and the service from a menu', async () => {
@@ -182,7 +189,47 @@ describe('wheems setup', () => {
       `run claude in ${home}`,
       'install service',
       'doctor',
+      // Setup ends with the chief saying hello in chat.
+      'greet',
     ]);
+    expect(
+      ui.shown.find((x) => x.kind === 'success' && x.message.includes('said hello'))?.message,
+    ).toBe('Your chief of staff said hello in direct messages on slack. Reply there to start.');
+  });
+
+  it("says why when the chief can't say hello, and says nothing when it has before", async () => {
+    await setup({
+      home,
+      env,
+      ui: scriptedUi([
+        'channels',
+        'slack',
+        false,
+        'xoxb-good',
+        'xapp-good',
+        'UMEMBER1',
+        'workspaces',
+        'personal',
+        'Personal',
+        'direct',
+        'claude-opus-5-5',
+        false,
+        'service',
+        'done',
+      ]),
+      registry: registry(),
+      actions,
+    });
+    greeting = { ok: false, message: 'Slack refused the message: not_in_channel' };
+    const failed = scriptedUi(['done']);
+    await setup({ home, env, ui: failed, registry: registry(), actions });
+    expect(failed.shown.find((x) => x.kind === 'warn')?.message).toBe(
+      "Your chief of staff couldn't say hello in chat: Slack refused the message: not_in_channel. See what's wrong with: wheems doctor",
+    );
+    greeting = { ok: true, message: '', skipped: true };
+    const quiet = scriptedUi(['done']);
+    await setup({ home, env, ui: quiet, registry: registry(), actions });
+    expect(quiet.shown.filter((x) => x.kind === 'warn' || x.kind === 'success')).toEqual([]);
   });
 
   it('keeps working tokens and allowed users when run again, and suggests the next step', async () => {
@@ -296,7 +343,7 @@ describe('wheems setup', () => {
       'run codex login',
     ]);
     // Done, with a chat channel and no service, offers to start it rather than go quiet.
-    expect(calls.at(-1)).toBe('install service');
+    expect(calls.slice(-2)).toEqual(['install service', 'greet']);
     const which = ui.shown.find((s) => s.message === 'Which engine?');
     expect(which?.choices?.map((c) => [c.value, c.hint])).toEqual([
       ['claude-code', '1.0.0 · signed in'],

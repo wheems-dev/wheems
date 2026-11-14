@@ -127,7 +127,10 @@ any time.
 | Workspaces       | Creates a workspace with its chief of staff, on the engine and model you choose. The first workspace chats in the Slack app's direct messages; others chat in a channel you invite the app to. |
 | Knowledge        | Turns on search by meaning with Ollama, or leaves search on keywords only. It uses the embedding model Ollama already has, or offers to download `nomic-embed-text`.                           |
 | Service          | Runs Wheems in the background under launchd, now and at every login.                                                                                                                           |
-| Check everything | Runs `wheems doctor`.                                                                                                                                                                          |
+| Check everything | Runs `wheems doctor` (`wheems doctor --fix` offers fixes).                                                                                                                                     |
+
+When you choose **Done** with the service running, your first chief of staff (the one in direct
+messages) says hello in chat. It says it's set up and how to talk to it (and, once channel onboarding is in, that inviting it to any channel adds another chief). That happens once per install; if the greeting can't be sent, setup says why.
 
 ### Connecting Slack
 
@@ -257,8 +260,16 @@ Message the Slack app (or the workspace's channel). Each message you send starts
 - Messages sent while the agent is working are passed on when it finishes its turn.
 - Each workspace keeps at most four sessions running. The least recently used idle one is
   stopped to make room, and its conversation resumes where it left off when you next reply.
-- If an agent hasn't started on a message, perhaps because it's waiting for an answer at the
-  Mac, Wheems tells you in the thread, with the `hc attach` command to use.
+- **A chief that can't answer says so in the thread**, with what's wrong and the one step that
+  fixes it, rather than staying silent:
+  - its engine doesn't trust the install folder;
+  - its engine isn't signed in (Wheems asks the engine before starting a session);
+  - it's waiting for an answer at the Mac, such as a permission prompt (`hc attach …`);
+  - it hasn't started on the message, or hit an error;
+  - its session failed to start (`wheems doctor --fix`).
+
+  Each problem is said once per workspace, not on every message, until the chief answers
+  again. The notices go through the channel driver, so they work on any channel.
 
 ## Sessions
 
@@ -603,6 +614,19 @@ file, or remove it to start its threads afresh, then run `wheems restart`.
 
 It exits with 1 when anything fails. `--json` prints the report as JSON.
 
+`wheems doctor --fix` offers to fix what it safely can. For each problem it says what's wrong and
+what the fix will do, and asks first (no unless you say yes); then it checks again. It never
+fixes anything silently, and never changes the chat app's settings or tokens. It can:
+
+- open the engine in the install folder so you can answer its trust question;
+- start or restart the service, which also imports `conversations.json` and brings the session
+  store up to date;
+- rebuild a search index that can't be read or was built for another model;
+- write a channel name the app can see into `workspace.yaml`, when the one there is a near miss
+  (a typo).
+
+Anything else keeps its hint: inviting the app to a channel, for one, is yours to do in Slack.
+
 The session store check warns about a Herdr session with a Wheems label (`wheems=<session id>`)
 that the store has no record of. Wheems never adopts or removes one; stop it with `hc kill` if
 nothing needs it. It also warns when `.wheems/conversations.json` from an older Wheems is still
@@ -633,7 +657,7 @@ need it.
 | `wheems`                                                            | The welcome screen: the cloud, and how the install is doing (workspaces, the service, search, review)     |
 | `wheems setup`                                                      | The setup menu: engines, Slack, workspaces, knowledge, the service, doctor                                |
 | `wheems init <workspace> [--name] [--channel] [--engine] [--model]` | Creates a workspace with its chief of staff. `--engine` is `claude-code` (default), `codex` or `opencode` |
-| `wheems doctor [--quick] [--json]`                                  | Checks the machine, Herdr core and the install                                                            |
+| `wheems doctor [--quick] [--json] [--fix]`                          | Checks the machine, Herdr core and the install; `--fix` offers safe fixes, asking before each             |
 | `wheems validate [paths...]`                                        | Validates config files or install folders                                                                 |
 | `wheems review [--list]`                                            | Goes through skill proposals and changes to `about-you.md`                                                |
 | `wheems kb search <query...> [--workspace] [--limit] [--json]`      | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)                   |

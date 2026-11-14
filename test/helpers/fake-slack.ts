@@ -69,6 +69,8 @@ export class FakeSlack implements SlackTransport {
           response_metadata: { next_cursor: '' },
         });
       }
+      case 'conversations.open':
+        return Promise.resolve({ ok: true, channel: { id: `D${String(args.users)}` } });
       case 'conversations.info': {
         const channel = this.channels.find((c) => c.id === args.channel);
         if (!channel) return this.fail('channel_not_found');

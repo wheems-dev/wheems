@@ -80,6 +80,11 @@ export class MemoryChannel implements ChannelDriver {
     return Promise.resolve();
   }
 
+  /** Direct messages with a person are the channel `D-<their id>`. */
+  openDirect(userId: string): Promise<string> {
+    return Promise.resolve(`D-${userId}`);
+  }
+
   stop(): Promise<void> {
     this.handler = undefined;
     return Promise.resolve();
