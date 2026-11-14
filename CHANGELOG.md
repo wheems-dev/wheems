@@ -15,6 +15,13 @@ change anything, including commands and config formats, without a migration path
 - The cloud winks once when it appears, in an interactive terminal. Set `WHEEMS_NO_ANIMATION` to
   stop it; it never winks in CI, in a dumb terminal, or when the output isn't a terminal.
 
+**Fixed**
+
+- When a pasted Slack token isn't right, setup says why instead of only "The bot token starts with
+  xoxb-": the app-level token pasted for the bot token (or the other way round), a user or refresh
+  token, two pastes run together, something in front of the token, or a space in it, each with
+  where in Slack to find the right one. It names tokens only by their standard prefix.
+
 ## 0.0.2
 
 Fixes from the first preview, a welcome screen, and checks that catch common set-up problems.

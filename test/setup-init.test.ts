@@ -146,7 +146,7 @@ describe('wheems setup', () => {
       ['telegram', true],
     ]);
     expect(ui.shown.filter((s) => s.kind === 'invalid').map((s) => s.message)).toEqual([
-      'The bot token starts with xoxb-',
+      "That isn't the bot token: it starts with xoxb-. Under OAuth & Permissions, copy the Bot User OAuth Token (xoxb-…).",
       'A member ID starts with U or W, then letters and digits',
     ]);
     expect(await readSecrets(env.WHEEMS_SECRETS!)).toEqual({

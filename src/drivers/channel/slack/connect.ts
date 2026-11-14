@@ -128,7 +128,8 @@ async function newTokens(
       copied
         ? '2. Paste the manifest: it is on your clipboard.'
         : `2. Paste the manifest from ${manifestFile}`,
-      '3. Install the app to the workspace, then copy the Bot User OAuth Token (xoxb-…).',
+      '3. Install the app to the workspace. Under OAuth & Permissions, copy the',
+      '   Bot User OAuth Token (xoxb-…).',
       '4. Under Basic Information → App-Level Tokens, generate a token with the',
       '   connections:write scope (xapp-…).',
       '',
@@ -142,13 +143,11 @@ async function newTokens(
   for (;;) {
     const botToken = await ui.secret({
       message: 'Bot User OAuth Token',
-      validate: (value) =>
-        value.trim().startsWith('xoxb-') ? undefined : 'The bot token starts with xoxb-',
+      validate: (value) => tokenProblem('bot', value),
     });
     const appToken = await ui.secret({
       message: 'App-Level Token',
-      validate: (value) =>
-        value.trim().startsWith('xapp-') ? undefined : 'The app-level token starts with xapp-',
+      validate: (value) => tokenProblem('app', value),
     });
     try {
       await ui.task(
@@ -162,4 +161,56 @@ async function newTokens(
       if (!(await ui.confirm('Try the tokens again?', true))) throw error;
     }
   }
+}
+
+/** What each token is called in Slack, where to find it, and how it starts. */
+const TOKENS = {
+  bot: {
+    name: 'bot token',
+    prefix: 'xoxb-',
+    where: 'Under OAuth & Permissions, copy the Bot User OAuth Token',
+  },
+  app: {
+    name: 'app-level token',
+    prefix: 'xapp-',
+    where: 'Under Basic Information → App-Level Tokens, copy the token',
+  },
+} as const;
+
+/** Other Slack tokens people paste by mistake, by their standard prefix. */
+const OTHER_TOKENS: Record<string, string> = {
+  'xoxp-': 'a user token',
+  'xoxe-': 'a refresh token',
+  'xoxa-': 'a workspace token',
+};
+
+const CLEAR = 'Clear the field with Backspace, then paste it once.';
+
+/**
+ * What's wrong with a pasted token, said so the person can fix it, or undefined if it looks
+ * right. It names a token only by its standard prefix, never by any other part of it.
+ */
+export function tokenProblem(kind: 'bot' | 'app', value: string): string | undefined {
+  const want = TOKENS[kind];
+  const other = TOKENS[kind === 'bot' ? 'app' : 'bot'];
+  const token = value.trim();
+  const fix = `${want.where} (${want.prefix}…).`;
+  if (token === '') return `Paste the ${want.name}. ${fix}`;
+  if (token.split(want.prefix).length > 2) {
+    return `That looks like more than one paste. ${CLEAR}`;
+  }
+  if (token.startsWith(want.prefix)) {
+    return /\s/.test(token) ? `There's a space or line break in it. ${CLEAR}` : undefined;
+  }
+  if (token.includes(want.prefix)) {
+    return `There's something before the ${want.prefix} at the start. ${CLEAR}`;
+  }
+  if (token.startsWith(other.prefix)) {
+    return `That starts with ${other.prefix}, so it's the ${other.name}. ${fix}`;
+  }
+  const known = Object.entries(OTHER_TOKENS).find(([prefix]) => token.startsWith(prefix));
+  if (known !== undefined) {
+    return `That starts with ${known[0]}, so it's ${known[1]}, not the ${want.name}. ${fix}`;
+  }
+  return `That isn't the ${want.name}: it starts with ${want.prefix}. ${fix}`;
 }
