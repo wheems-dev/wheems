@@ -153,6 +153,17 @@ export class SlackChannel implements ChannelDriver {
     return this.channelIds.get(name) ?? null;
   }
 
+  async openDirect(userId: string): Promise<string> {
+    try {
+      const result = await this.transport.call('conversations.open', { users: userId });
+      const id = (result.channel as { id?: unknown } | undefined)?.id;
+      if (typeof id !== 'string') throw new Error('Slack returned no channel');
+      return id;
+    } catch (error) {
+      throw this.toDriverError(error, `Could not open direct messages with ${userId}`);
+    }
+  }
+
   async isMember(channelId: string): Promise<boolean | null> {
     try {
       const info = await this.transport.call('conversations.info', { channel: channelId });

@@ -68,6 +68,8 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('session-search'), caller: callerSchema, words: z.string() }),
   z.object({ op: z.literal('session-show'), caller: callerSchema, id: z.string().min(1) }),
   z.object({ op: z.literal('session-end'), caller: callerSchema, id: z.string().min(1) }),
+  /** The first chief greets the person in chat; with `once`, only if it never has. */
+  z.object({ op: z.literal('greet'), once: z.boolean().optional() }),
   z.object({
     op: z.literal('session-send'),
     caller: callerSchema,
@@ -90,6 +92,8 @@ export type ControlResponse =
       session?: SessionRecord;
       sessions?: SessionRecord[];
       details?: SessionDetails;
+      /** For `greet` with `once`: true when it had greeted before, so it didn't again. */
+      skipped?: boolean;
       /** The answer to a `session send --wait`. */
       answer?: string;
       sent?: MessageRecord;

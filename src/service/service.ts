@@ -1,4 +1,4 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:net';
 import { join } from 'node:path';
 import { crossCheck } from '../config/check.js';
@@ -368,6 +368,19 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
               message: sent.next,
             };
           }
+          case 'greet': {
+            const marker = join(where.state, 'greeted.json');
+            if (request.once === true && (await exists(marker))) {
+              return { ok: true, skipped: true, message: 'It has greeted you before.' };
+            }
+            const greeted = await greet(config, bindings, channels);
+            await mkdir(where.state, { recursive: true });
+            await writeFile(
+              marker,
+              `${JSON.stringify({ workspace: greeted.workspace, at: new Date().toISOString() })}\n`,
+            );
+            return { ok: true, message: greeted.place };
+          }
           case 'session-end': {
             const ended = await sessions.end(sessions.caller(request.caller), request.id);
             return {
@@ -483,6 +496,57 @@ async function openStore(
     throw error;
   }
   return state;
+}
+
+/**
+ * The first chief greets the person in chat, through the channel driver: the chief in direct
+ * messages if there is one, else the first that chats in a channel. Says where, or throws why it
+ * couldn't.
+ */
+async function greet(
+  config: InstallConfig,
+  bindings: Binding[],
+  channels: Map<string, ChannelDriver>,
+): Promise<{ workspace: string; place: string }> {
+  const binding = bindings.find((b) => b.channel === null) ?? bindings[0];
+  if (!binding) throw new Error('No workspace chats anywhere yet: run wheems setup (Workspaces).');
+  const driver = channels.get(binding.connection);
+  if (!driver) throw new Error(`${binding.connection} isn't connected`);
+  let channel = binding.channel;
+  if (channel === null) {
+    const person = config.connections[binding.connection]?.allowed_users[0];
+    if (person === undefined) {
+      throw new Error(
+        `no one is in ${binding.connection}'s allowed_users yet: run wheems setup (Channels).`,
+      );
+    }
+    if (!driver.openDirect) {
+      throw new Error(`${binding.connection} can't start direct messages.`);
+    }
+    channel = await driver.openDirect(person);
+  }
+  const workspace = binding.workspace;
+  const name = workspace.config?.name ?? workspace.id;
+  const identity = workspace.config?.identity;
+  await driver.send({
+    channel,
+    text: `Hi! I'm ${name}'s chief of staff, and I'm set up. Message me here whenever you need something: each message starts a conversation, and replies in its thread carry it on.\n\nTo add another chief of staff, for a team, a client or a project, invite me to any channel. I'll ask for a name there and set one up.`,
+    ...(identity && driver.capabilities.identities && { identity }),
+  });
+  return {
+    workspace: workspace.id,
+    place:
+      binding.channel === null
+        ? `in direct messages on ${binding.connection}`
+        : `in ${binding.channel} on ${binding.connection}`,
+  };
+}
+
+async function exists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false,
+  );
 }
 
 /** Each workspace's chief of staff, as the store records standing agents. */

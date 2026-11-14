@@ -25,6 +25,11 @@ export interface SetupActions {
   installService(): Promise<boolean>;
   /** Whether the background service is answering. */
   serviceRunning(): Promise<boolean>;
+  /**
+   * Has the first chief greet the person in chat, once per install. `message` says where, or
+   * why it couldn't; `skipped` when it had greeted before.
+   */
+  greet(): Promise<{ ok: boolean; message: string; skipped?: boolean }>;
   /** Runs doctor and returns its report as text, and whether it passed. */
   doctor(): Promise<{ ok: boolean; report: string }>;
   /** Puts text on the clipboard; false where there is none. */
@@ -113,6 +118,7 @@ export async function setup(options: SetupOptions): Promise<void> {
     });
     if (section === 'done') {
       if (!running && (await wantsService(options, install))) await service(options);
+      await greeting(options, install);
       return;
     }
     try {
@@ -536,6 +542,24 @@ async function wantsService(options: SetupOptions, install: LoadedInstall): Prom
   }
   options.ui.info('Start it any time with: wheems start');
   return false;
+}
+
+/**
+ * Setup ends with the first chief greeting the person in chat, once, so they see it works and
+ * where to find it. If it can't, setup says why.
+ */
+async function greeting(options: SetupOptions, install: LoadedInstall): Promise<void> {
+  const chats = install.workspaces.some((w) => w.config?.channels.chat !== undefined);
+  if (!chats || !(await options.actions.serviceRunning())) return;
+  const result = await options.actions.greet();
+  if (result.skipped === true) return;
+  if (result.ok) {
+    options.ui.success(`Your chief of staff said hello ${result.message}. Reply there to start.`);
+  } else {
+    options.ui.warn(
+      `Your chief of staff couldn't say hello in chat: ${result.message}. See what's wrong with: wheems doctor`,
+    );
+  }
 }
 
 async function service(options: SetupOptions): Promise<boolean> {

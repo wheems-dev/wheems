@@ -46,6 +46,14 @@ describe('slack channel', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('opens direct messages with a person', async () => {
+    const { fake, driver } = setup();
+    expect(await driver.openDirect('UME')).toBe('DUME');
+    expect(fake.calls.at(-1)).toEqual({ method: 'conversations.open', args: { users: 'UME' } });
+    fake.failures.set('conversations.open', 'user_not_found');
+    await expectDriverError(driver.openDirect('UNOBODY'), 'failed');
+  });
+
   it('passes on messages with files attached, with the files named', async () => {
     const { fake, events, start } = setup();
     await start();

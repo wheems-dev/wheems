@@ -31,6 +31,7 @@ import {
 } from './welcome.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
+import { request } from '../service/control.js';
 import { SetupCancelled } from '../contracts/setup.js';
 import { paths, tilde } from '../home.js';
 import { shellPath } from '../util/trust.js';
@@ -148,6 +149,23 @@ export function createProgram(io: Io): Command {
               }),
             installService: () => installAndWait(where),
             serviceRunning: () => serviceAnswers(where),
+            greet: async () => {
+              try {
+                const answer = await request(where.socket, { op: 'greet', once: true });
+                return answer.ok
+                  ? {
+                      ok: true,
+                      message: answer.message ?? '',
+                      ...(answer.skipped === true && { skipped: true }),
+                    }
+                  : { ok: false, message: answer.error };
+              } catch (error) {
+                return {
+                  ok: false,
+                  message: error instanceof Error ? error.message : String(error),
+                };
+              }
+            },
             copy: async (text) =>
               process.platform === 'darwin' &&
               (await runCommand('pbcopy', [], { input: text })).code === 0,

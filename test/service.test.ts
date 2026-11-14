@@ -97,6 +97,24 @@ describe('the service', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
+  it('has the first chief greet the person in direct messages, once when asked to', async () => {
+    const socket = paths(home, env).socket;
+    const first = await request(socket, { op: 'greet', once: true });
+    expect(first).toMatchObject({ ok: true, message: 'in direct messages on slack' });
+    expect(channel.sent).toMatchObject([
+      { channel: 'D-UME', identity: { name: 'Personal chief of staff' } },
+    ]);
+    expect(channel.sent[0]?.text).toContain('invite me to any channel');
+    expect(await request(socket, { op: 'greet', once: true })).toMatchObject({
+      ok: true,
+      skipped: true,
+    });
+    expect(channel.sent).toHaveLength(1);
+    // Asked without once, it greets again.
+    expect(await request(socket, { op: 'greet' })).toMatchObject({ ok: true });
+    expect(channel.sent).toHaveLength(2);
+  });
+
   it('keeps a session store: imports conversations.json, writes the chief, and matches Herdr', async () => {
     await service?.stop();
     const where = paths(home, env);

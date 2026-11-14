@@ -45,6 +45,12 @@ export interface ChannelDriver extends Driver<'channel'> {
    * can't tell. Seeing a channel isn't enough: Slack lists public channels the app isn't in.
    */
   isMember?(channelId: string): Promise<boolean | null>;
+
+  /**
+   * Optional: the channel id of the app's direct messages with a person, opening them if need
+   * be, so Wheems can write to them first, as setup's greeting does.
+   */
+  openDirect?(userId: string): Promise<string>;
 }
 
 export interface MessageRef {
