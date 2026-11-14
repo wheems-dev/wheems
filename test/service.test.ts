@@ -10,6 +10,8 @@ import { paths } from '../src/home.js';
 import { writeSecret } from '../src/secrets.js';
 import { request } from '../src/service/control.js';
 import { runService, type RunningService } from '../src/service/service.js';
+import { conversationKey, uuidFor } from '../src/service/conversations.js';
+import { StateStore, sessionLabels } from '../src/state/store.js';
 import { listProposals } from '../src/skills/proposals.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
 import { fakeAgent } from './helpers/fake-agent.js';
@@ -20,6 +22,20 @@ describe('the service', () => {
   let channel: MemoryChannel;
   let service: RunningService | undefined;
   let channelOptions: Record<string, unknown> | undefined;
+  let runtime: MemoryRuntime;
+  let registry: DriverRegistry;
+  const startService = (log: (message: string) => void = () => undefined) =>
+    runService({
+      home,
+      registry,
+      node: '/usr/local/bin/node',
+      cli: '/opt/wheems/dist/cli/main.js',
+      version: '9.9.9',
+      env,
+      log,
+      pollMs: 5,
+      startupSeconds: 2,
+    });
 
   /** Runs `wheems reply` (or another command) as an agent would, inside a conversation. */
   const cliReply = async (conversation: string, args: string[], stdin = '', command = 'reply') => {
@@ -56,7 +72,7 @@ describe('the service', () => {
       app_token: 'xapp-test',
     });
     channel = new MemoryChannel();
-    const runtime = new MemoryRuntime({
+    runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
         // The agent replies with the real `wheems reply` command, over the control socket.
         reply: async (conversation, text) => {
@@ -65,30 +81,115 @@ describe('the service', () => {
         },
       }),
     });
-    const registry = new DriverRegistry()
+    registry = new DriverRegistry()
       .register('runtime', 'herdr', () => runtime)
       .register('engine', 'claude-code', () => new StubEngine({ command: ['fake-agent'] }))
       .register('channel', 'slack', (options) => {
         channelOptions = options;
         return channel;
       });
-    service = await runService({
-      home,
-      registry,
-      node: '/usr/local/bin/node',
-      cli: '/opt/wheems/dist/cli/main.js',
-      version: '9.9.9',
-      env,
-      log: () => undefined,
-      pollMs: 5,
-      startupSeconds: 2,
-    });
+    service = await startService();
   });
 
   afterEach(async () => {
     await service?.stop();
     service = undefined;
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it('keeps a session store: imports conversations.json, writes the chief, and matches Herdr', async () => {
+    await service?.stop();
+    const where = paths(home, env);
+    const key = conversationKey('personal', 'slack', 'D1', '1700000000.000100');
+    writeFileSync(
+      where.conversations,
+      JSON.stringify({
+        [key]: {
+          workspace: 'personal',
+          connection: 'slack',
+          channel: 'D1',
+          thread: '1700000000.000100',
+          sessionId: uuidFor(key),
+          sessionName: 'personal-gone',
+          createdAt: '2026-11-13T10:00:00.000Z',
+          lastActiveAt: '2026-11-13T10:00:00.000Z',
+          lastAnswerId: 'answer-1',
+        },
+      }),
+    );
+    await runtime.start({
+      name: 'stray',
+      command: ['fake-agent'],
+      labels: sessionLabels('not-in-the-store', 'personal'),
+    });
+    const logs: string[] = [];
+    service = await startService((m) => logs.push(m));
+
+    expect(existsSync(where.conversations)).toBe(false);
+    expect(existsSync(`${where.conversations}.imported`)).toBe(true);
+    expect(logs.join('\n')).toContain('Imported 1 conversation into the session store');
+    expect(logs.join('\n')).toContain(
+      "Herdr session stray has a Wheems label and isn't in the session store; leaving it alone",
+    );
+    const state = await StateStore.open(where.store, { readOnly: true });
+    try {
+      const personal = state.workspace('personal');
+      expect(personal.agents()).toEqual([
+        {
+          id: 'personal/chief-of-staff',
+          workspace: 'personal',
+          project: null,
+          name: 'chief-of-staff',
+          role: 'chief',
+          engine: 'claude-code',
+        },
+      ]);
+      // Its Herdr session has gone, so it's stopped, and resumes when next needed.
+      expect(personal.session(uuidFor(key))).toMatchObject({
+        kind: 'thread',
+        agent: 'personal/chief-of-staff',
+        state: 'stopped',
+      });
+      expect(state.conversation(key)?.lastAnswerId).toBe('answer-1');
+    } finally {
+      state.close();
+    }
+    expect((await runtime.list()).map((s) => s.name)).toEqual(['stray']);
+  });
+
+  it("refuses to start while conversations.json can't be imported, then takes its threads up again once it's fixed", async () => {
+    await service?.stop();
+    service = undefined;
+    const where = paths(home, env);
+    const key = conversationKey('personal', 'slack', 'D1', '1700000000.000200');
+    const conversation = {
+      workspace: 'personal',
+      connection: 'slack',
+      channel: 'D1',
+      thread: '1700000000.000200',
+      sessionId: uuidFor(key),
+      sessionName: 'personal-still-on',
+      createdAt: '2026-11-13T10:00:00.000Z',
+      lastActiveAt: '2026-11-13T10:00:00.000Z',
+      lastAnswerId: 'answer-1',
+    };
+    // Its session is still running from before the upgrade.
+    await runtime.start({
+      name: 'personal-still-on',
+      command: ['fake-agent'],
+      labels: { wheems: 'conversation', workspace: 'personal' },
+    });
+    writeFileSync(where.conversations, `{"${key}": {"workspace": 1}}`);
+    await expect(startService()).rejects.toThrow(/Could not import .*conversations\.json/);
+    expect(existsSync(where.conversations)).toBe(true);
+    // Nothing answers in the meantime, so no thread can start afresh and replace its record.
+    await expect(request(where.socket, { op: 'ping' }, 500)).rejects.toThrow();
+
+    writeFileSync(where.conversations, JSON.stringify({ [key]: conversation }));
+    service = await startService();
+    const reply = await cliReply(key, ['still here']);
+    expect(reply).toMatchObject({ code: 0 });
+    expect(channel.sent.map((m) => m.text)).toEqual(['still here']);
   });
 
   it('answers on its control socket, privately', async () => {

@@ -16,6 +16,8 @@ import { SqliteVectorStore } from '../src/drivers/vector-store/sqlite.js';
 import { proposeSkill } from '../src/skills/proposals.js';
 import { KnowledgeSearch } from '../src/knowledge/search.js';
 import { HashEmbeddings, MemoryChannel, StubEngine } from '../src/testing/index.js';
+import { ConversationStore } from '../src/service/store.js';
+import { StateStore, sessionLabels } from '../src/state/store.js';
 
 const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 
@@ -209,7 +211,7 @@ describe('doctor', () => {
     expect(before.sections.find((x) => x.title === 'Channels')?.checks[1]?.message).toBe(
       'Not connected yet: no credentials saved for it',
     );
-    expect(statuses(before).Service).toEqual(['warn service']);
+    expect(statuses(before).Service).toEqual(['warn service', 'skip session store']);
     expect(before.ok).toBe(false);
 
     await writeSecret(env.WHEEMS_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
@@ -226,8 +228,58 @@ describe('doctor', () => {
       'warn slack allowed users',
       'pass slack: memory channel',
     ]);
-    expect(statuses(after).Service).toEqual(['pass service']);
+    expect(statuses(after).Service).toEqual(['pass service', 'skip session store']);
     expect(after.ok).toBe(true);
+  });
+
+  it('reports Herdr sessions with a Wheems label the session store has no record of, and leaves them alone', async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    const { registry, fake } = registryWith();
+    const state = await StateStore.open(join(home, '.wheems', 'state.sqlite'));
+    await new ConversationStore(state).set('personal:slack:D1:1', {
+      workspace: 'personal',
+      connection: 'slack',
+      channel: 'D1',
+      thread: '1',
+      sessionId: 'known-id',
+      sessionName: 'personal-known',
+      createdAt: '2026-11-14T10:00:00.000Z',
+      lastActiveAt: '2026-11-14T10:00:00.000Z',
+    });
+    state.close();
+    writeFileSync(join(home, '.wheems', 'conversations.json'), '{}');
+    const runtime = new HerdrRuntime({ binary: fake.binary, env: fake.env });
+    const start = (name: string, labels: Record<string, string>) =>
+      runtime.start({ name, command: ['sleep', '60'], labels });
+    await start('personal-known', sessionLabels('known-id', 'personal'));
+    await start('personal-stray', sessionLabels('stray-id', 'personal'));
+    await start('personal-filer', { wheems: 'filer', workspace: 'personal' });
+
+    const report = await runDoctor({ home, registry, quick: true, ...probes });
+    expect(statuses(report).Service).toEqual([
+      'warn service',
+      'warn conversations.json',
+      'pass session store',
+      'warn unknown session',
+    ]);
+    const unknown = report.sections
+      .find((x) => x.title === 'Service')
+      ?.checks.find((c) => c.name === 'unknown session');
+    expect(unknown?.message).toContain('personal-stray');
+    writeFileSync(join(home, '.wheems', 'conversations.json'), '{"a": ');
+    const damaged = await runDoctor({ home, registry, quick: true, ...probes });
+    expect(statuses(damaged).Service).toContain('fail conversations.json');
+    expect(damaged.ok).toBe(false);
+    expect((await runtime.list()).map((s) => s.name).sort()).toEqual([
+      'personal-filer',
+      'personal-known',
+      'personal-stray',
+    ]);
   });
 
   it("warns when the app isn't in a workspace's chat channel, and fails when it can't see it", async () => {

@@ -15,6 +15,7 @@ import { loadInstall } from '../src/config/load.js';
 import { ClaudeCodeEngine } from '../src/drivers/engine/claude-code.js';
 import { ConversationManager } from '../src/service/conversations.js';
 import { ConversationStore } from '../src/service/store.js';
+import { StateStore } from '../src/state/store.js';
 import { MemoryChannel, MemoryRuntime, type ProgramFactory } from '../src/testing/index.js';
 
 /**
@@ -83,9 +84,11 @@ describe('conversations with the Claude Code driver reading a transcript', () =>
   let home: string;
   let manager: ConversationManager;
   let channel: MemoryChannel;
+  let state: StateStore;
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'wheems-ta-'));
+    state = await StateStore.open(join(home, '.wheems', 'state.sqlite'));
     writeFileSync(
       join(home, 'install.yaml'),
       installYaml().replace('allowed_users: []', 'allowed_users: [UME]'),
@@ -105,7 +108,7 @@ describe('conversations with the Claude Code driver reading a transcript', () =>
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: {},
       pollMs: 5,
       startupSeconds: 2,
@@ -116,6 +119,7 @@ describe('conversations with the Claude Code driver reading a transcript', () =>
 
   afterEach(async () => {
     await manager.stop();
+    state.close();
     rmSync(home, { recursive: true, force: true });
   });
 

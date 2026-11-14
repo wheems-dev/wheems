@@ -515,6 +515,22 @@ Agents reach the service through the `wheems` command, which Wheems puts first o
 `PATH`, pinned to the same Node.js and the same copy of Wheems. The command talks to the service
 over a Unix socket in `.wheems/` that only you can open.
 
+### The session store
+
+The service keeps a record of every session it runs in `.wheems/state.sqlite`, using Node's
+built-in SQLite: each workspace's chief, written from config every time the service starts, and
+each chat thread with the session it talks to, where the answers have got to and its notes.
+Herdr says whether a session is running; the store says what it's for. Every session Wheems
+starts is labelled `wheems=<session id>` in Herdr, and when the service starts it matches the
+store against Herdr: a session whose Herdr session has gone is marked stopped, and resumes when
+it's next needed.
+
+Only the service writes to the store. Its schema version is kept in the file and brought up to
+date when the service starts. The first time a Wheems with the store starts, it imports
+`.wheems/conversations.json` and renames it `conversations.json.imported`. If it can't read the
+file, it leaves it where it is and won't start, and the log and `wheems doctor` say why: fix the
+file, or remove it to start its threads afresh, then run `wheems restart`.
+
 ## Doctor and validate
 
 `wheems doctor` checks everything, in sections:
@@ -528,9 +544,14 @@ over a Unix socket in `.wheems/` that only you can open.
 | Channels   | Each Slack connection's tokens work                                                                                          |
 | Knowledge  | The embeddings driver and model, the vector store, and each workspace's search index                                         |
 | Review     | What waits for `wheems review`                                                                                               |
-| Service    | Whether the service is installed and answering                                                                               |
+| Service    | Whether the service is installed and answering, and the session store (see below)                                            |
 
 It exits with 1 when anything fails. `--json` prints the report as JSON.
+
+The session store check warns about a Herdr session with a Wheems label (`wheems=<session id>`)
+that the store has no record of. Wheems never adopts or removes one; stop it with `hc kill` if
+nothing needs it. It also warns when `.wheems/conversations.json` from an older Wheems is still
+waiting to be imported, and fails when it can't be read.
 
 `wheems validate` checks config files or a whole install folder, with line numbers:
 
@@ -602,7 +623,7 @@ silently. A complete example is in [`examples/install/`](examples/install/).
 ├── library/skills/             every version of every skill
 ├── workspaces/<id>/            one folder per workspace (see above)
 └── .wheems/                    running state, never committed
-    ├── conversations.json      which thread is which session
+    ├── state.sqlite            the session store: agents, sessions and chat threads
     ├── wheems.sock             the control socket
     ├── logs/service.log
     ├── bin/wheems              the command agents run
@@ -818,6 +839,7 @@ also run it against a fake `hc`, which is what CI uses. Set `WHEEMS_TEST_OLLAMA_
 | `src/contracts/`    | Driver contracts and the registry                                                |
 | `src/drivers/`      | Built-in drivers: Herdr, Claude Code, Codex, opencode, Slack, Ollama, SQLite     |
 | `src/service/`      | The service: conversations, filing, the task runner, the control socket, launchd |
+| `src/state/`        | The session store: its schema, migrations and every query                        |
 | `src/knowledge/`    | Notes, filing checks, the nightly tidy and search                                |
 | `src/skills/`       | The skill library and proposals                                                  |
 | `src/review/`       | Approving and turning down what waits for review                                 |

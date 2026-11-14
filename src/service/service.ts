@@ -6,8 +6,9 @@ import { loadInstall, type LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import type { ChannelDriver } from '../contracts/channel.js';
 import type { EngineDriver } from '../contracts/engine.js';
+import type { SessionInfo } from '../contracts/runtime.js';
 import type { DriverRegistry } from '../contracts/registry.js';
-import { paths, tilde } from '../home.js';
+import { paths, tilde, type Paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { ConversationManager, type Binding } from './conversations.js';
 import {
@@ -22,6 +23,8 @@ import { proposeSkill } from '../skills/proposals.js';
 import { FilingQueue } from './filing.js';
 import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
+import { StateStore, type StandingAgent } from '../state/store.js';
+import { requireFullTextSearch } from '../util/sqlite.js';
 
 export interface ServiceOptions {
   home: string;
@@ -91,6 +94,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   if (runtimeFailures.length > 0) {
     throw new Error(`Herdr core is not ready: ${runtimeFailures.map((c) => c.message).join('; ')}`);
   }
+
+  const state = await openStore(where, install.workspaces, await runtime.list(), log);
 
   const channels = new Map<string, ChannelDriver>();
   const channelFor = (connection: string): ChannelDriver => {
@@ -186,7 +191,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     channels,
     runtime,
     engine: engineFor,
-    store: new ConversationStore(where.conversations),
+    store: new ConversationStore(state),
     onNote: (workspace) => void filing.file(workspace),
     trustProblem: async (engine, dir) => {
       const entry = options.registry.catalog('engine').find((e) => e.name === engine);
@@ -262,6 +267,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     for (const channel of started) await channel.stop().catch(() => undefined);
     await manager.stop();
     await search.close();
+    state.close();
     throw error;
   }
   const listening = server;
@@ -303,8 +309,73 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       await manager.stop();
       filing.stop();
       await search.close();
+      state.close();
     },
   };
+}
+
+/**
+ * Opens the session store and brings it up to date: its schema, the standing agents from
+ * config, the conversations a Wheems from before it kept in `conversations.json`, and which
+ * sessions are still running in Herdr.
+ */
+async function openStore(
+  where: Paths,
+  workspaces: LoadedWorkspace[],
+  live: SessionInfo[],
+  log: (message: string) => void,
+): Promise<StateStore> {
+  await requireFullTextSearch();
+  const state = await StateStore.open(where.store);
+  try {
+    state.writeAgents(standingAgents(workspaces));
+    const imported = await state.importConversations(where.conversations);
+    if (imported.status === 'imported') {
+      log(
+        `Imported ${String(imported.conversations)} ${imported.conversations === 1 ? 'conversation' : 'conversations'} into the session store${imported.skipped > 0 ? ` (${String(imported.skipped)} already there)` : ''}; the old file is ${imported.renamedTo}`,
+      );
+    } else if (imported.status === 'unreadable') {
+      // Its threads' sessions may still be running, and a thread started afresh would replace
+      // its record for good, so nothing starts until the file is fixed or removed.
+      throw new Error(
+        `Could not import ${where.conversations} into the session store: ${imported.problem}\nFix the file, or remove it to start its threads afresh, then run wheems restart.`,
+      );
+    }
+    const match = state.matchRuntime(live);
+    if (match.stopped.length > 0) {
+      log(
+        `${String(match.stopped.length)} ${match.stopped.length === 1 ? 'session has' : 'sessions have'} stopped since the service last ran; each resumes when it's next needed`,
+      );
+    }
+    for (const session of match.unknown) {
+      log(
+        `Herdr session ${session.name ?? session.id} has a Wheems label and isn't in the session store; leaving it alone`,
+      );
+    }
+  } catch (error) {
+    state.close();
+    throw error;
+  }
+  return state;
+}
+
+/** Each workspace's chief of staff, as the store records standing agents. */
+export function standingAgents(workspaces: LoadedWorkspace[]): StandingAgent[] {
+  return workspaces.flatMap((workspace) => {
+    const chief = workspace.config?.chief_of_staff;
+    const agent = workspace.agents.find((a) => a.definition.name === chief);
+    if (chief === undefined || !agent) return [];
+    return [
+      {
+        id: `${workspace.id}/${chief}`,
+        workspace: workspace.id,
+        project: null,
+        name: chief,
+        role: 'chief' as const,
+        engine: agent.definition.engine,
+      },
+    ];
+  });
 }
 
 /**

@@ -99,6 +99,9 @@ export function runtimeContract(label: string, options: RuntimeContractOptions):
       expect((await driver.get(session.name ?? ''))?.id).toBe(session.id);
       const listed = await driver.list({ labels: { contract: prefix } });
       expect(listed.map((s) => s.id)).toContain(session.id);
+      expect(listed.find((s) => s.id === session.id)?.labels).toMatchObject({ contract: prefix });
+      const all = await driver.list();
+      expect(all.find((s) => s.id === session.id)?.labels).toMatchObject({ contract: prefix });
       const other = await driver.list({ labels: { contract: `${prefix}-none` } });
       expect(other.map((s) => s.id)).not.toContain(session.id);
     });

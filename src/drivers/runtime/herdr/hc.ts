@@ -31,7 +31,8 @@ export class HcError extends Error {
   }
 }
 
-const labels = z.record(z.string(), z.string()).default({});
+/** `hc ls` and `hc run` leave labels out; `hc get` reports them. */
+const labels = z.record(z.string(), z.string()).optional();
 
 /**
  * An agent's status. `hc ls` reports the word; `hc get` and `hc run` report the whole

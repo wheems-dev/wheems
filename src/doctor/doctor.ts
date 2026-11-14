@@ -22,6 +22,7 @@ import { listProposals } from '../skills/proposals.js';
 import { compareVersions } from '../util/version.js';
 import { NODE_SUPPORTED, nodeVersionProblem } from '../util/node-support.js';
 import { fullTextSearchProblem } from '../util/sqlite.js';
+import { StateStore, readConversationsFile } from '../state/store.js';
 export { defaultHome } from '../home.js';
 
 export interface DoctorOptions {
@@ -111,7 +112,16 @@ export async function runDoctor(options: DoctorOptions): Promise<DoctorReport> {
     sections.push({ title: 'Channels', checks: await channelChecks(install, options) });
     sections.push({ title: 'Knowledge', checks: await knowledgeChecks(install, options) });
     sections.push({ title: 'Review', checks: [await reviewCheck(options)] });
-    sections.push({ title: 'Service', checks: [await serviceCheck(options)] });
+    sections.push({
+      title: 'Service',
+      checks: [
+        await serviceCheck(options),
+        ...(await sessionStoreChecks(
+          options,
+          runtimeChecks.some((c) => c.status === 'fail') ? null : runtime,
+        )),
+      ],
+    });
   }
 
   const ok = sections.every((s) => s.checks.every((c) => c.status !== 'fail'));
@@ -406,6 +416,85 @@ async function serviceCheck(options: DoctorOptions): Promise<HealthCheck> {
     message: installed ? 'Installed, but not answering' : 'Not running, so nothing answers in chat',
     hint: installed ? 'See why: wheems logs' : 'Start it with: wheems start',
   };
+}
+
+/**
+ * The session store, read-only: whether the service has made it, whether conversations from
+ * before it are still waiting to be imported, and Herdr sessions with a Wheems label that it
+ * has no record of. Those are left alone; doctor only reports them.
+ */
+async function sessionStoreChecks(
+  options: DoctorOptions,
+  runtime: RuntimeDriver | null,
+): Promise<HealthCheck[]> {
+  const where = paths(options.home, options.env);
+  const checks: HealthCheck[] = [];
+  const legacy = await readConversationsFile(where.conversations);
+  if (legacy.status === 'unreadable') {
+    checks.push({
+      name: 'conversations.json',
+      status: 'fail',
+      message: `${tilde(where.conversations, options.env)} can't be read, so the service won't start until it's imported: ${legacy.problem}`,
+      hint: 'Fix the file, or remove it to start its threads afresh, then run wheems restart.',
+    });
+  } else if (legacy.status === 'read') {
+    checks.push({
+      name: 'conversations.json',
+      status: 'warn',
+      message: `${tilde(where.conversations, options.env)} hasn't been imported into the session store`,
+      hint: 'The service imports it when it starts: wheems restart.',
+    });
+  }
+  if (!(await exists(where.store))) {
+    checks.push({
+      name: 'session store',
+      status: 'skip',
+      message: 'Not made yet; the service makes it when it starts',
+    });
+    return checks;
+  }
+  let store: StateStore;
+  try {
+    store = await StateStore.open(where.store, { readOnly: true });
+  } catch (error) {
+    checks.push({
+      name: 'session store',
+      status: 'warn',
+      message: error instanceof Error ? error.message : String(error),
+      hint: 'wheems restart brings it up to date.',
+    });
+    return checks;
+  }
+  try {
+    checks.push({
+      name: 'session store',
+      status: 'pass',
+      message: tilde(where.store, options.env),
+    });
+    if (runtime === null) return checks;
+    let live;
+    try {
+      live = await runtime.list();
+    } catch (error) {
+      checks.push({
+        name: 'unknown sessions',
+        status: 'skip',
+        message: `Couldn't list Herdr's sessions: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      return checks;
+    }
+    for (const session of store.unknownSessions(live)) {
+      checks.push({
+        name: 'unknown session',
+        status: 'warn',
+        message: `Herdr session ${session.name ?? session.id} (${session.id}) has a Wheems label but isn't in the session store, so Wheems leaves it alone`,
+        hint: `If nothing needs it: hc kill ${session.id}`,
+      });
+    }
+    return checks;
+  } finally {
+    store.close();
+  }
 }
 
 async function probeService(home: string): Promise<{ installed: boolean; answering: boolean }> {

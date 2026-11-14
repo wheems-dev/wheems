@@ -25,6 +25,7 @@ import {
   readCapped,
   writeNote,
 } from '../knowledge/notes.js';
+import { sessionLabels } from '../state/store.js';
 import type { Conversation, ConversationStore } from './store.js';
 
 export interface Binding {
@@ -576,7 +577,7 @@ export class ConversationManager {
         WHEEMS_WORKSPACE: workspace.id,
         WHEEMS_CONVERSATION: key,
       },
-      labels: { wheems: 'conversation', workspace: workspace.id },
+      labels: sessionLabels(uuidFor(key), workspace.id),
     });
     const text = plan.typeAfterStart;
     if (text !== undefined) {
@@ -815,11 +816,19 @@ export class ConversationManager {
 
   /** Stops the least recently used idle sessions beyond the workspace's limit. */
   private async trim(workspace: string, keep: string): Promise<void> {
-    const live = await this.options.runtime.list({ labels: { wheems: 'conversation', workspace } });
+    const conversations = await this.options.store.all();
+    // This workspace's thread sessions, known by their names in the store. A session with a
+    // Wheems label and no row is left alone; doctor reports it.
+    const names = new Set(
+      conversations.filter(([, c]) => c.workspace === workspace).map(([, c]) => c.sessionName),
+    );
+    const live = (await this.options.runtime.list({ labels: { workspace } })).filter((s) =>
+      names.has(s.name ?? ''),
+    );
     if (live.length <= this.options.maxLiveSessions) return;
     const lastActive = new Map<string, string>();
     const busy = new Set<string>();
-    for (const [, c] of await this.options.store.all()) {
+    for (const [, c] of conversations) {
       lastActive.set(c.sessionName, c.lastActiveAt);
       if ((c.pending ?? 0) > 0) busy.add(c.sessionName);
     }
@@ -841,7 +850,7 @@ export class ConversationManager {
         (lastActive.get(a.name ?? '') ?? '').localeCompare(lastActive.get(b.name ?? '') ?? ''),
       );
     const keys = new Map<string, [string, Conversation]>();
-    for (const entry of await this.options.store.all()) keys.set(entry[1].sessionName, entry);
+    for (const entry of conversations) keys.set(entry[1].sessionName, entry);
     for (const session of candidates.slice(0, live.length - this.options.maxLiveSessions)) {
       const entry = keys.get(session.name ?? '');
       const binding = entry ? this.bindingFor(entry[1]) : undefined;
