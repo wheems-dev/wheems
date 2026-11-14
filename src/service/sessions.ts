@@ -358,13 +358,23 @@ export class SessionService {
       };
     }
 
-    if (wait && from !== null && this.waitsOn(target.id, from.id)) {
-      throw new Error(
-        `Session ${target.id} is waiting on you, so you can't wait on it: the two of you would wait for ever. Send without --wait.`,
-      );
+    const waiter = wait ? from : null;
+    if (waiter !== null) {
+      if (this.waitsOn(target.id, waiter.id)) {
+        throw new Error(
+          `Session ${target.id} is waiting on you, so you can't wait on it: the two of you would wait for ever. Send without --wait.`,
+        );
+      }
+      // Taken at once, with nothing awaited since the check, so two waits can't cross.
+      this.addWait(waiter.id, target.id);
     }
-    const message = await this.record(workspace, from?.id ?? null, target.id, text);
-    if (wait && from !== null) this.addWait(from.id, target.id);
+    let message: MessageRecord;
+    try {
+      message = await this.record(workspace, from?.id ?? null, target.id, text);
+    } catch (error) {
+      if (waiter !== null) this.removeWait(waiter.id, target.id);
+      throw error;
+    }
     const outcome = this.enqueue(target.id, () =>
       this.deliver(workspace, target.id, message, typed),
     );
@@ -401,7 +411,7 @@ export class SessionService {
       return { message: sessions.message(message.id) ?? message, answer: result.answer, next: '' };
     } finally {
       timer.cancel();
-      if (from !== null) this.removeWait(from.id, target.id);
+      if (waiter !== null) this.removeWait(waiter.id, target.id);
     }
   }
 
@@ -646,19 +656,19 @@ export class SessionService {
 
   /**
    * Types a message into an ad-hoc session, resuming it first if it has stopped, and follows
-   * the turn it starts to its answer. A null message is a notice from Wheems, such as an answer
-   * handed back: followed the same way, so the next message's answer is its own, but not kept.
+   * the turn it starts to its answer. Answers handed back come this way too, so the next
+   * message's answer is always its own.
    */
   private async deliver(
     workspace: LoadedWorkspace,
     targetId: string,
-    message: MessageRecord | null,
+    message: MessageRecord,
     text: string,
   ): Promise<Outcome> {
     const sessions = this.options.state.workspace(workspace.id);
     const caller = workspaceCaller(workspace);
     const fail = (problem: string): Outcome => {
-      if (message && !this.stopped)
+      if (!this.stopped)
         sessions.finishMessage(message.id, 'failed', null, new Date().toISOString());
       return { answer: null, problem };
     };
@@ -699,7 +709,7 @@ export class SessionService {
   private async follow(
     workspace: LoadedWorkspace,
     targetId: string,
-    message: MessageRecord | null,
+    message: MessageRecord,
     runtimeId: string,
     fromTurn: number,
     before: string | null,
@@ -710,7 +720,7 @@ export class SessionService {
       // A service that's stopping leaves the message waiting, to be marked when it next starts.
       if (this.stopped) return;
       const now = new Date().toISOString();
-      if (message) sessions.finishMessage(message.id, state, answerFile, now);
+      sessions.finishMessage(message.id, state, answerFile, now);
       sessions.update(targetId, { state: 'idle', lastActiveAt: now }, 'working');
     };
     try {
@@ -730,6 +740,8 @@ export class SessionService {
         this.options.answerWaitSeconds,
       );
       if (this.stopped) return { answer: null, problem: 'the service stopped' };
+      // A turn still running would answer into the next message's turn, so it's stopped.
+      const cutShort = ended ? null : await this.stopUnfinishedTurn(workspace, targetId, runtimeId);
       // The engine may still be writing its record when the turn ends; give it a moment. A
       // turn that didn't end as expected may still have answered, such as one that took the
       // message in while it was busy.
@@ -748,20 +760,47 @@ export class SessionService {
         finish('failed', null);
         return {
           answer: null,
-          problem: ended ? 'it finished without answering' : 'it gave no answer in time',
+          problem: ended
+            ? 'it finished without answering'
+            : (cutShort ?? 'it gave no answer in time'),
         };
       }
-      let answerFile: string | null = null;
-      if (message) {
-        answerFile = message.messageFile.replace(/\.md$/, '.answer.md');
-        await writeFile(answerFile, `${answer}\n`);
-      }
+      const answerFile = message.messageFile.replace(/\.md$/, '.answer.md');
+      await writeFile(answerFile, `${answer}\n`);
       finish('answered', answerFile);
       return { answer, problem: null };
     } catch (error) {
       finish('failed', null);
       return { answer: null, problem: describe(error) };
     }
+  }
+
+  /**
+   * After following a turn gave up: if the turn may still be running (working, blocked, or with
+   * no status to say), stops the session, so a late answer can't be taken for the next message's.
+   * The next message resumes it. Returns why there's no answer, or null if nothing was running.
+   */
+  private async stopUnfinishedTurn(
+    workspace: LoadedWorkspace,
+    targetId: string,
+    runtimeId: string,
+  ): Promise<string | null> {
+    const live = await this.options.runtime.get(runtimeId).catch(() => null);
+    if (live?.state !== 'live' || live.status === 'idle' || live.status === 'done') return null;
+    const sessions = this.options.state.workspace(workspace.id);
+    const name = sessions.session(targetId)?.herdrName ?? runtimeId;
+    const minutes = Math.round(this.options.answerWaitSeconds / 60);
+    const why =
+      live.status === 'blocked'
+        ? 'it was waiting for an answer at the Mac'
+        : `it gave no answer within ${String(minutes)} minutes`;
+    if (await this.stopRuntimeSession(name)) {
+      sessions.update(targetId, { state: 'stopped' }, 'working');
+      this.options.log(`Stopped session ${targetId} mid-turn: ${why}`);
+      return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it`;
+    }
+    this.options.log(`Session ${targetId} didn't finish its turn, and couldn't be stopped`);
+    return `${why}, and it couldn't be stopped, so its answers may now be out of order. See it with hc attach ${live.id}`;
   }
 
   /** Starts a stopped ad-hoc session again, resuming its engine session, with a message. */
@@ -774,6 +813,11 @@ export class SessionService {
     const name = target.agent?.split('/').at(-1);
     const agent = workspace.agents.find((a) => a.definition.name === name);
     if (!agent) throw new Error(`its agent ${String(name)} has no agent file`);
+    const sessions = this.options.state.workspace(workspace.id);
+    const isEnded = () =>
+      this.ending.has(target.id) || (sessions.session(target.id)?.state ?? 'ended') === 'ended';
+    // Read again: it may have been ended while this waited its turn.
+    if (isEnded()) throw new Error('it has ended');
     const engineId = engine.findSession ? target.engineSessionId : target.id;
     if (engineId === null) {
       throw new Error(
@@ -785,14 +829,20 @@ export class SessionService {
     if (old?.state === 'live') throw new Error('it started again meanwhile; send again');
     if (old) await this.options.runtime.remove(old.id).catch(() => undefined);
     await this.checkAccountLimit(agent.definition.account);
-    const sessions = this.options.state.workspace(workspace.id);
     try {
       const started = await this.launch(workspace, target, agent, engine, {
         resume: true,
         engineId,
         task: text,
       });
-      sessions.update(target.id, { state: 'working', launchedAt: new Date().toISOString() });
+      // Ended while it started: it mustn't keep running.
+      const now = sessions.session(target.id);
+      if (isEnded() || !now) throw new Error('it was ended while it started again');
+      sessions.update(
+        target.id,
+        { state: 'working', launchedAt: new Date().toISOString() },
+        now.state,
+      );
       this.options.log(`Resumed session ${target.id} (${started.id}) in ${workspace.id}`);
       return started;
     } catch (error) {
@@ -826,18 +876,35 @@ export class SessionService {
       outcome.answer !== null
         ? `Wheems: answer from ${who}:\n\n${outcome.answer}`
         : `Wheems: no answer from ${who}, because ${outcome.problem}. See it with wheems session show ${targetId}.`;
+    // Kept as a message from the session that answered, so it's never lost, even undelivered.
+    let message: MessageRecord | undefined;
+    const failed = (problem: string) => {
+      if (message) sessions.finishMessage(message.id, 'failed', null, new Date().toISOString());
+      this.options.log(
+        `Couldn't hand the answer from ${who} back to ${fromId}: ${problem}${message ? ` (kept as message ${message.id})` : ''}`,
+      );
+    };
     try {
+      message = await this.record(workspace, targetId, from.id, text);
       if (from.kind === 'thread') {
         if (!this.options.tell) throw new Error("its conversation can't be reached");
         await this.options.tell(from.id, text);
+        sessions.finishMessage(message.id, 'answered', null, new Date().toISOString());
       } else if (from.kind === 'adhoc') {
-        await this.enqueue(from.id, () => this.deliver(workspace, from.id, null, text));
+        const kept = message;
+        const delivered = await this.enqueue(from.id, () =>
+          this.deliver(workspace, from.id, kept, text),
+        );
+        // The service may have stopped meanwhile, leaving the message for its next start.
+        if (delivered.answer === null && !this.isStopping()) failed(delivered.problem);
       }
     } catch (error) {
-      this.options.log(
-        `Couldn't hand the answer from ${who} back to ${fromId}: ${describe(error)}`,
-      );
+      if (!this.isStopping()) failed(describe(error));
     }
+  }
+
+  private isStopping(): boolean {
+    return this.stopped;
   }
 
   private async launch(

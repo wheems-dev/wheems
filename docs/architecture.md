@@ -419,14 +419,17 @@ message arrives as `Wheems: message from <sender>:` and the text.
   or handed to a chief's conversation (the conversation manager's `tell`), which answers in its
   own thread, on whatever channel that is. A message from Wheems is delivered, queued and
   followed like the person's, but there's nothing to mark as seen. The person's answers are only
-  kept, for `wheems session show`. If the session doesn't answer within an hour, or it can't be
-  resumed, the sender is told why instead.
+  kept, for `wheems session show`. If the session doesn't answer within an hour, or it can't
+  be resumed, the sender is told why instead. An answer handed back is itself kept as a message
+  from the session that answered, so one that can't be delivered isn't lost.
 - **A session's purpose is its first message**, from whoever started it, so the answer to it
   goes back to its starter in the same way: a chief hears what came of a session it started
   without asking.
 - **One message at a time.** Each ad-hoc session has an inbox: a message is typed in once the one
   before has been answered, and its answer is the session's answers since it was typed, so
-  answers are never mixed up between senders. Answers handed back to an ad-hoc session queue in
+  answers are never mixed up between senders. A turn that doesn't finish (no answer within an
+  hour, or stuck waiting for an answer at the Mac) is stopped, so a late answer can't be taken for
+  the next message's; the next message resumes the session. Answers handed back to an ad-hoc session queue in
   its inbox in the same way.
 - **An ad-hoc session can send to its owner** with `wheems session send owner "…"`, to tell it
   something unasked, such as what came of work it handed on. For a chief, that's the thread that

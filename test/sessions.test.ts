@@ -570,6 +570,56 @@ describe('wheems session', () => {
       expect(after.err).toBe('');
     });
 
+    it('lets only one of two crossing waits through', async () => {
+      const parent = await newSession('parent');
+      await settled(parent.id);
+      const asParent = { WHEEMS_SESSION: parent.id };
+      const child = await newSession('child', asParent);
+      await settled(child.id);
+      behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+      const results = await Promise.all([
+        wheems(['session', 'send', child.id, 'Work slowly.', '--wait'], asParent),
+        wheems(['session', 'send', 'owner', 'Work slowly too.', '--wait'], {
+          WHEEMS_SESSION: child.id,
+        }),
+      ]);
+      expect(results.filter((r) => r.err.includes('is waiting on you'))).toHaveLength(1);
+      expect(results.filter((r) => r.err === '')).toHaveLength(1);
+    });
+
+    it('stops a session whose turn is cut short, so a late answer is never the next one', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('permission') ? 'block' : 'answer');
+      const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
+      expect(blocked.err).toContain(
+        'it was waiting for an answer at the Mac, so Wheems stopped it',
+      );
+      expect(await stored((s) => s.workspace('personal').session(session.id)?.state)).toBe(
+        'stopped',
+      );
+      // The next message resumes it, and gets its own answer.
+      const next = await wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      expect(next.out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
+    it('keeps an answer it could not hand back, as a failed message', async () => {
+      const parent = await newSession('parent');
+      await settled(parent.id);
+      const asParent = { WHEEMS_SESSION: parent.id };
+      // The parent can't take the answer in: it stops to ask for permission.
+      behave = (line) => (line.startsWith('Wheems: answer from') ? 'block' : 'answer');
+      const child = await newSession('child', asParent);
+      await waitFor(async () =>
+        (await stored((s) => s.workspace('personal').messages(parent.id))).some(
+          (m) => m.sender === child.id && m.state === 'failed',
+        ),
+      );
+      const show = await wheems(['session', 'show', parent.id]);
+      expect(show.out).toContain(`from ${child.id}`);
+      expect(show.out).toContain('failed: Wheems: answer from session');
+    });
+
     it('refuses messages to an ended session', async () => {
       const session = await newSession('packaging');
       await settled(session.id);
