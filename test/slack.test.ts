@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SlackChannel } from '../src/drivers/channel/slack/slack-channel.js';
 import { slackManifest } from '../src/drivers/channel/slack/setup.js';
+import { tokenProblem } from '../src/drivers/channel/slack/connect.js';
 import { channelContract, expectDriverError } from '../src/testing/index.js';
 import type { InboundEvent } from '../src/contracts/channel.js';
 import { FakeSlack } from './helpers/fake-slack.js';
@@ -183,5 +184,65 @@ describe('slack channel', () => {
     }
     for (const event of ['message.im', 'message.channels', 'message.groups'])
       expect(manifest).toContain(`- ${event}`);
+  });
+});
+
+describe('checking a pasted Slack token', () => {
+  // Shaped like real tokens, but made up, and put together here so that nothing in this file
+  // looks like a token to secret scanners.
+  const bot = ['xoxb', '1111111111', '2222222222222', 'abcdefghijklmnopqrstuvwx'].join('-');
+  const app = ['xapp', '1', 'A0123456789', '1234567890123', 'f'.repeat(64)].join('-');
+
+  it('accepts the right token, with spaces around it', () => {
+    expect(tokenProblem('bot', bot)).toBeUndefined();
+    expect(tokenProblem('bot', `  ${bot}\n`)).toBeUndefined();
+    expect(tokenProblem('app', app)).toBeUndefined();
+  });
+
+  it('says when the other token was pasted, and where the right one is', () => {
+    expect(tokenProblem('bot', app)).toBe(
+      "That starts with xapp-, so it's the app-level token. Under OAuth & Permissions, copy the Bot User OAuth Token (xoxb-…).",
+    );
+    expect(tokenProblem('app', bot)).toBe(
+      "That starts with xoxb-, so it's the bot token. Under Basic Information → App-Level Tokens, copy the token (xapp-…).",
+    );
+  });
+
+  it('names other Slack tokens by their prefix', () => {
+    expect(tokenProblem('bot', 'xoxp-123-456-789-abc')).toBe(
+      "That starts with xoxp-, so it's a user token, not the bot token. Under OAuth & Permissions, copy the Bot User OAuth Token (xoxb-…).",
+    );
+  });
+
+  it('spots two pastes run together, or something in front of the token', () => {
+    expect(tokenProblem('bot', bot + bot)).toBe(
+      'That looks like more than one paste. Clear the field with Backspace, then paste it once.',
+    );
+    expect(tokenProblem('bot', `oops${bot}`)).toBe(
+      "There's something before the xoxb- at the start. Clear the field with Backspace, then paste it once.",
+    );
+    expect(tokenProblem('bot', `${bot.slice(0, 20)} ${bot.slice(20)}`)).toBe(
+      "There's a space or line break in it. Clear the field with Backspace, then paste it once.",
+    );
+  });
+
+  it('asks for the token when nothing was pasted', () => {
+    expect(tokenProblem('app', '  ')).toBe(
+      'Paste the app-level token. Under Basic Information → App-Level Tokens, copy the token (xapp-…).',
+    );
+  });
+
+  it('never repeats any of what was pasted beyond a standard prefix', () => {
+    const pasted = ['secret-client-value-123', app, bot + bot, `oops${bot}`, 'xoxp-999-888'];
+    for (const value of pasted) {
+      for (const kind of ['bot', 'app'] as const) {
+        const said = tokenProblem(kind, value) ?? '';
+        expect(said).not.toContain('1111111111');
+        expect(said).not.toContain('A0123456789');
+        expect(said).not.toContain('secret');
+        expect(said).not.toContain('999');
+        expect(said).not.toContain('oops');
+      }
+    }
   });
 });
