@@ -35,6 +35,7 @@ settings:
       - message.im
       - message.channels
       - message.groups
+      - member_joined_channel
   interactivity:
     is_enabled: true
   org_deploy_enabled: false

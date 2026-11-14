@@ -7,7 +7,7 @@ change anything, including commands and config formats, without a migration path
 
 **Added**
 
-- Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, and how to talk to it. If it can't, setup says why.
+- Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, how to talk to it, and that inviting it to any channel adds another chief. If it can't, setup says why.
 - `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before
   each fix: trusting the install folder, starting the service, rebuilding a stale search index,
   and a near-miss channel name in `workspace.yaml`. It never changes the chat app's settings or
@@ -16,7 +16,12 @@ change anything, including commands and config formats, without a migration path
   problem until it's fixed: an engine that isn't signed in (newly checked before a session
   starts) or doesn't trust the folder, a question waiting at the Mac, an error, or a session that
   failed to start.
-
+- Inviting the app to a channel sets up a chief of staff there. In a channel no workspace uses,
+  Wheems offers one to people in `allowed_users`, once per channel, and creates the workspace
+  from the name they reply with, answering there at once with no restart. A workspace whose
+  channel the app couldn't see starts answering as soon as the app is invited there. Channel
+  drivers report being added to a channel through an optional `joins` capability; Slack's
+  manifest now subscribes to `member_joined_channel`.
 - `wheems start`, `stop`, `restart`, `status` and `logs` look after the background service. `stop`
   keeps it stopped, even after you log in again, until `wheems start`. `status` shows the version,
   how long it has been up, and where each workspace chats, with what stops one from chatting (a
@@ -75,6 +80,9 @@ change anything, including commands and config formats, without a migration path
 - The session store, `.wheems/state.sqlite`, and its `-wal` and `-shm` files were created
   readable by everyone. They're now owner-only, and the service mends existing ones when it
   starts.
+- `wheems restart` could fail with "launchctl bootstrap failed: 5: Input/output error" and leave
+  the service stopped, because it loaded the job before launchd had finished unloading it. It now
+  waits for the job to unload, and tries the bootstrap again briefly.
 - Under launchd, the service took about ten seconds to start, because launchd throttles the CPU
   and disk of a job that doesn't say what kind it is. It now runs as an interactive job and starts
   in about a second. `wheems start` waits up to 30 seconds and, if it still doesn't answer, prints

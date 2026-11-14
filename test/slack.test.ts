@@ -54,6 +54,41 @@ describe('slack channel', () => {
     await expectDriverError(driver.openDirect('UNOBODY'), 'failed');
   });
 
+  it('reports the app being added to a channel, from either event, and no one else joining', async () => {
+    const { fake, driver, events, start } = setup();
+    await start();
+    expect(driver.capabilities.joins).toBe(true);
+    await fake.emit({ type: 'member_joined_channel', channel: 'C2', user: 'U1', inviter: 'U9' });
+    expect(events).toEqual([]);
+    await fake.emit({ type: 'member_joined_channel', channel: 'C2', user: 'UBOT', inviter: 'U9' });
+    await fake.emit({ channel: 'C3', user: 'UBOT', subtype: 'channel_join', ts: '1.6' });
+    expect(events).toMatchObject([
+      { type: 'joined', channel: 'C2', userId: 'U9' },
+      { type: 'joined', channel: 'C3', userId: null },
+    ]);
+  });
+
+  it('drops a mention of the app that starts a message', async () => {
+    const { fake, events, start } = setup();
+    await start();
+    await fake.message({ channel: 'C1', text: '<@UBOT> Marketing' });
+    await fake.message({ channel: 'C1', text: 'ask <@UBOT> about it' });
+    expect(events.map((e) => (e.type === 'message' ? e.text : ''))).toEqual([
+      'Marketing',
+      'ask <@UBOT> about it',
+    ]);
+  });
+
+  it('names a channel from its id, and remembers it', async () => {
+    const { fake, driver } = setup();
+    fake.channels.push({ id: 'C0MARKET01', name: 'marketing-chat' });
+    expect(await driver.channelName('C0MARKET01')).toBe('marketing-chat');
+    expect(await driver.channelName('C0NOWHERE1')).toBeNull();
+    const lists = fake.calls.filter((c) => c.method === 'conversations.list').length;
+    expect(await driver.resolveChannel('marketing-chat')).toBe('C0MARKET01');
+    expect(fake.calls.filter((c) => c.method === 'conversations.list')).toHaveLength(lists);
+  });
+
   it('passes on messages with files attached, with the files named', async () => {
     const { fake, events, start } = setup();
     await start();
@@ -190,7 +225,12 @@ describe('slack channel', () => {
     ]) {
       expect(manifest).toContain(`- ${scope}`);
     }
-    for (const event of ['message.im', 'message.channels', 'message.groups'])
+    for (const event of [
+      'message.im',
+      'message.channels',
+      'message.groups',
+      'member_joined_channel',
+    ])
       expect(manifest).toContain(`- ${event}`);
   });
 });

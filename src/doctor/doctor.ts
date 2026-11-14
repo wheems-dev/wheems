@@ -306,7 +306,7 @@ async function channelMembership(
         name,
         status: 'fail',
         message: `The app can't see ${chat.channel}`,
-        hint: 'Check the name in workspace.yaml, invite the app to the channel, then run wheems restart.',
+        hint: 'Invite the app to the channel: a running service picks it up at once. Or check the name in workspace.yaml.',
         ...(fix && { fix }),
       });
       continue;

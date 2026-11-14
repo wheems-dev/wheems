@@ -33,6 +33,8 @@ export interface WorkspaceTemplate {
   name: string;
   /** A channel name, or null for the bot's direct messages. */
   channel: string | null;
+  /** The install connection it chats on. Defaults to `slack`. */
+  connection?: string;
   /** The engine the chief of staff runs in, its model, and the account that pays. */
   engine: EngineChoice;
 }
@@ -55,10 +57,11 @@ function yamlString(value: string): string {
 }
 
 export function workspaceYaml(template: WorkspaceTemplate): string {
+  const connection = template.connection ?? 'slack';
   const chat =
     template.channel === null
-      ? '{ connection: slack, direct: true }'
-      : `{ connection: slack, channel: ${yamlString(template.channel)} }`;
+      ? `{ connection: ${connection}, direct: true }`
+      : `{ connection: ${connection}, channel: ${yamlString(template.channel)} }`;
   return `name: ${yamlString(template.name)}
 accounts: [${template.engine.account}]
 

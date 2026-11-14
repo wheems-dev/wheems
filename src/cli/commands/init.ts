@@ -21,6 +21,8 @@ export interface InitOptions {
   name?: string;
   /** A channel to chat in, instead of the bot's direct messages. */
   channel?: string;
+  /** The install connection the channel is on. Defaults to `slack`. */
+  connection?: string;
   /** The engine the chief of staff runs in. Defaults to Claude Code. */
   engine?: EngineChoice;
   /** The install account's driver, added to install.yaml if the account isn't there. */
@@ -68,9 +70,20 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
     id: options.id,
     name: name ?? options.id.charAt(0).toUpperCase() + options.id.slice(1).replaceAll('-', ' '),
     channel: channel ?? null,
+    ...(options.connection !== undefined && { connection: options.connection }),
     engine: options.engine ?? DEFAULT_ENGINE,
   };
   await ensureAccount(where.install, template.engine.account, options.accountDriver ?? 'claude');
+  // Made exclusively: if another init made it meanwhile, this one stops rather than overwrite it.
+  await mkdir(where.workspaces, { recursive: true });
+  try {
+    await mkdir(dir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      throw new Error(`Workspace ${options.id} already exists at ${dir}`, { cause: error });
+    }
+    throw error;
+  }
   await mkdir(join(dir, 'agents'), { recursive: true });
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));
   await writeFile(join(dir, 'skills.yaml'), SKILLS_YAML);

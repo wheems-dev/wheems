@@ -93,6 +93,27 @@ When a conversation has been quiet for half an hour, Wheems asks its agent to wr
 which lands in `workspaces/<id>/knowledge/inbox/`. You won't see that in Slack. Fill in
 `~/wheems/about-you.md` with what you'd tell anyone working for you: every agent reads it.
 
+### Add a chief by inviting the app to a channel
+
+To give a team, a client or a side project its own chief of staff, invite the app to a Slack
+channel: type `@Wheems` there and accept the invitation. Wheems answers in the channel that it
+isn't set up there yet, and asks for a name. Reply in its thread with one, such as `Marketing`,
+and Wheems creates the workspace (`~/wheems/workspaces/marketing/`) with its chief of staff, on
+the same engine and account as your first chief, and the chief answers in that channel straight
+away. There's nothing to restart, and you never leave Slack.
+
+Only people in `allowed_users` get the offer, and it's made once per channel (again after the
+service restarts, if no one answered). If you'd rather set it up from the terminal,
+`wheems init marketing --channel marketing` does the same, then `wheems restart`.
+
+The offer comes as soon as the app is invited, through Slack's `member_joined_channel` event.
+A Slack app made from the manifest before this version doesn't have that event: add it under
+**Event Subscriptions → Subscribe to bot events** in the app's settings (it needs no new
+scope). Until then, the offer comes with your first message in the channel instead.
+
+A workspace whose `workspace.yaml` names a channel the app isn't in yet, such as one made with
+`wheems init`, starts answering there as soon as you invite the app: its chief says it's there.
+
 Now and then, run `wheems review`. It shows what waits for you: skills agents proposed, and
 changes to `about-you.md` suggested from their notes. Nothing changes until you approve it.
 Overnight, Wheems writes `knowledge/reports/contradictions.md` and `knowledge/reports/stale.md`,

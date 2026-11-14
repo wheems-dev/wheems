@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { ChannelDriver, InboundEvent } from '../contracts/channel.js';
+import type {
+  ButtonPress,
+  ChannelDriver,
+  InboundEvent,
+  InboundMessage,
+} from '../contracts/channel.js';
 import { replyThread } from '../contracts/channel.js';
 import { expectDriverError, expectHealthCheck } from './runtime-contract.js';
 
@@ -43,10 +48,15 @@ export function channelContract(label: string, options: ChannelContractOptions):
       for (const wake of waiters.splice(0)) wake();
     };
 
-    const nextEvent = async (match: (e: InboundEvent) => boolean): Promise<InboundEvent> => {
+    /** The next message or button press that matches; `joined` events never do. */
+    const nextEvent = async (
+      match: (e: InboundMessage | ButtonPress) => boolean,
+    ): Promise<InboundMessage | ButtonPress> => {
       const deadline = Date.now() + timeoutMs;
       for (;;) {
-        const found = events.find(match);
+        const found = events.find(
+          (e): e is InboundMessage | ButtonPress => e.type !== 'joined' && match(e),
+        );
         if (found) return found;
         const left = deadline - Date.now();
         if (left <= 0) throw new Error(`No matching inbound event within ${timeoutMs} ms`);

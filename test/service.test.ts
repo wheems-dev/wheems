@@ -105,8 +105,8 @@ describe('the service', () => {
       { channel: 'D-UME', identity: { name: 'Personal chief of staff' } },
     ]);
     expect(channel.sent[0]?.text).toContain("I'm Personal's chief of staff, and I'm set up.");
-    // Until channel onboarding is in, it doesn't promise it.
-    expect(channel.sent[0]?.text).not.toContain('invite me');
+    // Inviting the app to a channel sets up a chief there, and the hello says so.
+    expect(channel.sent[0]?.text).toContain('invite me to any channel');
     expect(await request(socket, { op: 'greet', once: true })).toMatchObject({
       ok: true,
       skipped: true,
