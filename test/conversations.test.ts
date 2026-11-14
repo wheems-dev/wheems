@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall, type LoadedInstall } from '../src/config/load.js';
 import { ConversationManager, conversationKey, uuidFor } from '../src/service/conversations.js';
 import { ConversationStore } from '../src/service/store.js';
+import { StateStore } from '../src/state/store.js';
 import type { FinalMessage } from '../src/contracts/engine.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
 import { fakeAgent, type Behaviour } from './helpers/fake-agent.js';
@@ -24,6 +25,7 @@ describe('conversations', () => {
   let received: Map<string, string[]>;
   let logs: string[];
   let answers: Map<string, FinalMessage[]>;
+  let state: StateStore;
 
   const make = (
     options: {
@@ -41,7 +43,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: options.startupSeconds ?? 2,
@@ -57,6 +59,7 @@ describe('conversations', () => {
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'wheems-conv-'));
+    state = await StateStore.open(join(home, '.wheems', 'state.sqlite'));
     writeFileSync(
       join(home, 'install.yaml'),
       installYaml().replace('allowed_users: []', `allowed_users: [${ME}]`),
@@ -84,6 +87,7 @@ describe('conversations', () => {
 
   afterEach(async () => {
     await manager.stop();
+    state.close();
     rmSync(home, { recursive: true, force: true });
   });
 
@@ -128,7 +132,7 @@ describe('conversations', () => {
         text: "_Wheems:_ I can't open files yet (invoice.pdf). Paste the text, or say in words what you need.",
       },
     ]);
-    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toEqual([]);
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toEqual([]);
 
     const withWords = await channel.receive({
       channel: 'D1',
@@ -148,11 +152,18 @@ describe('conversations', () => {
     await settle();
     expect(posts()).toEqual([{ thread: first, text: 'echo: hello' }]);
     const sessions = await runtime.list({
-      labels: { wheems: 'conversation', workspace: 'personal' },
+      labels: { workspace: 'personal' },
     });
     expect(sessions).toHaveLength(1);
     const key = conversationKey('personal', 'slack', 'D1', first);
     expect(received.get(sessions[0]!.id)).toEqual(['hello']);
+    // Labelled with its session's id, so the store can be matched against Herdr.
+    expect(sessions[0]!.labels).toEqual({ wheems: uuidFor(key), workspace: 'personal' });
+    expect(state.workspace('personal').session(uuidFor(key))).toMatchObject({
+      kind: 'thread',
+      agent: null,
+      herdrName: sessions[0]!.name,
+    });
     // The reply carries the workspace's identity.
     expect(channel.sent[0]?.identity).toEqual({ name: 'Personal chief of staff' });
     // The seen mark is cleared once the agent has replied.
@@ -160,9 +171,7 @@ describe('conversations', () => {
     // The engine wrote its instructions file, with the built-in chat instructions.
     const claudeMd = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
     expect(claudeMd).toContain('wheems reply');
-    expect(
-      JSON.parse(readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8')),
-    ).toMatchObject({
+    expect(Object.fromEntries(state.conversations())).toMatchObject({
       [key]: { workspace: 'personal', channel: 'D1', thread: first, sessionId: uuidFor(key) },
     });
   });
@@ -174,7 +183,7 @@ describe('conversations', () => {
     await settle();
     await dm('three', first);
     await settle();
-    const sessions = await runtime.list({ labels: { wheems: 'conversation' } });
+    const sessions = await runtime.list({ labels: { workspace: 'personal' } });
     expect(sessions).toHaveLength(1);
     expect(received.get(sessions[0]!.id)).toEqual(['one', 'two', 'three']);
     expect(posts().map((p) => p.thread)).toEqual([first, first, first]);
@@ -197,7 +206,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new SlowStore(join(home, '.wheems', 'conversations.json')),
+      store: new SlowStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: 2,
@@ -214,17 +223,17 @@ describe('conversations', () => {
     await dm('one');
     await dm('another topic');
     await settle();
-    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toHaveLength(2);
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toHaveLength(2);
   });
 
   it('resumes the conversation in a new session when the old one has ended', async () => {
     const first = await dm('one');
     await settle();
-    const [session] = await runtime.list({ labels: { wheems: 'conversation' } });
+    const [session] = await runtime.list({ labels: { workspace: 'personal' } });
     await runtime.stop(session!.id);
     await dm('two', first);
     await settle();
-    const [next] = await runtime.list({ labels: { wheems: 'conversation' } });
+    const [next] = await runtime.list({ labels: { workspace: 'personal' } });
     expect(next!.id).not.toBe(session!.id);
     // The stub engine reports resume and the same conversation id.
     expect(next!.command).toEqual(['fake-agent', '--resume']);
@@ -342,7 +351,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: 2,
@@ -351,18 +360,19 @@ describe('conversations', () => {
     const first = await dm('first question');
     await settle();
     const key = conversationKey('personal', 'slack', 'D1', first);
-    const stored = JSON.parse(
-      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
-    ) as Record<string, { engineSessionId?: string }>;
+    const stored = Object.fromEntries(state.conversations()) as Record<
+      string,
+      { engineSessionId?: string }
+    >;
     expect(stored[key]?.engineSessionId).toBe('own-1');
     expect(posts()).toEqual([{ thread: first, text: 'answer: first question' }]);
 
     // The session ends; the next message resumes the engine's own session.
-    const [session] = await runtime.list({ labels: { wheems: 'conversation' } });
+    const [session] = await runtime.list({ labels: { workspace: 'personal' } });
     await runtime.stop(session!.id);
     await dm('second question', first);
     await settle();
-    const [next] = await runtime.list({ labels: { wheems: 'conversation' } });
+    const [next] = await runtime.list({ labels: { workspace: 'personal' } });
     expect(next?.command).toEqual(['fake-agent', '--resume']);
     expect(posts().at(-1)).toEqual({ thread: first, text: 'answer: second question' });
   });
@@ -390,7 +400,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
@@ -417,7 +427,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       startupSeconds: 2,
@@ -425,9 +435,10 @@ describe('conversations', () => {
     const a = await dm('Hello');
     const b = await dm('Hello');
     await settle();
-    const stored = JSON.parse(
-      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
-    ) as Record<string, { engineSessionId?: string }>;
+    const stored = Object.fromEntries(state.conversations()) as Record<
+      string,
+      { engineSessionId?: string }
+    >;
     const ids = [a, b].map(
       (thread) => stored[conversationKey('personal', 'slack', 'D1', thread)]?.engineSessionId,
     );
@@ -459,7 +470,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
@@ -500,7 +511,7 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        store: new ConversationStore(state),
         sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
@@ -548,7 +559,7 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        store: new ConversationStore(state),
         sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
@@ -566,9 +577,10 @@ describe('conversations', () => {
     await manager.recover();
     await settle();
     expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
-    const stored = JSON.parse(
-      readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8'),
-    ) as Record<string, { pending?: number }>;
+    const stored = Object.fromEntries(state.conversations()) as Record<
+      string,
+      { pending?: number }
+    >;
     expect(stored[conversationKey('personal', 'slack', 'D1', first)]?.pending).toBe(0);
   });
 
@@ -596,7 +608,7 @@ describe('conversations', () => {
         channels: new Map([['slack', channel]]),
         runtime: quiet,
         engine: () => engine,
-        store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+        store: new ConversationStore(state),
         sessionEnv: { WHEEMS_HOME: home },
         pollMs: 5,
         answerPollMs: 5,
@@ -648,7 +660,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
@@ -691,7 +703,7 @@ describe('conversations', () => {
       channels: new Map([['slack', channel]]),
       runtime: quiet,
       engine: () => engine,
-      store: new ConversationStore(join(home, '.wheems', 'conversations.json')),
+      store: new ConversationStore(state),
       sessionEnv: { WHEEMS_HOME: home },
       pollMs: 5,
       answerPollMs: 5,
@@ -700,11 +712,11 @@ describe('conversations', () => {
     });
     const first = await dm('one');
     await settle();
-    const [session] = await quiet.list({ labels: { wheems: 'conversation' } });
+    const [session] = await quiet.list({ labels: { workspace: 'personal' } });
     await quiet.stop(session!.id);
     await dm('two', first);
     await settle();
-    const [next] = await quiet.list({ labels: { wheems: 'conversation' } });
+    const [next] = await quiet.list({ labels: { workspace: 'personal' } });
     expect(next?.command).toEqual(['fake-agent', '--resume']);
     expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
   });
@@ -754,14 +766,14 @@ describe('conversations', () => {
       `${install.workspaces[0]!.agents[0]!.definition.engine} ${install.workspaces[0]!.dir}`,
     ]);
     expect(posts()).toEqual([{ thread: first, text: '_Wheems:_ Trust the install folder first.' }]);
-    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toEqual([]);
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toEqual([]);
     expect([...(channel.reactions.get(`D1/${first}`) ?? [])]).toEqual([]);
 
     // Once trusted at the Mac, the same thread starts as usual.
     trusted = true;
     await dm('hello again', first);
     await settle();
-    expect(await runtime.list({ labels: { wheems: 'conversation' } })).toHaveLength(1);
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toHaveLength(1);
   });
 
   it('says so when the session exits without replying', async () => {
@@ -778,7 +790,7 @@ describe('conversations', () => {
       await dm(text);
       await settle();
     }
-    const live = await runtime.list({ labels: { wheems: 'conversation' } });
+    const live = await runtime.list({ labels: { workspace: 'personal' } });
     expect(live).toHaveLength(2);
     expect(live.map((s) => received.get(s.id)?.[0])).toEqual(['b', 'c']);
   });
@@ -792,7 +804,7 @@ describe('conversations', () => {
       line.startsWith('Wheems: this conversation has gone quiet');
     const later = () => Date.now() + 31 * 60_000;
     const stored = () =>
-      JSON.parse(readFileSync(join(home, '.wheems', 'conversations.json'), 'utf8')) as Record<
+      Object.fromEntries(state.conversations()) as Record<
         string,
         { notedAt?: string; noting?: boolean; lastAnswerId?: string }
       >;
@@ -810,7 +822,7 @@ describe('conversations', () => {
       // Noted, so a quiet spell asks for nothing.
       await manager.sweepNotes(later());
       await settle();
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       expect(received.get(session.id)).toEqual(['hello']);
     });
 
@@ -828,7 +840,7 @@ describe('conversations', () => {
       const key = conversationKey('personal', 'slack', 'D1', first);
       // Not quiet for long enough yet.
       await manager.sweepNotes(Date.now() + 60_000);
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       expect(received.get(session.id)).toEqual(['plan the week']);
 
       await manager.sweepNotes(later());
@@ -862,7 +874,7 @@ describe('conversations', () => {
       await settle();
       await manager.sweepNotes(later());
       await settle();
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       expect(received.get(session.id)).toEqual(['hello']);
     });
 
@@ -872,8 +884,8 @@ describe('conversations', () => {
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
       // A note turn whose answer arrived after the service stopped following it.
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
-      await new ConversationStore(join(home, '.wheems', 'conversations.json')).setNoting(key, true);
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
+      await new ConversationStore(state).setNoting(key, true);
       make();
       await runtime.send(session.id, 'Wheems: this conversation has gone quiet (old request)');
       await new Promise((r) => setTimeout(r, 50));
@@ -888,11 +900,11 @@ describe('conversations', () => {
       behaviour = () => 'answer';
       const first = await dm('one');
       await settle();
-      const oldSession = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const oldSession = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       await dm('two');
       await settle();
       expect(received.get(oldSession.id)?.map((l) => isNoteRequest(l))).toEqual([false, true]);
-      const live = await runtime.list({ labels: { wheems: 'conversation' } });
+      const live = await runtime.list({ labels: { workspace: 'personal' } });
       expect(live.map((s) => s.id)).not.toContain(oldSession.id);
       expect(posts().map((p) => p.text)).toEqual(['answer: one', 'answer: two']);
       expect(stored()[conversationKey('personal', 'slack', 'D1', first)]?.notedAt).toBeDefined();
@@ -903,7 +915,7 @@ describe('conversations', () => {
       behaviour = (line) => (isNoteRequest(line) ? 'slow-answer' : 'answer');
       const first = await dm('one');
       await settle();
-      const oldSession = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const oldSession = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       await manager.sweepNotes(later());
       expect((await runtime.get(oldSession.id))?.state).not.toBe('live');
       await dm('two', first);
@@ -918,8 +930,8 @@ describe('conversations', () => {
       const first = await dm('one');
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
-      await new ConversationStore(join(home, '.wheems', 'conversations.json')).setNoting(key, true);
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
+      await new ConversationStore(state).setNoting(key, true);
       make();
       await runtime.send(session.id, 'Wheems: this conversation has gone quiet (old request)');
       await dm('two', first);
@@ -947,7 +959,7 @@ describe('conversations', () => {
       const first = await dm('one');
       await settle();
       const key = conversationKey('personal', 'slack', 'D1', first);
-      const session = (await runtime.list({ labels: { wheems: 'conversation' } }))[0]!;
+      const session = (await runtime.list({ labels: { workspace: 'personal' } }))[0]!;
       await manager.sweepNotes(later());
       await settle();
       const stop = runtime.stop.bind(runtime);

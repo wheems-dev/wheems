@@ -868,12 +868,17 @@ export function contentWords(text: string): Set<string> {
   );
 }
 
-/** A full-text query that matches any of the words, or null when there are none. */
-export function ftsQuery(query: string): string | null {
+/**
+ * A full-text query that matches any of the words (or, with `all`, every one of them), or
+ * null when there are none.
+ */
+export function ftsQuery(query: string, options: { all?: boolean } = {}): string | null {
   const words = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])];
   const telling = words.filter((w) => !STOPWORDS.has(w));
   const terms = telling.length > 0 ? telling : words;
-  return terms.length === 0 ? null : terms.map((w) => `"${w}"`).join(' OR ');
+  return terms.length === 0
+    ? null
+    : terms.map((w) => `"${w}"`).join(options.all === true ? ' ' : ' OR ');
 }
 
 function createSchema(db: DatabaseSync): void {

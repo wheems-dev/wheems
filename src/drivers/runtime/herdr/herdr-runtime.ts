@@ -191,7 +191,25 @@ export class HerdrRuntime implements RuntimeDriver {
       const terminals = await this.hc.list({
         ...(options.labels !== undefined && { labels: options.labels }),
       });
-      return terminals.map((t) => toSession(t));
+      // hc ls leaves labels out, so each terminal's are read with hc get, a few at a time.
+      // One that has gone by then is left out of the list.
+      const sessions: (SessionInfo | null)[] = [];
+      for (let i = 0; i < terminals.length; i += LABEL_READS) {
+        sessions.push(
+          ...(await Promise.all(
+            terminals.slice(i, i + LABEL_READS).map(async (terminal) => {
+              if (terminal.labels !== undefined) return toSession(terminal);
+              try {
+                return toSession(await this.hc.get(terminal.address));
+              } catch (error) {
+                if (error instanceof HcError && error.kind === 'not_found') return null;
+                throw error;
+              }
+            }),
+          )),
+        );
+      }
+      return sessions.filter((s): s is SessionInfo => s !== null && s.state === 'live');
     });
   }
 
@@ -250,6 +268,9 @@ export class HerdrRuntime implements RuntimeDriver {
   }
 }
 
+/** How many terminals' labels list() reads at once. */
+const LABEL_READS = 8;
+
 const STATUSES = new Set<string>(['idle', 'working', 'done', 'blocked', 'error']);
 const WAIT_REASONS = new Set<string>([
   'status',
@@ -274,7 +295,7 @@ function toSession(terminal: HcTerminal, command?: string[]): SessionInfo {
     cwd: terminal.cwd,
     command: terminal.argv ?? command ?? null,
     exitCode: terminal.exit_code ?? null,
-    labels: terminal.labels,
+    labels: terminal.labels ?? {},
   };
 }
 

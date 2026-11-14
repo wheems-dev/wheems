@@ -10,8 +10,11 @@ export interface Paths {
   home: string;
   install: string;
   workspaces: string;
-  /** Running state: conversations, the control socket, logs. Git-ignored. */
+  /** Running state: the session store, the control socket, logs. Git-ignored. */
   state: string;
+  /** The session store, `state.sqlite`. */
+  store: string;
+  /** Where conversations were kept before the session store; imported from at its first start. */
   conversations: string;
   socket: string;
   logs: string;
@@ -42,6 +45,7 @@ export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths
     workspaces: join(home, 'workspaces'),
     aboutYou: join(home, 'about-you.md'),
     state,
+    store: join(state, 'state.sqlite'),
     conversations: join(state, 'conversations.json'),
     socket: join(state, 'wheems.sock'),
     logs: join(state, 'logs'),

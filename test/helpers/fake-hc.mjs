@@ -116,7 +116,8 @@ switch (command) {
       Object.entries(labels).every(([k, v]) => t.labels[k] === v),
     );
     out({
-      terminals: terminals.map((t) => view(t, { statusWord: true })),
+      // Like real hc, ls leaves labels out; get reports them.
+      terminals: terminals.map(({ labels: _labels, ...t }) => view(t, { statusWord: true })),
       hidden_finished: 0,
       machines: [],
     });

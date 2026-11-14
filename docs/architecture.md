@@ -90,10 +90,10 @@ and never pass through an agent.
             └── reports/      nightly: contradictions and stale pages
 ```
 
-Running state, never committed, lives in `.wheems/`: the control socket, logs, conversations, the
-filer's working copies, the search indexes (`.wheems/index/`) and what waits for review
-(`.wheems/review/`). From milestone 3 the session store, `.wheems/state.sqlite`, replaces
-`conversations.json` (see [The session store](#the-session-store)).
+Running state, never committed, lives in `.wheems/`: the control socket, logs, the session store
+(`.wheems/state.sqlite`, which replaced `conversations.json`; see
+[The session store](#the-session-store)), the filer's working copies, the search indexes
+(`.wheems/index/`) and what waits for review (`.wheems/review/`).
 
 Agents are told never to write into `knowledge/` or `about-you.md` themselves; that's an
 instruction, not a lock, until permission rules arrive (milestone 6). They write notes with
@@ -334,9 +334,10 @@ app may, and otherwise tells you to create it and invite the app; doctor checks 
 
 ## Sessions
 
-Planned, milestone 3, built first in it. Wheems keeps a record of every agent session it runs:
-which workspace, project and agent it belongs to, who started it, what it's for and what state
-it's in. That lets the service pick up after a restart, and lets a chief find the right session
+Milestone 3, built first in it. The session store is built; the `wheems session` commands, a
+Slack thread per ad-hoc session and `send` come next. Wheems keeps a record of every agent
+session it runs: which workspace, project and agent it belongs to, who started it, what it's for
+and what state it's in. That lets the service pick up after a restart, and lets a chief find the right session
 to talk to. Two kinds of thing are recorded:
 
 - **Standing agents**: each workspace's chief and, from milestone 4, each project's lead. One row
@@ -450,6 +451,14 @@ does.
   becomes stopped, still resumable; a Herdr session with a Wheems label and no row is reported by
   doctor and left alone, never adopted or removed. This is how a running session is picked up
   again after a restart and never started twice.
+  - Rows are matched by the Herdr session's name, which Wheems chooses and which outlives its
+    address. `hc ls` doesn't report labels, so the Herdr driver reads them with `hc get`.
+  - Runs that aren't sessions in the store keep labels of their own: the filer's
+    (`wheems=filer`, until it becomes a task in milestone 5) and doctor's test session
+    (`wheems=doctor`). Thread sessions started before the store carry `wheems=conversation` and
+    are known by their name.
+  - A thread session is working while messages wait for answers and idle when none do; stopped
+    and ended come from Herdr and from ending one, never from a message.
 - **Only the service writes to it.** The CLI and agents go through the control socket, as they do
   now, so there's one writer and every change passes the same checks.
 - **Ids, states and short text, not content.** Messages, briefs, results and notes stay as files
@@ -459,17 +468,23 @@ does.
   workspace, and `max_sessions` counts across workspaces. The workspace filter lives in one module,
   like `hc` calls do.
 - **Migrations in code.** The schema version is kept in `PRAGMA user_version` and migrations run at
-  service start. On the first start, `.wheems/conversations.json` is imported and renamed
-  `conversations.json.imported`.
+  service start; a store from a newer Wheems is refused rather than written to. On the first
+  start, `.wheems/conversations.json` is imported and renamed `conversations.json.imported`. An
+  import never replaces a thread already in the store, and a file that can't be read is left
+  where it is (its threads start afresh; doctor and the log say so).
+- **In code**, `src/state/store.ts` holds every query. Those made for a caller go through
+  `workspace(id)`, which filters each one by that workspace; the install-wide ones (writing
+  agents, the import, matching Herdr, routing chat threads, whose keys carry their workspace)
+  are the service's own.
 
-| Table (proposed)    | One row per                          | Holds                                                                                                                                                                                                    |
-| ------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `agents`            | Standing agent                       | Id (`acme/chief-of-staff`, `acme/reviews/lead`), workspace, project, role and engine, from config                                                                                                        |
-| `sessions`          | Session Wheems started               | Id, workspace, project, agent, kind (`thread`, `adhoc`, `task`), owner, parent, title, purpose, summary, state, Herdr address, engine session id, folder, and when it started, was last active and ended |
-| `threads`           | Chat thread                          | Connection, channel and thread, the session it belongs to, and what `conversations.json` keeps per thread today: the answer position, the waiting count and the note state                               |
-| `messages`          | Message sent between sessions        | Sender, receiver, the files holding the message and its answer, state and times                                                                                                                          |
-| `tasks`, `attempts` | Task and attempt (milestone 5)       | See [How a task runs](#how-a-task-runs)                                                                                                                                                                  |
-| `session_search`    | Session, in a full-text search index | Title, purpose, summary, agent and project                                                                                                                                                               |
+| Table               | One row per                          | Holds                                                                                                                                                                                                 |
+| ------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`            | Standing agent                       | Id (`acme/chief-of-staff`, `acme/reviews/lead`), workspace, project, role and engine, from config                                                                                                     |
+| `sessions`          | Session Wheems started               | Id, workspace, project, agent, kind (`thread`, `adhoc`, `task`), owner, parent, title, purpose, summary, state, Herdr name, engine session id, folder, and when it started, was last active and ended |
+| `threads`           | Chat thread                          | Connection, channel and thread, the session it belongs to, and what `conversations.json` kept per thread: the answer position, the waiting count and the note state                                   |
+| `messages`          | Message sent between sessions        | Sender, receiver, the files holding the message and its answer, state and times                                                                                                                       |
+| `tasks`, `attempts` | Task and attempt (milestone 5)       | See [How a task runs](#how-a-task-runs)                                                                                                                                                               |
+| `session_search`    | Session, in a full-text search index | Title, purpose, summary, agent and project                                                                                                                                                            |
 
 ## Tasks
 

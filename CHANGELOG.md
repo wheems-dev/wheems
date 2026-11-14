@@ -14,9 +14,19 @@ change anything, including commands and config formats, without a migration path
   `wheems service`, which keeps `install`, `uninstall` and `run`.
 - Leaving `wheems setup` with a chat channel and no service running asks whether to start it,
   rather than leaving messages to go unanswered.
+- The session store, `.wheems/state.sqlite`: a record of each workspace's chief and of every
+  session the service runs, kept with Node's built-in SQLite. It replaces `conversations.json`,
+  which the service imports the first time it starts and renames `conversations.json.imported`.
+  When the service starts, a session whose Herdr session has gone is marked stopped, and resumes
+  when it's next needed. It's the first step towards `wheems session` in milestone 3.
+- `wheems doctor` reports a Herdr session with a Wheems label that the session store has no
+  record of, and a `conversations.json` still waiting to be imported.
 
 **Changed**
 
+- Sessions the service starts are labelled `wheems=<session id>` in Herdr, instead of
+  `wheems=conversation`. Making room for a new session only stops sessions the store knows.
+- The Herdr driver's `list()` reports each session's labels, which `hc ls` leaves out.
 - Claude Code and Codex are asked to trust the install folder once, instead of each workspace's
   folder. A trusted folder covers the folders in it, so this covers every workspace, including
   ones added later. Setup and `wheems init` skip the question when the engine already trusts it,
