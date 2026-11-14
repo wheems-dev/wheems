@@ -14,7 +14,7 @@ import { conversationKey, uuidFor } from '../src/service/conversations.js';
 import { runService, type RunningService } from '../src/service/service.js';
 import { StateStore, type SessionRecord } from '../src/state/store.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
-import { fakeAgent } from './helpers/fake-agent.js';
+import { fakeAgent, type Behaviour } from './helpers/fake-agent.js';
 
 describe('wheems session', () => {
   let home: string;
@@ -24,6 +24,8 @@ describe('wheems session', () => {
   let service: RunningService | undefined;
   let received: Map<string, string[]>;
   let answers: Map<string, FinalMessage[]>;
+  /** What the agent does with each message: tests may change it. */
+  let behave: (line: string) => Behaviour;
 
   /** Runs a `wheems` command, as the person or (with `as`) inside a session. */
   const wheems = async (args: string[], as: Record<string, string> = {}, stdin = '') => {
@@ -115,12 +117,13 @@ describe('wheems session', () => {
     await initWorkspace({ home, id: 'personal' });
     await writeSecret(env.WHEEMS_SECRETS!, 'slack', { bot_token: 'x', app_token: 'y' });
     channel = new MemoryChannel();
+    // Chat messages are answered with wheems reply; everything else with a final answer.
+    behave = (line) => (line.startsWith('hello') ? 'reply' : 'answer');
     received = new Map();
     answers = new Map();
     runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
-        // Chat messages are answered with wheems reply; everything else with a final answer.
-        behaviour: (line) => (line.startsWith('hello') ? 'reply' : 'answer'),
+        behaviour: (line) => behave(line),
         reply: async (conversation, text) => {
           const result = await wheems(['reply', text], { WHEEMS_CONVERSATION: conversation });
           if (result.code !== 0) throw new Error(result.err);
@@ -218,7 +221,9 @@ describe('wheems session', () => {
     // A new thread's session was told about it at launch.
     const instructions = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
     expect(instructions).toContain('### Your open sessions');
-    expect(instructions).toContain(`\`${created.id}\` packaging (working): research packaging`);
+    expect(instructions).toMatch(
+      new RegExp(`\`${created.id}\` packaging \\((working|idle)\\): research packaging`),
+    );
   });
 
   it('limits open sessions per owner and how deep sessions may start sessions', async () => {
@@ -398,6 +403,9 @@ describe('wheems session', () => {
     expect(await stored((s) => s.workspace('personal').session(session.id)?.engineSessionId)).toBe(
       'own-1',
     );
+    // Its answer to a message is the one after the answers it had.
+    const sent = await wheems(['session', 'send', session.id, 'And prices.', '--wait']);
+    expect(sent.out).toBe('answer: Wheems: message from the person:\n\nAnd prices.\n');
     const ended = await wheems(['session', 'end', session.id]);
     expect(ended.out).toContain('It wrote its note and has ended.');
   });
@@ -431,6 +439,241 @@ describe('wheems session', () => {
       'can only act in its own workspace',
     );
     expect((await wheems(['session', 'list'])).err).toContain('Say which workspace');
+  });
+  describe('send', () => {
+    /** Waits until a session has answered its purpose and is idle. */
+    const settled = async (id: string) => {
+      await waitFor(
+        async () => (await stored((s) => s.workspace('personal').session(id)?.state)) === 'idle',
+      );
+    };
+
+    it('waits for the answer, and keeps the message and its answer', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      const sent = await wheems(['session', 'send', session.id, 'Add delivery times.', '--wait']);
+      expect(sent.err).toBe('');
+      expect(sent.out).toBe('answer: Wheems: message from the person:\n\nAdd delivery times.\n');
+
+      const messages = await stored((s) => s.workspace('personal').messages(session.id));
+      expect(messages[0]).toMatchObject({ sender: null, receiver: session.id, state: 'answered' });
+      expect(readFileSync(messages[0]!.messageFile, 'utf8')).toBe('Add delivery times.\n');
+      expect(readFileSync(messages[0]!.answerFile!, 'utf8')).toContain('Add delivery times.');
+      // Its purpose is its first message.
+      expect(messages[1]).toMatchObject({ sender: null, state: 'answered' });
+
+      const show = await wheems(['session', 'show', session.id]);
+      expect(show.out).toContain('Recent messages:');
+      expect(show.out).toContain('from the person');
+      expect(show.out).toContain('answered: Add delivery times.');
+    });
+
+    it("hands answers back to a chief's conversation, which answers on its channel", async () => {
+      const chief = await chiefThread();
+      const before = channel.sent.length;
+      const created = await newSession('packaging', chief);
+      // The purpose's answer comes back to the thread that started it, as a message from Wheems.
+      const told = `Wheems: answer from session ${created.id} ("packaging"):`;
+      const heard = () => [...received.values()].flat().filter((l) => l.startsWith(told));
+      await waitFor(() => heard().length === 1);
+      await waitFor(() => channel.sent.length > before);
+
+      const sent = await wheems(['session', 'send', created.id, 'And prices.'], chief);
+      expect(sent.out).toContain('Its answer will come to you in this conversation');
+      await waitFor(() => heard().length === 2);
+      expect(heard()[1]).toContain('Wheems: message from chief-of-staff:');
+    });
+
+    it('resumes a stopped session first', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      const herdr = await runtime.get(session.herdrName!);
+      await runtime.stop(herdr!.id);
+      await runtime.remove(herdr!.id);
+      expect((await wheems(['session', 'list', '--json'])).out).toContain('"state": "stopped"');
+
+      const sent = await wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      expect(sent.err).toBe('');
+      expect(sent.out).toContain('Carry on.');
+      expect((await runtime.get(session.herdrName!))?.state).toBe('live');
+      expect((await wheems(['session', 'show', session.id, '--json'])).out).toContain(
+        '"state": "idle"',
+      );
+    });
+
+    it('lets a session send only to its owner and the sessions it owns', async () => {
+      const one = await newSession('one');
+      const two = await newSession('two');
+      await settled(one.id);
+      const asOne = { WHEEMS_SESSION: one.id };
+      const sideways = await wheems(['session', 'send', two.id, 'hi'], asOne);
+      expect(sideways.err).toContain('only send to its owner and to the sessions it owns');
+      // The person started it, so there's no owner to send to.
+      expect((await wheems(['session', 'send', 'owner', 'hi'], asOne)).err).toContain(
+        'no owner to send to',
+      );
+      const child = await newSession('child', asOne);
+      await settled(child.id);
+      expect((await wheems(['session', 'send', child.id, 'go', '--wait'], asOne)).err).toBe('');
+      expect(
+        (await wheems(['session', 'send', 'owner', 'done', '--wait'], { WHEEMS_SESSION: child.id }))
+          .err,
+      ).toBe('');
+      expect((await wheems(['session', 'send', one.id, 'hi'], asOne)).err).toContain(
+        "can't send to itself",
+      );
+    });
+
+    it("tells a chief's thread what its session sends to its owner, never with a wait", async () => {
+      const chief = await chiefThread();
+      const created = await newSession('packaging', chief);
+      await settled(created.id);
+      const asIt = { WHEEMS_SESSION: created.id };
+      expect(
+        (await wheems(['session', 'send', 'owner', 'Found one.', '--wait'], asIt)).err,
+      ).toContain("can't wait");
+      const sent = await wheems(['session', 'send', 'owner', 'Found one.'], asIt);
+      expect(sent.err).toBe('');
+      await waitFor(() =>
+        [...received.values()]
+          .flat()
+          .some((l) => l.startsWith(`Wheems: message from session ${created.id}`)),
+      );
+      // The person's own chats aren't for sending to.
+      expect((await wheems(['session', 'send', chief.WHEEMS_SESSION!, 'hi'])).err).toContain(
+        'a conversation with the person',
+      );
+    });
+
+    it('refuses a wait that would make two sessions wait on each other', async () => {
+      const parent = await newSession('parent');
+      await settled(parent.id);
+      const asParent = { WHEEMS_SESSION: parent.id };
+      const child = await newSession('child', asParent);
+      await settled(child.id);
+      behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+      const waiting = wheems(['session', 'send', child.id, 'Work slowly.', '--wait'], asParent);
+      await waitFor(async () =>
+        (await stored((s) => s.workspace('personal').messages(child.id))).some(
+          (m) => m.state === 'sent',
+        ),
+      );
+      const back = await wheems(['session', 'send', 'owner', 'Quick question', '--wait'], {
+        WHEEMS_SESSION: child.id,
+      });
+      expect(back.err).toContain('is waiting on you');
+      expect((await waiting).out).toContain('Work slowly.');
+      // Once the wait is over, it may.
+      const after = await wheems(['session', 'send', 'owner', 'Thanks', '--wait'], {
+        WHEEMS_SESSION: child.id,
+      });
+      expect(after.err).toBe('');
+    });
+
+    it('lets only one of two crossing waits through', async () => {
+      const parent = await newSession('parent');
+      await settled(parent.id);
+      const asParent = { WHEEMS_SESSION: parent.id };
+      const child = await newSession('child', asParent);
+      await settled(child.id);
+      behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+      const results = await Promise.all([
+        wheems(['session', 'send', child.id, 'Work slowly.', '--wait'], asParent),
+        wheems(['session', 'send', 'owner', 'Work slowly too.', '--wait'], {
+          WHEEMS_SESSION: child.id,
+        }),
+      ]);
+      expect(results.filter((r) => r.err.includes('is waiting on you'))).toHaveLength(1);
+      expect(results.filter((r) => r.err === '')).toHaveLength(1);
+    });
+
+    it('stops a session whose turn is cut short, so a late answer is never the next one', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('permission') ? 'block' : 'answer');
+      const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
+      expect(blocked.err).toContain(
+        'it was waiting for an answer at the Mac, so Wheems stopped it',
+      );
+      expect(await stored((s) => s.workspace('personal').session(session.id)?.state)).toBe(
+        'stopped',
+      );
+      // The next message resumes it, and gets its own answer.
+      const next = await wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      expect(next.out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
+    it("holds the next message while a turn it couldn't stop is unfinished", async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('permission') ? 'block' : 'answer');
+      const stop = runtime.stop.bind(runtime);
+      runtime.stop = () => Promise.reject(new Error("Herdr didn't answer"));
+      const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
+      expect(blocked.err).toContain("couldn't be stopped");
+      // Until it can be stopped, the next message waits rather than joining that turn, even
+      // while Herdr can't say how the session is.
+      const latest = async () =>
+        (await stored((s) => s.workspace('personal').messages(session.id)))[0]?.state;
+      const get = runtime.get.bind(runtime);
+      runtime.get = () => Promise.reject(new Error("Herdr didn't answer"));
+      const next = wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      await new Promise((r) => setTimeout(r, 300));
+      expect(await latest()).toBe('sent');
+      runtime.get = get;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(await latest()).toBe('sent');
+      runtime.stop = stop;
+      expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
+    it('stops or holds a turn it lost track of, so its late answer is never the next one', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      behave = (line) => (line.includes('slowly') ? 'slow-answer' : 'answer');
+      const get = runtime.get.bind(runtime);
+      const stop = runtime.stop.bind(runtime);
+      const first = wheems(['session', 'send', session.id, 'Work slowly.', '--wait']);
+      await waitFor(async () =>
+        (await stored((s) => s.workspace('personal').messages(session.id))).some(
+          (m) => m.state === 'sent',
+        ),
+      );
+      // Herdr stops answering while the turn is followed, and the session can't be stopped.
+      runtime.get = () => Promise.reject(new Error("Herdr didn't answer"));
+      runtime.stop = () => Promise.reject(new Error("Herdr didn't answer"));
+      expect((await first).err).toContain("Herdr didn't answer");
+      const next = wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      await new Promise((r) => setTimeout(r, 100));
+      runtime.get = get;
+      runtime.stop = stop;
+      // The slow turn's late answer belongs to the first message, not this one.
+      expect((await next).out).toBe('answer: Wheems: message from the person:\n\nCarry on.\n');
+    });
+
+    it('keeps an answer it could not hand back, as a failed message', async () => {
+      const parent = await newSession('parent');
+      await settled(parent.id);
+      const asParent = { WHEEMS_SESSION: parent.id };
+      // The parent can't take the answer in: it stops to ask for permission.
+      behave = (line) => (line.startsWith('Wheems: answer from') ? 'block' : 'answer');
+      const child = await newSession('child', asParent);
+      await waitFor(async () =>
+        (await stored((s) => s.workspace('personal').messages(parent.id))).some(
+          (m) => m.sender === child.id && m.state === 'failed',
+        ),
+      );
+      const show = await wheems(['session', 'show', parent.id]);
+      expect(show.out).toContain(`from ${child.id}`);
+      expect(show.out).toContain('failed: Wheems: answer from session');
+    });
+
+    it('refuses messages to an ended session', async () => {
+      const session = await newSession('packaging');
+      await settled(session.id);
+      expect((await wheems(['session', 'end', session.id])).err).toBe('');
+      expect((await wheems(['session', 'send', session.id, 'hi'])).err).toContain('has ended');
+    });
   });
 });
 

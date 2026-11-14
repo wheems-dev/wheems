@@ -161,6 +161,70 @@ export function registerSession(program: Command, io: Io): void {
     });
 
   session
+    .command('send')
+    .description(
+      'Send a message into a session, resuming it if it has stopped; its answer comes back to you',
+    )
+    .argument('<id>', "the session's id, or owner for your own owner (inside a session)")
+    .argument('[text...]', 'the message; "-" or nothing reads it from standard input')
+    .option('--wait', 'wait for its answer and print it (up to --timeout)')
+    .option(
+      '--timeout <seconds>',
+      'how long --wait waits; after that the answer comes back as without --wait',
+      '600',
+    )
+    .option('--workspace <id>', workspaceHelp)
+    .option('--json', 'print the result as JSON')
+    .option('--home <dir>', homeHelp)
+    .action(
+      async (
+        id: string,
+        words: string[],
+        options: {
+          wait?: boolean;
+          timeout: string;
+          workspace?: string;
+          json?: boolean;
+          home?: string;
+        },
+      ) => {
+        const seconds = Number(options.timeout);
+        if (!Number.isInteger(seconds) || seconds < 1 || seconds > 3600) {
+          throw new Error('--timeout is a whole number of seconds, from 1 to 3600');
+        }
+        const text = (
+          words.length === 0 || (words.length === 1 && words[0] === '-')
+            ? await io.stdin()
+            : words.join(' ')
+        ).trim();
+        if (text === '') throw new Error('Nothing to send.');
+        const wait = options.wait === true;
+        const answer = await ask(
+          options,
+          {
+            op: 'session-send',
+            caller: callerFrom(io.env, options.workspace),
+            id,
+            text,
+            ...(wait && { wait: true, wait_seconds: seconds }),
+          },
+          // Resuming a stopped session can take its start-up time; a wait, as long as it waits.
+          (wait ? seconds : 0) * 1000 + 180_000,
+        );
+        if (options.json === true) {
+          const { ok: _ok, ...rest } = answer;
+          io.out(`${JSON.stringify(rest, null, 2)}\n`);
+          return;
+        }
+        if (answer.answer !== undefined) {
+          io.out(`${answer.answer.trim()}\n`);
+          return;
+        }
+        io.out(`Sent to ${id}. ${answer.message ?? ''}\n`);
+      },
+    );
+
+  session
     .command('end')
     .description('End an ad-hoc session you own: it is asked for its note first')
     .argument('<id>', "the session's id")
@@ -224,6 +288,13 @@ export function formatDetails(details: SessionDetails, now: number): string {
   if (s.purpose !== null) lines.push('', 'Purpose:', s.purpose);
   if (s.summary !== null && s.summary !== s.purpose) lines.push('', `Summary: ${s.summary}`);
   if (details.latestAnswer !== null) lines.push('', 'Latest answer:', details.latestAnswer.trim());
+  if (details.messages.length > 0) {
+    lines.push('', 'Recent messages:');
+    for (const m of details.messages) {
+      const way = m.receiver === s.id ? `from ${m.sender ?? 'the person'}` : `to ${m.receiver}`;
+      lines.push(`- ${way}, ${since(m.sentAt, now)} ago, ${m.state}: ${m.preview}`);
+    }
+  }
   if (details.runtimeId !== null) lines.push('', `Watch it: hc attach ${details.runtimeId}`);
   return `${lines.join('\n')}\n`;
 }

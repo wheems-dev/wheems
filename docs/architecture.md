@@ -335,7 +335,7 @@ app may, and otherwise tells you to create it and invite the app; doctor checks 
 ## Sessions
 
 Milestone 3, built first in it. The session store and `wheems session new`, `list`, `search`,
-`show` and `end` are built; `send` comes next. Wheems keeps a record of every agent session it
+`send`, `show` and `end` are built. Wheems keeps a record of every agent session it
 runs: which workspace, project and agent it belongs to, who started it, what it's for and what
 state it's in. That lets the service pick up after a restart, and lets a chief find the right
 session to talk to. Two kinds of thing are recorded:
@@ -407,13 +407,38 @@ results.
 
 ### Talking to another session
 
-`wheems session send <id> "<message>"` delivers a message into an existing session, resuming it
-first if it was stopped. With `--wait` the caller gets the answer back (up to a timeout);
-without, the answer is typed into the caller's own session as a message from that session. A
-chief's thread session then answers in its own conversation, on whatever channel that is.
+`wheems session send <id> "<message>"` delivers a message into an ad-hoc session, resuming it
+first if it was stopped: Herdr starts it again, and its engine resumes the conversation. The
+message arrives as `Wheems: message from <sender>:` and the text.
 
-Until tasks arrive, a send is a plain message and its answer, both kept as files and recorded in
-the store. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
+- **With `--wait`** the caller gets the answer back from the command, up to `--timeout` (ten
+  minutes by default, at most an hour). If it doesn't come in time, the command says so and the
+  answer comes back later as without `--wait`.
+- **Without**, the command returns at once, and the answer goes back to the sender when it comes,
+  as `Wheems: answer from session <id> ("<title>"):` and the answer: typed into an ad-hoc sender,
+  or handed to a chief's conversation (the conversation manager's `tell`), which answers in its
+  own thread, on whatever channel that is. A message from Wheems is delivered, queued and
+  followed like the person's, but there's nothing to mark as seen. The person's answers are only
+  kept, for `wheems session show`. If the session doesn't answer within an hour, or it can't
+  be resumed, the sender is told why instead. An answer handed back is itself kept as a message
+  from the session that answered, so one that can't be delivered isn't lost.
+- **A session's purpose is its first message**, from whoever started it, so the answer to it
+  goes back to its starter in the same way: a chief hears what came of a session it started
+  without asking.
+- **One message at a time.** Each ad-hoc session has an inbox: a message is typed in once the one
+  before has been answered, and its answer is the session's answers since it was typed, so
+  answers are never mixed up between senders. A turn that doesn't finish (no answer within an
+  hour, or stuck waiting for an answer at the Mac) is stopped, so a late answer can't be taken for
+  the next message's; the next message resumes the session. If it can't be stopped, nothing more
+  is typed into it until that turn is over, or a later try to stop it works. Answers handed back to an ad-hoc session queue in
+  its inbox in the same way.
+- **An ad-hoc session can send to its owner** with `wheems session send owner "…"`, to tell it
+  something unasked, such as what came of work it handed on. For a chief, that's the thread that
+  started it, never with a wait: the chief answers in its own conversation, in its own time.
+
+A send is a plain message and its answer, both kept as files under
+`.wheems/messages/<workspace>/` and recorded in the store's `messages` table. A message still
+waiting for its answer when the service stops is marked failed when it next starts. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
 `task.md`) instead of a fresh one, so the task stays the one hand-off: a brief, a result, the same
 checks and the same run record. The only difference is that the session receiving it keeps its
 context.
@@ -423,16 +448,19 @@ context.
 - **Within one workspace only.** A session can't find, see or message another workspace's
   sessions. Every query is filtered by the caller's workspace in one place in code, taken from
   who's calling, never from an argument.
-- **Who may send to whom.** A chief may send to any session in its workspace, and a lead to any
-  session in its project. Any other session may send to its owner and to the sessions it owns.
-  You may send to any of them from a terminal.
+- **Who may send to whom.** A chief may send to any ad-hoc session in its workspace, and (from
+  milestone 4) a lead to any in its project. Any other session may send to its owner and to the
+  sessions it owns. You may send to any ad-hoc session from a terminal. A chief's thread sessions
+  are conversations with you: only the sessions a thread started can send to it, and you talk to
+  it in its chat. A session can't send to itself, or to an ended one.
 - **Limits, so sessions can't multiply or loop.** `max_open_per_owner` (3 by default) caps the
   open (not ended) ad-hoc sessions one owner has. `max_depth` (2 by default) counts levels of
   ad-hoc sessions: one a chief's thread or you start is at level 1, one it starts at level 2, and
   none may start past `max_depth`. `max_sessions` per account (in `install.yaml`) counts every
   running session of every kind, in every workspace, as Herdr reports them; until tasks queue in
-  milestone 5, `session new` beyond it is refused. A `--wait` send to a session that's already
-  waiting on the sender is refused, so two sessions can't wait on each other.
+  milestone 5, `session new` beyond it, or resuming a stopped session beyond it, is refused.
+  **No two sessions wait on each other:** a `--wait` send to a session that's waiting on the
+  sender, directly or through others waiting in a chain, is refused, since neither could answer.
 - **Who's calling.** The control socket knows the caller by the session id Wheems put in its
   environment at launch (`WHEEMS_SESSION`; thread sessions started before it had one are known by
   `WHEEMS_CONVERSATION`). That's convenience, not proof, on a machine with one person; the
@@ -450,9 +478,10 @@ sessions:
 ### States and lifetimes
 
 An ad-hoc session is **starting**, **working**, **idle**, **stopped** (its Herdr session has gone,
-and its engine session can be resumed) or **ended**. An idle one may be stopped to make room, least
-recently used first, as thread sessions are today, and is resumed when it's next sent a message.
-Its state is brought up to date from Herdr whenever sessions are listed, searched or shown.
+and its engine session can be resumed) or **ended**. It's working from when a message is typed
+in until its answer comes, and idle after; a stopped one is resumed when it's next sent a
+message. Between messages, its state is brought up to date from Herdr whenever sessions are
+listed, searched or shown.
 
 `wheems session end <id>`, run by its owner or you, or (planned) `end_after_idle`, ends one:
 Wheems asks it for its note first, as it does before stopping a session today, and gives it up
@@ -460,18 +489,18 @@ to ten minutes, then stops it and marks it ended. A stopped session is ended wit
 ended session stays in the store and in search as a record, but can't be sent messages.
 
 An ad-hoc session's answers are never posted anywhere. The agent's last message of each turn is
-its answer: its engine keeps it, `wheems session show` displays the latest, and from `send` on,
-it goes back to whoever sent the message. `wheems reply`, which posts into a chat, is refused
+its answer: its engine keeps it, `wheems session show` displays the latest, and it goes back to
+whoever sent the message. `wheems reply`, which posts into a chat, is refused
 inside an ad-hoc session and tells it to answer its owner instead.
 
-| Command                                                              | What it does                                                               |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, prints its id                |
-| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                         |
-| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                |
-| `wheems session send <id> "<message>" [--wait]` (next)               | Sends a message into a session and returns its answer                      |
-| `wheems session show <id>`                                           | Its details, latest answer (recent messages next) and the `hc attach` line |
-| `wheems session end <id>`                                            | Asks for its note, then ends it                                            |
+| Command                                                              | What it does                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, prints its id                         |
+| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                                  |
+| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                         |
+| `wheems session send <id> "<message>" [--wait] [--timeout]`          | Sends a message into a session; its answer comes back, or with `--wait` is returned |
+| `wheems session show <id>`                                           | Its details, latest answer, recent messages and the `hc attach` line                |
+| `wheems session end <id>`                                            | Asks for its note, then ends it                                                     |
 
 The agent is any agent in the workspace's `agents/` (or, from milestone 4, the project's team); with
 none named, the session runs the owner's own agent file.

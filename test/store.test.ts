@@ -313,6 +313,33 @@ describe('session store', () => {
       expect(personal.session('id-personal-packaging')?.state).toBe('working');
     });
 
+    it('keeps messages in their workspace, finishes each once, and fails waiting ones at start', () => {
+      const personal = state.workspace('personal');
+      const message = (id: string, sentAt: string) =>
+        personal.addMessage({
+          id,
+          sender: 'id-personal-packaging',
+          receiver: 'id-personal-suppliers',
+          messageFile: `/m/${id}.md`,
+          sentAt,
+        });
+      message('m1', '2026-11-14T10:00:00.000Z');
+      message('m2', '2026-11-14T11:00:00.000Z');
+      personal.finishMessage('m1', 'answered', '/m/m1.answer.md', '2026-11-14T10:05:00.000Z');
+      // Once finished, it stays as it was.
+      personal.finishMessage('m1', 'failed', null, '2026-11-14T10:06:00.000Z');
+      expect(personal.message('m1')).toMatchObject({
+        state: 'answered',
+        answerFile: '/m/m1.answer.md',
+      });
+      expect(personal.messages('id-personal-packaging').map((m) => m.id)).toEqual(['m2', 'm1']);
+      expect(personal.messages('id-personal-suppliers', 1).map((m) => m.id)).toEqual(['m2']);
+      expect(state.workspace('acme').message('m1')).toBeUndefined();
+      expect(state.workspace('acme').messages('id-personal-packaging')).toEqual([]);
+      expect(state.failWaitingMessages('2026-11-14T12:00:00.000Z')).toBe(1);
+      expect(personal.message('m2')?.state).toBe('failed');
+    });
+
     it('searches by agent within the workspace only', () => {
       expect(
         state

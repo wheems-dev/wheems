@@ -370,14 +370,50 @@ export class ConversationManager {
     await Promise.allSettled([...this.watchers]);
   }
 
+  /**
+   * Hands a message from Wheems, not the person, to a conversation's session, such as the
+   * answer from an ad-hoc session it sent work to. It's delivered after anything queued for
+   * the conversation, resuming the session if it has stopped, and the agent's answer is
+   * posted to the conversation's thread as any answer is.
+   */
+  tell(key: string, text: string): Promise<void> {
+    return this.options.store.get(key).then((conversation) => {
+      if (!conversation) throw new Error(`No conversation ${key}`);
+      const binding = this.bindingFor(conversation);
+      if (!binding) throw new Error(`Conversation ${key}'s workspace or connection isn't running`);
+      const event: InboundEvent & { type: 'message' } = {
+        type: 'message',
+        channel: conversation.channel,
+        messageId: conversation.thread,
+        threadId: conversation.thread,
+        userId: '',
+        text,
+        direct: false,
+        receivedAt: new Date(),
+      };
+      return this.enqueue(key, () =>
+        this.deliver(key, binding, event, null).catch((error: unknown) => {
+          this.options.log(`Conversation ${key}: ${describe(error)}`);
+          return this.notice(
+            key,
+            binding,
+            conversation.thread,
+            `Something went wrong passing a message on to the agent: ${describe(error)}`,
+          );
+        }),
+      );
+    });
+  }
+
   private async deliver(
     key: string,
     binding: Binding,
     event: InboundEvent & { type: 'message' },
+    /** The person's message, to mark as seen; null for a message from Wheems. */
+    seen: MessageRef | null = { channel: event.channel, messageId: event.messageId },
   ): Promise<void> {
     const channel = this.channel(binding.connection);
-    const seen = { channel: event.channel, messageId: event.messageId };
-    if (channel.capabilities.reactions)
+    if (seen && channel.capabilities.reactions)
       await channel.react(seen, 'eyes', true).catch(() => undefined);
 
     let existing = await this.options.store.get(key);
@@ -422,7 +458,7 @@ export class ConversationManager {
         );
       } catch (error) {
         if (!isDriverError(error, 'blocked')) throw error;
-        await this.unmark(channel, seen);
+        if (seen) await this.unmark(channel, seen);
         await this.notice(key, binding, replyThread(event), blockedText(session));
       }
       return;
@@ -432,7 +468,7 @@ export class ConversationManager {
     const untrusted = await this.options.trustProblem(engineName, binding.workspace.dir);
     if (untrusted !== null) {
       this.options.log(`Conversation ${key}: not started, ${engineName} doesn't trust the folder`);
-      await this.unmark(channel, seen);
+      if (seen) await this.unmark(channel, seen);
       await this.notice(key, binding, replyThread(event), untrusted);
       return;
     }
@@ -610,8 +646,9 @@ export class ConversationManager {
     const active = this.watches.get(key);
     if (active && active.sessionName === sessionName && !active.closed) {
       // A turn is already being followed. The agent takes this message during that turn or
-      // in the next one, so it is followed into the next turn too.
-      if (seen) active.queued.push(seen);
+      // in the next one, so it is followed into the next turn too. A message from Wheems has
+      // nothing to mark, but is followed the same way.
+      active.queued.push(seen);
       return;
     }
     const watch: Watch = {

@@ -50,7 +50,11 @@ ${purpose}
 - Answer normally. When you finish working on a message, your last message is your answer, and
   Wheems passes it to whoever sent the message. Lead with the answer and keep it short. Don't use
   \`wheems reply\`: it is for chats with the person.
+- Messages from Wheems start with \`Wheems:\` and say who they're from, such as
+  \`Wheems: message from …\` or \`Wheems: answer from session …\`.
 - If you need a decision before going on, ask it and stop. The answer arrives as the next message.
+- To tell ${session.owner} something later, without being asked, such as what came of work you
+  handed on, send it: \`wheems session send owner "…"\`.
 - The first message may end with a tag like \`<wheems conversation="…"/>\`. It is for Wheems;
   ignore it and never repeat it.
 - You stay open until ${session.owner} or the person ends you, so you can be picked up again. When
@@ -85,7 +89,8 @@ answer simple things yourself.
   \`\`\`
 
 - Start one with a short title and a purpose that says what to do and what to hand back. It
-  starts working on the purpose at once, and \`new\` prints its id. It runs your own agent, or
+  starts working on the purpose at once, and \`new\` prints its id; its answer comes back to you
+  as a message from Wheems when it's done. It runs your own agent, or
   another of this workspace's agents when you name it first:
   \`wheems session new researcher --title …\`.
 
@@ -93,12 +98,23 @@ answer simple things yourself.
   wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
   \`\`\`
 
+- Talk to a session with \`wheems session send <id> "…"\`. It's resumed first if it has
+  stopped. Its answer comes back to you as a message from Wheems, starting
+  \`Wheems: answer from session …\`, so you can carry on meanwhile. Add \`--wait\` to wait for
+  the answer and get it back from the command instead, for quick questions: after ten minutes
+  (\`--timeout <seconds>\`) it comes back as without \`--wait\`. A chief may send to any ad-hoc
+  session in its workspace; an ad-hoc session only to the sessions it started and to its owner.
+
+  \`\`\`sh
+  wheems session send 3f2a… "Add delivery times to the shortlist."
+  \`\`\`
+
 - \`wheems session list\` shows this workspace's open sessions (\`--mine\` for yours),
   \`wheems session show <id>\` one session's details and latest answer, and
   \`wheems session end <id>\` ends one of yours once its work is done. It's asked for its note
   first.
-- Sessions never talk to the person: you do. Read a session's answers and tell the person what
-  they need to know, in your own conversation with them.
+- Sessions never talk to the person. Read a session's answers and pass on what matters: a chief
+  tells the person what they need to know, in its own conversation with them.
 - You may have ${String(options.maxOpen)} open at once. End the ones you're done with.
 - Titles and purposes appear in search. Never put passwords, tokens or other secrets in them.
 
