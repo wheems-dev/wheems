@@ -304,6 +304,15 @@ describe('session store', () => {
       );
     });
 
+    it('changes a session only from the state it was read in, when asked to', () => {
+      const personal = state.workspace('personal');
+      personal.update('id-personal-suppliers', { state: 'ended' });
+      personal.update('id-personal-suppliers', { state: 'idle' }, 'working');
+      expect(personal.session('id-personal-suppliers')?.state).toBe('ended');
+      personal.update('id-personal-packaging', { state: 'working' }, 'idle');
+      expect(personal.session('id-personal-packaging')?.state).toBe('working');
+    });
+
     it('searches by agent within the workspace only', () => {
       expect(
         state

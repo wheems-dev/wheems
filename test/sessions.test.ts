@@ -375,7 +375,8 @@ describe('wheems session', () => {
     await service?.stop();
     runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
-        behaviour: () => 'answer',
+        behaviour: (line) => (line.startsWith('research') ? 'slow-answer' : 'answer'),
+        slowMs: 300,
         reply: () => Promise.resolve(),
         reportsStatus: false,
         received,
@@ -384,6 +385,11 @@ describe('wheems session', () => {
     });
     await start({ ownIds: true, reportsStatus: false });
     const session = await newSession('packaging');
+    // No status, and no answer yet: still working.
+    expect((await wheems(['session', 'list', '--state', 'working'])).out).toContain(session.id);
+    await waitFor(async () =>
+      (await wheems(['session', 'list', '--state', 'idle'])).out.includes(session.id),
+    );
     await waitFor(async () =>
       (await wheems(['session', 'show', session.id])).out.includes(
         'Latest answer:\nanswer: research packaging',

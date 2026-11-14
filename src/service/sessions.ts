@@ -466,13 +466,23 @@ export class SessionService {
     const now = new Date().toISOString();
     for (const session of open) {
       const runtime = live.get(session.herdrName);
-      const state: SessionState =
-        runtime === undefined ? 'stopped' : runtime.status === 'working' ? 'working' : 'idle';
+      let state: SessionState = session.state;
+      if (runtime === undefined) state = 'stopped';
+      else if (runtime.status === 'working') state = 'working';
+      else if (runtime.status !== null) state = 'idle';
+      else if (!this.engineOf(caller, session).capabilities.status) {
+        // An engine that reports no status has finished its turn once its answer is there.
+        // This milestone only follows its first turn; its Slack thread will follow the rest.
+        const answered = (await this.answers(caller, session, null).catch(() => [])).length > 0;
+        state = answered ? 'idle' : 'working';
+      }
       if (state === session.state) continue;
-      sessions.update(session.id, {
-        state,
-        ...(session.state === 'working' && state === 'idle' && { lastActiveAt: now }),
-      });
+      // Only if nothing changed it meanwhile, such as wheems session end.
+      sessions.update(
+        session.id,
+        { state, ...(session.state === 'working' && state === 'idle' && { lastActiveAt: now }) },
+        session.state,
+      );
     }
   }
 

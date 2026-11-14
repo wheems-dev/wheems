@@ -567,8 +567,12 @@ export class WorkspaceSessions {
     return created;
   }
 
-  /** Changes a session in this workspace. Does nothing for one that isn't here. */
-  update(id: string, change: SessionChange): void {
+  /**
+   * Changes a session in this workspace. Does nothing for one that isn't here, or, with
+   * `ifState`, for one no longer in that state, so a change worked out from an earlier read
+   * never overwrites a newer one.
+   */
+  update(id: string, change: SessionChange, ifState?: SessionState): void {
     const columns: [string, SQLInputValue | undefined][] = [
       ['state', change.state],
       ['summary', change.summary],
@@ -583,9 +587,14 @@ export class WorkspaceSessions {
     if (set.length === 0) return;
     this.db
       .prepare(
-        `UPDATE sessions SET ${set.map(([column]) => `${column} = ?`).join(', ')} WHERE workspace = ? AND id = ?`,
+        `UPDATE sessions SET ${set.map(([column]) => `${column} = ?`).join(', ')} WHERE workspace = ? AND id = ?${ifState !== undefined ? ' AND state = ?' : ''}`,
       )
-      .run(...set.map(([, value]) => value ?? null), this.workspace, id);
+      .run(
+        ...set.map(([, value]) => value ?? null),
+        this.workspace,
+        id,
+        ...(ifState !== undefined ? [ifState] : []),
+      );
   }
 
   /** How many ad-hoc sessions an owner (null for the person) has open: not ended. */
