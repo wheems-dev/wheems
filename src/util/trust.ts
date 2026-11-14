@@ -81,6 +81,8 @@ export function codexTrustedFolders(toml: string): { trusted: Set<string>; unsur
     const header = PROJECT_HEADER.exec(line);
     if (header) {
       current = tomlString(header[1] ?? '""');
+      // A folder name this can't decode may be one that is trusted.
+      if (current === null) unsure = true;
       continue;
     }
     if (/^\s*\[/.test(line)) {
@@ -100,9 +102,35 @@ export function codexTrustedFolders(toml: string): { trusted: Set<string>; unsur
   return { trusted, unsure };
 }
 
-function tomlString(quoted: string): string {
+/** A TOML string's value, or null when it has an escape that isn't valid TOML. */
+export function tomlString(quoted: string): string | null {
   const body = quoted.slice(1, -1);
-  return quoted.startsWith("'") ? body : body.replace(/\\(.)/g, '$1');
+  if (quoted.startsWith("'")) return body;
+  const simple: Record<string, string> = {
+    b: '\b',
+    t: '\t',
+    n: '\n',
+    f: '\f',
+    r: '\r',
+    e: '\x1b',
+    '"': '"',
+    '\\': '\\',
+  };
+  const invalid: string[] = [];
+  const value = body.replace(
+    /\\(u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|x[0-9A-Fa-f]{2}|.)/g,
+    (_match, escape: string) => {
+      if (escape.length > 1) {
+        const code = Number.parseInt(escape.slice(1), 16);
+        if (code <= 0x10ffff && (code < 0xd800 || code > 0xdfff)) return String.fromCodePoint(code);
+      } else if (simple[escape] !== undefined) {
+        return simple[escape];
+      }
+      invalid.push(escape);
+      return '';
+    },
+  );
+  return invalid.length === 0 ? value : null;
 }
 
 /**

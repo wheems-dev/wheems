@@ -102,11 +102,20 @@ export async function uninstallService(): Promise<void> {
 /** Unloads the service. Unloading one that isn't loaded is fine; failing to unload isn't. */
 async function bootout(): Promise<void> {
   const result = await runCommand('launchctl', ['bootout', `${domain()}/${LABEL}`]);
-  if (result.code !== 0 && (await serviceStatus()).loaded) {
-    throw new Error(
-      `launchctl bootout failed, so the service is still running: ${result.stderr.trim()}`,
-    );
-  }
+  if (result.code === 0) return;
+  // It failed: fine only if launchd says plainly that it has no such job.
+  const print = await runCommand('launchctl', ['print', `${domain()}/${LABEL}`]);
+  if (jobAbsent(print)) return;
+  throw new Error(
+    print.code === 0
+      ? `launchctl bootout failed, so the service is still running: ${result.stderr.trim()}`
+      : `launchctl bootout failed, and launchd didn't say whether the service stopped: ${result.stderr.trim()}. Check with: wheems status`,
+  );
+}
+
+/** Whether `launchctl print` said the job doesn't exist (exit 113, "Could not find service"). */
+export function jobAbsent(print: { code: number | null; stdout: string; stderr: string }): boolean {
+  return print.code === 113 || /Could not find service/.test(`${print.stdout}${print.stderr}`);
 }
 
 /**

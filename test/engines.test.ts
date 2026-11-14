@@ -15,7 +15,7 @@ import {
   type OpencodeExport,
 } from '../src/drivers/engine/opencode.js';
 import { engineContract } from '../src/testing/index.js';
-import { codexTrustedFolders, codexTrusts } from '../src/util/trust.js';
+import { codexTrustedFolders, codexTrusts, tomlString } from '../src/util/trust.js';
 
 const FAKE_OPENCODE = fileURLToPath(new URL('./helpers/fake-opencode.mjs', import.meta.url));
 const onThisMac = process.env.CI === undefined;
@@ -307,6 +307,15 @@ describe('codex engine', () => {
         trusted: [],
         unsure: false,
       });
+      // Escapes are decoded as TOML decodes them; an invalid one leaves it unsure.
+      expect(read('[projects."/tmp/whe\\u0065ms"]\ntrust_level = "trusted"').trusted).toEqual([
+        '/tmp/wheems',
+      ]);
+      expect(read('[projects."/tmp/\\q"]\ntrust_level = "trusted"')).toEqual({
+        trusted: [],
+        unsure: true,
+      });
+      expect(tomlString(String.raw`"a\tb\\c\"d\U0001F600"`)).toBe('a\tb\\c"d😀');
       // Inline tables and dotted keys record trust in forms this doesn't read.
       expect(read('projects = { "/w" = { trust_level = "trusted" } }').unsure).toBe(true);
       expect(read('[projects]\n"/w".trust_level = "trusted"').unsure).toBe(true);

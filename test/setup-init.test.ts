@@ -13,7 +13,12 @@ import { StubEngine } from '../src/testing/index.js';
 import { crossCheck } from '../src/config/check.js';
 import { loadInstall } from '../src/config/load.js';
 import { readSecrets } from '../src/secrets.js';
-import { homeInPlist, parseLaunchctlPrint, renderPlist } from '../src/service/launchd.js';
+import {
+  homeInPlist,
+  jobAbsent,
+  parseLaunchctlPrint,
+  renderPlist,
+} from '../src/service/launchd.js';
 
 describe('wheems setup', () => {
   let root: string;
@@ -566,6 +571,16 @@ describe('wheems init', () => {
 });
 
 describe('launchd', () => {
+  it('counts a job as gone only when launchd says it has no such job', () => {
+    const notFound =
+      'Bad request.\nCould not find service "dev.wheems.service" in domain for user gui: 501\n';
+    expect(jobAbsent({ code: 113, stdout: '', stderr: notFound })).toBe(true);
+    expect(jobAbsent({ code: 1, stdout: notFound, stderr: '' })).toBe(true);
+    // A timeout or any other failure says nothing about whether it stopped.
+    expect(jobAbsent({ code: null, stdout: '', stderr: '' })).toBe(false);
+    expect(jobAbsent({ code: 5, stdout: '', stderr: 'Input/output error' })).toBe(false);
+  });
+
   it('reads back the install folder a plist was written for, so a restart keeps it', () => {
     const plist = renderPlist({
       node: '/opt/homebrew/opt/node@22/bin/node',
