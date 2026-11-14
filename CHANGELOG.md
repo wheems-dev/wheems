@@ -3,6 +3,38 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Added**
+
+- `wheems start`, `stop`, `restart`, `status` and `logs` look after the background service. `stop`
+  keeps it stopped, even after you log in again, until `wheems start`. `status` shows the version,
+  how long it has been up, and where each workspace chats, with what stops one from chatting (a
+  channel the app can't see or isn't in). `logs -f` keeps following the log. They're also under
+  `wheems service`, which keeps `install`, `uninstall` and `run`.
+- Leaving `wheems setup` with a chat channel and no service running asks whether to start it,
+  rather than leaving messages to go unanswered.
+
+**Changed**
+
+- Claude Code and Codex are asked to trust the install folder once, instead of each workspace's
+  folder. A trusted folder covers the folders in it, so this covers every workspace, including
+  ones added later. Setup and `wheems init` skip the question when the engine already trusts it,
+  and doctor's advice says the same.
+- When a message arrives for an engine that doesn't trust the folder, the service says so in the
+  thread at once, with the command to run, instead of starting a session that waits at the Mac
+  and saying so 90 seconds later.
+- `wheems restart` installs the service again, so it picks up a new copy of Wheems or Node.js
+  as well as new config, and waits until it answers.
+
+**Fixed**
+
+- Under launchd, the service took about ten seconds to start, because launchd throttles the CPU
+  and disk of a job that doesn't say what kind it is. It now runs as an interactive job and starts
+  in about a second. `wheems start` waits up to 30 seconds and, if it still doesn't answer, prints
+  the end of its log.
+- With nvm, the message for a Node.js too old for Wheems says how to make Node 22 the default.
+
 ## 0.0.3
 
 A new look for the cloud in the terminal, and clearer help when a Slack token is wrong. Still an

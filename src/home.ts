@@ -53,3 +53,11 @@ export function paths(home: string, env: NodeJS.ProcessEnv = process.env): Paths
         : join(configHome, 'wheems', 'secrets.json'),
   };
 }
+
+/** A path under the person's home folder written with ~, as they'd type it. */
+export function tilde(path: string, env: NodeJS.ProcessEnv = process.env): string {
+  const home = env.HOME;
+  return home !== undefined && home !== '' && path.startsWith(`${home}/`)
+    ? `~${path.slice(home.length)}`
+    : path;
+}

@@ -149,14 +149,21 @@ One Slack app serves every workspace, so you do this once.
 A workspace that chats in a channel needs the app in that channel: in the channel, type
 `/invite` and choose the app. Slack lists public channels the app isn't in, so a channel name
 that's spelt right can still hear nothing; the service warns at start-up and `wheems doctor`
-checks it. The service looks channels up when it starts, so after creating a channel or renaming
-one, run `wheems service restart`.
+checks it, and `wheems status` shows it while the service runs. The service looks channels up
+when it starts, so after creating a channel or renaming one, run `wheems restart`.
 
-### Trusting the workspace folder
+### Trusting the install folder
 
-Claude Code and Codex ask once whether to trust a new folder, and nobody can answer that from
-Slack. When setup creates a workspace, it offers to open the engine there: say yes, trust the
-folder, then press Ctrl+C twice to come back. `wheems doctor` checks the trust.
+Claude Code and Codex ask once whether to trust a folder, and nobody can answer that from Slack.
+A trusted folder covers every folder in it, so trust your install folder once and every
+workspace is covered, including ones you add later. When setup creates the first workspace for
+an engine, it offers to open the engine in the install folder: say yes, trust the folder, then
+press Ctrl+C twice to come back. To do it yourself, run `cd ~/wheems && claude` (or `codex`)
+and answer yes.
+
+`wheems doctor` checks the trust. If a message arrives for an engine that doesn't trust the
+folder, the service says so in the thread at once, with the command to run, rather than start a
+session that would wait at the Mac.
 
 ### Without the menu
 
@@ -167,7 +174,7 @@ because you type its tokens in yourself:
 ```bash
 wheems init personal                                   # a workspace on Claude Code
 wheems init acme --channel acme-chat --engine codex    # chat in a channel, on Codex
-wheems service install
+wheems start
 wheems doctor
 ```
 
@@ -471,19 +478,38 @@ which carries only its pinned skills.
 The service connects Slack to your agents, files notes, keeps the search index current and runs
 the nightly tidy.
 
+Nothing answers in chat unless it's running. Setup offers to start it, and asks again when you
+leave setup with it stopped.
+
 ```bash
-wheems service install    # run it under launchd, now and at every login
-wheems service status     # is it running?
-wheems service logs       # the end of its log (-n for more lines)
-wheems service restart    # after changing config
+wheems start              # start it, now and at every login
+wheems status             # is it running, and where does each workspace chat?
+wheems logs               # the end of its log (-n for more lines, -f to keep following)
+wheems restart            # after changing config, or updating Wheems
+wheems stop               # stop it; it stays stopped, even after you log in again, until wheems start
+wheems service run        # run it in this terminal, as launchd does
 wheems service uninstall  # stop it and remove it from launchd
-wheems service run        # run it in the foreground, as launchd does
+```
+
+`wheems status` shows the version, how long it has been up, the chat connections, and each
+workspace's channel, with what stops one from chatting, such as a channel the app hasn't been
+invited to:
+
+```text
+✓ Running: Wheems 0.0.4, pid 4242, up 2h 14m
+✓ Connected to slack
+✓ personal: direct messages on slack
+! marketing: the app can't see #marketing-chat on slack. Check the name in workspace.yaml and invite the app to the channel, then run wheems restart.
+Log: ~/wheems/.wheems/logs/service.log
 ```
 
 It runs as the launchd agent `dev.wheems.service`
-(`~/Library/LaunchAgents/dev.wheems.service.plist`), with the Node.js you installed it with. Its
-log is `~/wheems/.wheems/logs/service.log`. It refuses to start when the config has errors, and
-the log says why. Run `wheems doctor` to see them.
+(`~/Library/LaunchAgents/dev.wheems.service.plist`), with the Node.js and the copy of Wheems you
+started it with; `wheems restart` picks up a newer one. Its log is
+`~/wheems/.wheems/logs/service.log`. It refuses to start when the config has errors, and the log
+says why: `wheems start` prints the end of the log when it doesn't answer. Run `wheems doctor`
+to see the errors. The commands are also under `wheems service` (`wheems service start` and so
+on), and `wheems service install` is the same as `wheems start`.
 
 Agents reach the service through the `wheems` command, which Wheems puts first on each session's
 `PATH`, pinned to the same Node.js and the same copy of Wheems. The command talks to the service
@@ -521,25 +547,28 @@ from its workspace's skills. Pinned skill versions must exist in the library.
 ## Command reference
 
 Commands that use the install take `--home <dir>` for the install folder (default:
-`$WHEEMS_HOME`, then `~/wheems`). `wheems service restart`, `service uninstall` and
-`slack manifest` don't need it.
+`$WHEEMS_HOME`, then `~/wheems`). `wheems stop`, `service uninstall` and `slack manifest` don't
+need it.
 
 **For you**
 
-| Command                                                                        | What it does                                                                                              |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `wheems`                                                                       | The welcome screen: the cloud, and how the install is doing (workspaces, the service, search, review)     |
-| `wheems setup`                                                                 | The setup menu: engines, Slack, workspaces, knowledge, the service, doctor                                |
-| `wheems init <workspace> [--name] [--channel] [--engine] [--model]`            | Creates a workspace with its chief of staff. `--engine` is `claude-code` (default), `codex` or `opencode` |
-| `wheems doctor [--quick] [--json]`                                             | Checks the machine, Herdr core and the install                                                            |
-| `wheems validate [paths...]`                                                   | Validates config files or install folders                                                                 |
-| `wheems review [--list]`                                                       | Goes through skill proposals and changes to `about-you.md`                                                |
-| `wheems kb search <query...> [--workspace] [--limit] [--json]`                 | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)                   |
-| `wheems kb reindex [--workspace]`                                              | Rebuilds search indexes, every workspace's by default                                                     |
-| `wheems skill list [--json]`                                                   | Lists the library and waiting proposals                                                                   |
-| `wheems skill show <name> [version]`                                           | Prints a skill's `SKILL.md`                                                                               |
-| `wheems service install`, `status`, `logs [-n]`, `restart`, `uninstall`, `run` | Looks after the background service                                                                        |
-| `wheems slack manifest`                                                        | Prints the Slack app manifest                                                                             |
+| Command                                                             | What it does                                                                                              |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `wheems`                                                            | The welcome screen: the cloud, and how the install is doing (workspaces, the service, search, review)     |
+| `wheems setup`                                                      | The setup menu: engines, Slack, workspaces, knowledge, the service, doctor                                |
+| `wheems init <workspace> [--name] [--channel] [--engine] [--model]` | Creates a workspace with its chief of staff. `--engine` is `claude-code` (default), `codex` or `opencode` |
+| `wheems doctor [--quick] [--json]`                                  | Checks the machine, Herdr core and the install                                                            |
+| `wheems validate [paths...]`                                        | Validates config files or install folders                                                                 |
+| `wheems review [--list]`                                            | Goes through skill proposals and changes to `about-you.md`                                                |
+| `wheems kb search <query...> [--workspace] [--limit] [--json]`      | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)                   |
+| `wheems kb reindex [--workspace]`                                   | Rebuilds search indexes, every workspace's by default                                                     |
+| `wheems skill list [--json]`                                        | Lists the library and waiting proposals                                                                   |
+| `wheems skill show <name> [version]`                                | Prints a skill's `SKILL.md`                                                                               |
+| `wheems start`, `stop`, `restart`                                   | Starts, stops or restarts the background service                                                          |
+| `wheems status`                                                     | Whether the service is running, and where each workspace chats                                            |
+| `wheems logs [-n] [-f]`                                             | The end of the service's log, or follows it                                                               |
+| `wheems service run`, `uninstall`                                   | Runs the service in this terminal, or removes it from launchd                                             |
+| `wheems slack manifest`                                             | Prints the Slack app manifest                                                                             |
 
 **For agents** (these work only inside a conversation Wheems started)
 

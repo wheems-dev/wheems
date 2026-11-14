@@ -7,10 +7,16 @@ import type { InstallConfig } from '../config/schemas.js';
 import type { ChannelDriver } from '../contracts/channel.js';
 import type { EngineDriver } from '../contracts/engine.js';
 import type { DriverRegistry } from '../contracts/registry.js';
-import { paths } from '../home.js';
+import { paths, tilde } from '../home.js';
 import { readSecrets } from '../secrets.js';
 import { ConversationManager, type Binding } from './conversations.js';
-import { listen, type ControlRequest, type ControlResponse } from './control.js';
+import {
+  listen,
+  type ControlRequest,
+  type ControlResponse,
+  type ServiceReport,
+} from './control.js';
+import { trustAdvice } from '../util/trust.js';
 import { KnowledgeSearch } from '../knowledge/search.js';
 import { proposeSkill } from '../skills/proposals.js';
 import { FilingQueue } from './filing.js';
@@ -56,6 +62,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       console.log(`${new Date().toISOString()} ${message}`);
     });
   const where = paths(options.home, env);
+  log(`Starting Wheems ${options.version} from ${options.home}`);
 
   const install = await loadInstall(options.home);
   const problems = [...install.problems, ...crossCheck(install)].filter((p) => p.level === 'error');
@@ -99,29 +106,40 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   };
 
   const bindings: Binding[] = [];
+  const workspaceReport: ServiceReport['workspaces'] = [];
   for (const workspace of install.workspaces) {
     const chat = workspace.config?.channels.chat;
-    if (!chat) continue;
+    if (!chat) {
+      workspaceReport.push({ id: workspace.id, chat: null });
+      continue;
+    }
     const channel = channelFor(chat.connection);
     let channelId: string | null = null;
+    const place =
+      'channel' in chat
+        ? `#${chat.channel.replace(/^#/, '')} on ${chat.connection}`
+        : `direct messages on ${chat.connection}`;
     if ('channel' in chat) {
       channelId = channel.resolveChannel
         ? await channel.resolveChannel(chat.channel)
         : chat.channel;
       if (channelId === null) {
-        log(
-          `Workspace ${workspace.id}: the app can't see channel ${chat.channel}; check the name, invite the app to it, then run wheems service restart`,
-        );
+        const problem = `the app can't see ${place}. Check the name in workspace.yaml and invite the app to the channel, then run wheems restart.`;
+        log(`Workspace ${workspace.id}: ${problem}`);
+        workspaceReport.push({ id: workspace.id, chat: place, problem });
         continue;
       }
       // Slack lists public channels the app isn't in, and sends no messages from them.
       if ((await channel.isMember?.(channelId)) === false) {
-        log(
-          `Workspace ${workspace.id}: the app isn't in channel ${chat.channel}, so messages there won't reach the chief of staff. Invite it: in that channel, /invite @ the app's name`,
-        );
+        const problem = `the app isn't in ${place}, so messages there won't reach the chief of staff. In that channel, /invite the app.`;
+        log(`Workspace ${workspace.id}: ${problem}`);
+        workspaceReport.push({ id: workspace.id, chat: place, problem });
+        bindings.push({ workspace, connection: chat.connection, channel: channelId });
+        continue;
       }
     }
     bindings.push({ workspace, connection: chat.connection, channel: channelId });
+    workspaceReport.push({ id: workspace.id, chat: place });
     log(
       `Workspace ${workspace.id}: chat on ${chat.connection} ${channelId === null ? '(direct messages)' : channelId}`,
     );
@@ -170,6 +188,13 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     engine: engineFor,
     store: new ConversationStore(where.conversations),
     onNote: (workspace) => void filing.file(workspace),
+    trustProblem: async (engine, dir) => {
+      const entry = options.registry.catalog('engine').find((e) => e.name === engine);
+      const setup = entry?.engine;
+      if (!entry || !setup?.trusted || setup.trust === null) return null;
+      if ((await setup.trusted(dir)) !== false) return null;
+      return `${entry.label} hasn't been told to trust this workspace's folder, so it can't start. ${trustAdvice(entry.label, setup.trust, tilde(options.home, env))} Then send your message again.`;
+    },
     aboutYouFile: where.aboutYou,
     noteSweepMs: options.noteSweepMs ?? 60_000,
     sessionEnv,
@@ -182,6 +207,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   // ping is one that is connected. If anything fails, undo what started, so the process
   // exits and launchd restarts it.
   const started: ChannelDriver[] = [];
+  const startedAt = new Date().toISOString();
   let server: Server | undefined;
   try {
     for (const [connection, channel] of channels) {
@@ -195,6 +221,18 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         switch (request.op) {
           case 'ping':
             return { ok: true, version: options.version };
+          case 'status':
+            return {
+              ok: true,
+              status: {
+                version: options.version,
+                pid: process.pid,
+                startedAt,
+                home: options.home,
+                connections: [...channels.keys()],
+                workspaces: workspaceReport,
+              },
+            };
           case 'reply':
             await manager.reply(request.conversation, request.text);
             return { ok: true };

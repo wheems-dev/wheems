@@ -5,7 +5,11 @@ import { nodeVersionProblem } from '../util/node-support.js';
 
 const problem = nodeVersionProblem(process.versions.node);
 if (problem !== null) {
-  process.stderr.write(`${problem}\nThis is ${process.execPath}.\n`);
+  // nvm users usually have a newer Node.js already, with an older one as their default.
+  const nvm = (process.env.NVM_DIR ?? '') !== '';
+  process.stderr.write(
+    `${problem}\nThis is ${process.execPath}.\n${nvm ? 'With nvm, make 22 the default for every new terminal: nvm install 22 && nvm alias default 22\n' : ''}`,
+  );
   process.exit(1);
 }
 

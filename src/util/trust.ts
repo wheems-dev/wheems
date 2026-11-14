@@ -36,7 +36,12 @@ export function trustedIn(
   }
 }
 
-/** Codex: `[projects."<folder>"]` with `trust_level = "trusted"` in its config.toml. */
+/**
+ * Codex: `[projects."<folder>"]` with `trust_level = "trusted"` in its config.toml. Wheems reads
+ * only the usual forms of that; when the file records trust in a form it doesn't read, such as
+ * an inline table, the answer is null (can't tell) rather than false, because a false stops
+ * conversations from starting.
+ */
 export async function codexTrusts(
   dir: string,
   file = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml'),
@@ -47,7 +52,7 @@ export async function codexTrusts(
   } catch {
     return null;
   }
-  const trusted = codexTrustedFolders(text);
+  const { trusted, unsure } = codexTrustedFolders(text);
   const real = await realpath(dir).catch(() => dir);
   for (const start of [real, dir]) {
     for (let folder = start; ; folder = dirname(folder)) {
@@ -55,24 +60,91 @@ export async function codexTrusts(
       if (dirname(folder) === folder) break;
     }
   }
-  return false;
+  return unsure ? null : false;
 }
 
-/** The folders a Codex config.toml marks trusted. */
-export function codexTrustedFolders(toml: string): Set<string> {
+/** A TOML basic ("…") or literal ('…') string, and an optional comment to the end of the line. */
+const STRING = String.raw`("(?:[^"\\]|\\.)*"|'[^']*')`;
+const COMMENT = String.raw`\s*(?:#.*)?$`;
+const PROJECT_HEADER = new RegExp(String.raw`^\s*\[\s*projects\s*\.\s*${STRING}\s*\]${COMMENT}`);
+const TRUST_LEVEL = new RegExp(String.raw`^\s*trust_level\s*=\s*${STRING}${COMMENT}`);
+
+/**
+ * The folders a Codex config.toml marks trusted, and whether it records trust in a form this
+ * doesn't read (so a folder missing from `trusted` may still be trusted).
+ */
+export function codexTrustedFolders(toml: string): { trusted: Set<string>; unsure: boolean } {
   const trusted = new Set<string>();
+  let unsure = false;
   let current: string | null = null;
   for (const line of toml.split('\n')) {
-    const header = /^\s*\[projects\."((?:[^"\\]|\\.)*)"\]\s*$/.exec(line);
+    const header = PROJECT_HEADER.exec(line);
     if (header) {
-      current = (header[1] ?? '').replace(/\\(.)/g, '$1');
+      current = tomlString(header[1] ?? '""');
+      // A folder name this can't decode may be one that is trusted.
+      if (current === null) unsure = true;
       continue;
     }
     if (/^\s*\[/.test(line)) {
+      // Any other table: `[projects]` with dotted keys under it is one this doesn't read.
+      if (/^\s*\[\s*projects\s*\]/.test(line)) unsure = true;
       current = null;
       continue;
     }
-    if (current !== null && /^\s*trust_level\s*=\s*"trusted"/.test(line)) trusted.add(current);
+    if (!line.includes('trust_level')) continue;
+    const level = TRUST_LEVEL.exec(line);
+    if (current === null || !level) {
+      unsure = true;
+      continue;
+    }
+    if (tomlString(level[1] ?? '""') === 'trusted') trusted.add(current);
   }
-  return trusted;
+  return { trusted, unsure };
+}
+
+/** A TOML string's value, or null when it has an escape that isn't valid TOML. */
+export function tomlString(quoted: string): string | null {
+  const body = quoted.slice(1, -1);
+  if (quoted.startsWith("'")) return body;
+  const simple: Record<string, string> = {
+    b: '\b',
+    t: '\t',
+    n: '\n',
+    f: '\f',
+    r: '\r',
+    e: '\x1b',
+    '"': '"',
+    '\\': '\\',
+  };
+  const invalid: string[] = [];
+  const value = body.replace(
+    /\\(u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|x[0-9A-Fa-f]{2}|.)/g,
+    (_match, escape: string) => {
+      if (escape.length > 1) {
+        const code = Number.parseInt(escape.slice(1), 16);
+        if (code <= 0x10ffff && (code < 0xd800 || code > 0xdfff)) return String.fromCodePoint(code);
+      } else if (simple[escape] !== undefined) {
+        return simple[escape];
+      }
+      invalid.push(escape);
+      return '';
+    },
+  );
+  return invalid.length === 0 ? value : null;
+}
+
+/**
+ * How to trust the install folder, once, for an engine: a trusted folder covers every folder
+ * in it, so this covers every workspace there is and every one added later. `command` is the
+ * engine's own command (its setup's `trust`); `home` is the install folder.
+ */
+export function trustAdvice(label: string, command: string[], home: string): string {
+  return `At the Mac, run \`cd ${shellPath(home)} && ${command.join(' ')}\` and answer yes. ${label} then trusts every workspace in your install, including ones you add later.`;
+}
+
+/** A path as it can be typed into a shell, keeping a leading ~ outside the quotes. */
+export function shellPath(path: string): string {
+  if (/^[\w~/.-]+$/.test(path)) return path;
+  const [prefix, rest] = path.startsWith('~/') ? ['~/', path.slice(2)] : ['', path];
+  return `${prefix}'${rest.replaceAll("'", `'\\''`)}'`;
 }

@@ -98,6 +98,24 @@ describe('the service', () => {
     expect(await request(where.socket, { op: 'nope' } as never)).toMatchObject({ ok: false });
   });
 
+  it('says where each workspace chats, for wheems status', async () => {
+    const answer = await request(paths(home, env).socket, { op: 'status' });
+    expect(answer).toMatchObject({
+      ok: true,
+      status: {
+        version: '9.9.9',
+        pid: process.pid,
+        home,
+        connections: ['slack'],
+        workspaces: [{ id: 'personal', chat: 'direct messages on slack' }],
+      },
+    });
+    const status = await cliReply('', ['--home', home], '', 'status');
+    expect(status.code).toBe(0);
+    expect(status.out).toMatch(/^✓ Running: Wheems 9\.9\.9, pid \d+, up under a minute\n/);
+    expect(status.out).toContain('✓ Connected to slack\n✓ personal: direct messages on slack\n');
+  });
+
   it('gives the channel driver its secrets, and agents an wheems command pinned to its Node.js', () => {
     expect(channelOptions).toEqual({ bot_token: 'xoxb-test', app_token: 'xapp-test' });
     const wrapper = readFileSync(join(paths(home, env).bin, 'wheems'), 'utf8');

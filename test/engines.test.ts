@@ -15,7 +15,7 @@ import {
   type OpencodeExport,
 } from '../src/drivers/engine/opencode.js';
 import { engineContract } from '../src/testing/index.js';
-import { codexTrustedFolders, codexTrusts } from '../src/util/trust.js';
+import { codexTrustedFolders, codexTrusts, tomlString } from '../src/util/trust.js';
 
 const FAKE_OPENCODE = fileURLToPath(new URL('./helpers/fake-opencode.mjs', import.meta.url));
 const onThisMac = process.env.CI === undefined;
@@ -286,8 +286,42 @@ describe('codex engine', () => {
       expect(await codexTrusts('/other/x', join(home, 'config.toml'))).toBe(false);
       expect(await codexTrusts(work, join(home, 'missing.toml'))).toBeNull();
       expect([
-        ...codexTrustedFolders('[projects."/a \\"b\\""]\ntrust_level = "trusted"\n'),
+        ...codexTrustedFolders('[projects."/a \\"b\\""]\ntrust_level = "trusted"\n').trusted,
       ]).toEqual(['/a "b"']);
+    });
+
+    it("reads comments and single quotes, and says it can't tell for forms it does not read", async () => {
+      const read = (toml: string) => {
+        const { trusted, unsure } = codexTrustedFolders(toml);
+        return { trusted: [...trusted], unsure };
+      };
+      expect(read(`[projects."/tmp/wheems"] # my install\ntrust_level = 'trusted' # yes`)).toEqual({
+        trusted: ['/tmp/wheems'],
+        unsure: false,
+      });
+      expect(read(`[ projects . '/tmp/a\\b' ]\n  trust_level="trusted"`)).toEqual({
+        trusted: ['/tmp/a\\b'],
+        unsure: false,
+      });
+      expect(read('[projects."/x"]\ntrust_level = "untrusted"\n[other]\nkey = 1')).toEqual({
+        trusted: [],
+        unsure: false,
+      });
+      // Escapes are decoded as TOML decodes them; an invalid one leaves it unsure.
+      expect(read('[projects."/tmp/whe\\u0065ms"]\ntrust_level = "trusted"').trusted).toEqual([
+        '/tmp/wheems',
+      ]);
+      expect(read('[projects."/tmp/\\q"]\ntrust_level = "trusted"')).toEqual({
+        trusted: [],
+        unsure: true,
+      });
+      expect(tomlString(String.raw`"a\tb\\c\"d\U0001F600"`)).toBe('a\tb\\c"d😀');
+      // Inline tables and dotted keys record trust in forms this doesn't read.
+      expect(read('projects = { "/w" = { trust_level = "trusted" } }').unsure).toBe(true);
+      expect(read('[projects]\n"/w".trust_level = "trusted"').unsure).toBe(true);
+      const file = join(home, 'inline.toml');
+      writeFileSync(file, 'projects = { "/w" = { trust_level = "trusted" } }\n');
+      expect(await codexTrusts('/w/personal', file)).toBeNull();
     });
   });
 });

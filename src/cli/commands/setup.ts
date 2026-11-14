@@ -10,7 +10,8 @@ import {
   type EngineSetup,
   type SetupUi,
 } from '../../contracts/setup.js';
-import { paths, type Paths } from '../../home.js';
+import { paths, tilde, type Paths } from '../../home.js';
+import { trustAdvice } from '../../util/trust.js';
 import { readSecrets, writeSecret } from '../../secrets.js';
 import { runCommand } from '../../util/process.js';
 import { ABOUT_YOU_MD, INSTALL_GITIGNORE, installYaml } from '../templates.js';
@@ -110,7 +111,10 @@ export async function setup(options: SetupOptions): Promise<void> {
         { value: 'done', label: 'Done' },
       ],
     });
-    if (section === 'done') return;
+    if (section === 'done') {
+      if (!running && (await wantsService(options, install))) await service(options);
+      return;
+    }
     try {
       if (section === 'engines') next = (await engines(options)) ? 'channels' : 'engines';
       if (section === 'channels')
@@ -406,20 +410,25 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
   if (channel !== undefined) ui.info(`Invite the app to #${channel.replace(/^#/, '')} in Slack.`);
   const trust = engine.setup.trust;
   if (trust === null) return true;
+  // A trusted folder covers every folder in it, so trusting the install folder once covers
+  // this workspace and every one after it.
+  if ((await engine.setup.trusted?.(options.home)) === true) return true;
+  const home = tilde(options.home, options.env);
   ui.note(
     [
-      `${engine.label} asks once whether to trust a new folder, and nobody can answer that from Slack.`,
+      `${engine.label} asks once whether to trust a folder, and nobody can answer that from Slack.`,
+      `Trusting your install folder, ${home}, covers this workspace and every one you add later.`,
       'Answer yes, then press Ctrl+C twice to come back here.',
     ].join('\n'),
-    'Trust the folder',
+    'Trust the install folder',
   );
   try {
-    if (await ui.confirm(`Open ${engine.label} there now?`, true))
-      await options.actions.run(trust, dir);
+    if (await ui.confirm(`Open ${engine.label} in ${home} now?`, true))
+      await options.actions.run(trust, options.home);
   } catch (error) {
     if (!(error instanceof SetupCancelled)) throw error;
     // The workspace is made; only the trust step was skipped.
-    ui.info(`The workspace is saved. Trust its folder later: cd ${dir} && ${trust.join(' ')}`);
+    ui.info(`The workspace is saved. ${trustAdvice(engine.label, trust, home)}`);
   }
   return true;
 }
@@ -507,6 +516,28 @@ async function engines(options: SetupOptions): Promise<boolean> {
   return true;
 }
 
+/**
+ * Leaving setup with a chat channel to answer and no service to answer it is the easiest way
+ * to message an agent and hear nothing back, so ask before leaving.
+ */
+async function wantsService(options: SetupOptions, install: LoadedInstall): Promise<boolean> {
+  const chats = install.workspaces.some((w) => w.config?.channels.chat !== undefined);
+  if (!chats || (await connectedChannels(options)).length === 0) return false;
+  try {
+    if (
+      await options.ui.confirm(
+        'Nothing answers in chat until the service runs. Start it now?',
+        true,
+      )
+    )
+      return true;
+  } catch (error) {
+    if (!(error instanceof SetupCancelled)) throw error;
+  }
+  options.ui.info('Start it any time with: wheems start');
+  return false;
+}
+
 async function service(options: SetupOptions): Promise<boolean> {
   const { ui } = options;
   const running = await options.actions.serviceRunning();
@@ -517,12 +548,12 @@ async function service(options: SetupOptions): Promise<boolean> {
     return true;
   }
   const answering = await ui.task(
-    running ? 'Restarting the service' : 'Installing the service under launchd',
+    running ? 'Restarting the service' : 'Starting the service',
     () => options.actions.installService(),
     (ok) =>
       ok ? 'The service is running, now and at every login' : 'The service has not answered yet',
   );
-  if (!answering) ui.warn('See what it says with: wheems service logs');
+  if (!answering) ui.warn('See what it says with: wheems logs');
   return answering;
 }
 

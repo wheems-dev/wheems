@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { loadInstall } from '../config/load.js';
-import { paths } from '../home.js';
+import { paths, tilde } from '../home.js';
 import { listAboutYou } from '../review/review.js';
 import { request } from '../service/control.js';
 import { listProposals } from '../skills/proposals.js';
@@ -195,7 +195,7 @@ export async function welcomeStatus(
   status.push(
     (await ping(where.socket))
       ? { mark: '✓', text: 'The service is running' }
-      : { mark: '!', text: "The service isn't running: wheems service install" },
+      : { mark: '!', text: "The service isn't running: wheems start" },
   );
   const embeddings = install.config?.knowledge.embeddings;
   status.push(
@@ -213,11 +213,4 @@ export async function welcomeStatus(
 
 function count(n: number, noun: string): string {
   return `${String(n)} ${noun}${n === 1 ? '' : 's'}`;
-}
-
-function tilde(path: string, env: NodeJS.ProcessEnv): string {
-  const home = env.HOME;
-  return home !== undefined && home !== '' && path.startsWith(`${home}/`)
-    ? `~${path.slice(home.length)}`
-    : path;
 }
