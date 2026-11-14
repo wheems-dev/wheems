@@ -51,6 +51,14 @@ export const accountSchema = z.strictObject({
     .optional()
     .describe('The name of the credential in the secret store, when the account needs one.'),
   description: z.string().optional(),
+  max_sessions: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Most sessions running at once on this account, of every kind, across workspaces. Beyond it, `wheems session new` is refused. No limit when left out.',
+    ),
 });
 
 export const connectionSchema = z.strictObject({
@@ -223,6 +231,25 @@ export const workspaceSchema = z.strictObject({
     })
     .default({ note_after_idle: 30, tidy_at: '03:00' })
     .describe("How the workspace's knowledge loop runs."),
+  sessions: z
+    .strictObject({
+      max_open_per_owner: z
+        .number()
+        .int()
+        .positive()
+        .default(3)
+        .describe('Most open ad-hoc sessions one owner (a chief, a session or you) may have.'),
+      max_depth: z
+        .number()
+        .int()
+        .positive()
+        .default(2)
+        .describe(
+          "How many levels of ad-hoc sessions may start one another: 2 lets a chief's session start one, and that one start one more.",
+        ),
+    })
+    .default({ max_open_per_owner: 3, max_depth: 2 })
+    .describe('Limits on ad-hoc sessions, so they cannot multiply or loop.'),
   machine: nameSchema.optional().describe('The machine agents run on by default.'),
   identity: z
     .strictObject({

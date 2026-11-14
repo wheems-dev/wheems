@@ -23,6 +23,8 @@ import { proposeSkill } from '../skills/proposals.js';
 import { FilingQueue } from './filing.js';
 import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
+import { SessionService } from './sessions.js';
+import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
 
@@ -185,6 +187,34 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     },
     ...(options.filingSeconds !== undefined && { timeoutSeconds: options.filingSeconds }),
   });
+  const sessions = new SessionService({
+    install: config,
+    workspaces: install.workspaces,
+    state,
+    runtime,
+    engine: engineFor,
+    stateDir: where.state,
+    sessionEnv,
+    aboutYouFile: where.aboutYou,
+    log,
+    ...(options.startupSeconds !== undefined && { startupSeconds: options.startupSeconds }),
+    ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
+  });
+  /**
+   * Which conversation or ad-hoc session a reply, note or skill proposal comes from. A thread
+   * session may say either, so it's taken to its conversation.
+   */
+  const speaker = (request: {
+    conversation?: string | undefined;
+    session?: string | undefined;
+  }): { conversation: string } | { session: string } => {
+    if (request.conversation !== undefined) return { conversation: request.conversation };
+    if (request.session === undefined) throw new Error('Say which conversation or session');
+    const key = state.threadKeyOf(request.session);
+    if (key !== undefined) return { conversation: key };
+    if (!state.callingSession(request.session)) throw new Error(`No session ${request.session}`);
+    return { session: request.session };
+  };
   const manager = new ConversationManager({
     install: config,
     bindings,
@@ -192,6 +222,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     runtime,
     engine: engineFor,
     store: new ConversationStore(state),
+    sessionsSection: (workspace, owner) => sessions.sessionsSection(workspace, owner),
     onNote: (workspace) => void filing.file(workspace),
     trustProblem: async (engine, dir) => {
       const entry = options.registry.catalog('engine').find((e) => e.name === engine);
@@ -238,27 +269,94 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
                 workspaces: workspaceReport,
               },
             };
-          case 'reply':
-            await manager.reply(request.conversation, request.text);
+          case 'reply': {
+            const from = speaker(request);
+            if ('session' in from) {
+              throw new Error(
+                'An ad-hoc session has no chat thread to reply in yet. Your last message of each turn is your answer: Wheems keeps it, and wheems session show displays it.',
+              );
+            }
+            await manager.reply(from.conversation, request.text);
             return { ok: true };
-          case 'note':
-            return { ok: true, path: await manager.note(request.conversation, request.text) };
+          }
+          case 'note': {
+            const from = speaker(request);
+            if ('conversation' in from) {
+              return { ok: true, path: await manager.note(from.conversation, request.text) };
+            }
+            const { workspace, agent } = sessions.agentOf(from.session);
+            const path = await writeNote(
+              workspace.dir,
+              {
+                workspace: workspace.id,
+                agent: agent.definition.name,
+                engine: agent.definition.engine,
+                conversation: from.session,
+                origin: 'person',
+              },
+              request.text,
+            );
+            sessions.noted(from.session, request.text);
+            log(`Note from session ${from.session}: ${path}`);
+            void filing.file(workspace.id);
+            return { ok: true, path };
+          }
           case 'reindex':
             return { ok: true, index: await search.index(request.workspace).rebuild() };
           case 'propose-skill': {
-            const owner = await manager.owner(request.conversation);
+            const from = speaker(request);
+            const owner =
+              'conversation' in from
+                ? await manager.owner(from.conversation)
+                : (({ workspace, agent }) => ({
+                    workspace: workspace.id,
+                    agent: agent.definition.name,
+                  }))(sessions.agentOf(from.session));
             const { proposal, message } = await proposeSkill({
               home: options.home,
               stateDir: where.state,
               workspace: owner.workspace,
               agent: owner.agent,
-              conversation: request.conversation,
+              conversation: 'conversation' in from ? from.conversation : from.session,
               name: request.name,
               text: request.text,
               embeddings: search.embeddings,
             });
             log(`Skill proposed by ${owner.agent} in ${owner.workspace}: ${proposal.id}`);
             return { ok: true, message };
+          }
+          case 'session-new': {
+            const session = await sessions.create(sessions.caller(request.caller), {
+              title: request.title,
+              purpose: request.purpose,
+              ...(request.agent !== undefined && { agent: request.agent }),
+              ...(request.project !== undefined && { project: request.project }),
+            });
+            return { ok: true, session };
+          }
+          case 'session-list': {
+            const { op: _op, caller, ...filter } = request;
+            return { ok: true, sessions: sessions.list(sessions.caller(caller), filter) };
+          }
+          case 'session-search':
+            return {
+              ok: true,
+              sessions: sessions.search(sessions.caller(request.caller), request.words),
+            };
+          case 'session-show':
+            return {
+              ok: true,
+              details: await sessions.show(sessions.caller(request.caller), request.id),
+            };
+          case 'session-end': {
+            const ended = await sessions.end(sessions.caller(request.caller), request.id);
+            return {
+              ok: true,
+              session: ended.session,
+              message: ended.noted
+                ? 'It wrote its note and has ended.'
+                : "It has ended. It gave no note in time, or wasn't running.",
+            };
           }
         }
       },

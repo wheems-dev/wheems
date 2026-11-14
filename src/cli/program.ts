@@ -17,6 +17,7 @@ import { registerSkill } from './commands/skill.js';
 import { registerNote } from './commands/note.js';
 import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
+import { registerSession } from './commands/session.js';
 import { ensureInstall, setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
 import {
@@ -255,6 +256,7 @@ export function createProgram(io: Io): Command {
   registerService(program, io);
   registerReply(program, io);
   registerNote(program, io);
+  registerSession(program, io);
   registerKb(program, io);
   registerSkill(program, io);
   registerReview(program, io);

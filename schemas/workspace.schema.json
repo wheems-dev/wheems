@@ -179,6 +179,31 @@
       },
       "additionalProperties": false
     },
+    "sessions": {
+      "default": {
+        "max_open_per_owner": 3,
+        "max_depth": 2
+      },
+      "description": "Limits on ad-hoc sessions, so they cannot multiply or loop.",
+      "type": "object",
+      "properties": {
+        "max_open_per_owner": {
+          "default": 3,
+          "description": "Most open ad-hoc sessions one owner (a chief, a session or you) may have.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "max_depth": {
+          "default": 2,
+          "description": "How many levels of ad-hoc sessions may start one another: 2 lets a chief's session start one, and that one start one more.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
     "machine": {
       "description": "The machine agents run on by default.",
       "type": "string",

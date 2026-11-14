@@ -28,8 +28,8 @@ TypeScript first.
 - **The service**: always running, under launchd on a Mac and systemd on Linux. It holds the
   channel connections and routes messages, files notes, keeps search indexes and runs the
   nightly tidy (built). It will also run tasks, approvals, routines and workflows, and keep a
-  small SQLite store of every session it runs and what's waiting (planned, see
-  [Sessions](#sessions)).
+  small SQLite store of every session it runs (built) and what's waiting (planned), see
+  [Sessions](#sessions).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems post updates "…"`,
   `wheems ask approvals "Deploy?"` and `wheems note`. It replaces hand-written scripts and
   hard-coded channel IDs.
@@ -334,11 +334,11 @@ app may, and otherwise tells you to create it and invite the app; doctor checks 
 
 ## Sessions
 
-Milestone 3, built first in it. The session store is built; the `wheems session` commands, a
-Slack thread per ad-hoc session and `send` come next. Wheems keeps a record of every agent
-session it runs: which workspace, project and agent it belongs to, who started it, what it's for
-and what state it's in. That lets the service pick up after a restart, and lets a chief find the right session
-to talk to. Two kinds of thing are recorded:
+Milestone 3, built first in it. The session store and `wheems session new`, `list`, `search`,
+`show` and `end` are built; a Slack thread per ad-hoc session and `send` come next. Wheems keeps
+a record of every agent session it runs: which workspace, project and agent it belongs to, who
+started it, what it's for and what state it's in. That lets the service pick up after a restart,
+and lets a chief find the right session to talk to. Two kinds of thing are recorded:
 
 - **Standing agents**: each workspace's chief and, from milestone 4, each project's lead. One row
   per agent, written by code from `workspace.yaml` and `project.yaml` at every service start,
@@ -376,6 +376,19 @@ its summary, most recently active first. `wheems session list` filters by owner,
 kind and state. A chief's instructions get a generated Sessions section at launch listing its own
 open sessions, as they were then.
 
+**Who owns a session.** A chief's thread session starts sessions for the chief: their owner is
+the chief's agent (`acme/chief-of-staff`), so they're the chief's from every one of its threads,
+`max_open_per_owner` counts them across threads, and each new thread's Sessions section lists
+them. The thread session that started one is its parent. A session an ad-hoc session starts is
+owned by that session; one you start from a terminal is yours (no owner).
+
+**Each ad-hoc session runs in a folder of its own**, `.wheems/sessions/<workspace>/<id>/`. The
+engine writes the agent's instructions file into the folder a session runs in, so a session
+running another agent, or the chief's own with a different Sessions section, would otherwise
+replace the chief's `CLAUDE.md` in the workspace folder. It's inside the install folder, which
+the engines already trust, and reaches the knowledge base through `wheems kb` as every agent
+does. Chiefs' thread sessions stay in the workspace folder until milestone 5's session folders.
+
 **The summary is written by code, not by the agent**, the same rule as project cards: the purpose
 given to `session new` at first, then the first line of the session's latest note (or, from
 milestone 5, its latest task result). An agent can't describe itself into someone else's search
@@ -402,20 +415,24 @@ context.
   session in its project. Any other session may send to its owner and to the sessions it owns.
   You may send to any of them from Slack.
 - **Limits, so sessions can't multiply or loop.** `max_open_per_owner` (3 by default) caps the
-  open ad-hoc sessions one owner has; `max_depth` (2 by default) lets a chief's session start one
-  more level and no further; `max_sessions` per account counts every session of every kind. A
-  `--wait` send to a session that's already waiting on the sender is refused, so two sessions
-  can't wait on each other.
+  open (not ended) ad-hoc sessions one owner has. `max_depth` (2 by default) counts levels of
+  ad-hoc sessions: one a chief's thread or you start is at level 1, one it starts at level 2, and
+  none may start past `max_depth`. `max_sessions` per account (in `install.yaml`) counts every
+  running session of every kind, in every workspace, as Herdr reports them; until tasks queue in
+  milestone 5, `session new` beyond it is refused. A `--wait` send to a session that's already
+  waiting on the sender is refused, so two sessions can't wait on each other.
 - **Who's calling.** The control socket knows the caller by the session id Wheems put in its
-  environment at launch. That's convenience, not proof, on a machine with one person; the
-  short-lived credential that tasks get in milestone 5 covers sessions too.
+  environment at launch (`WHEEMS_SESSION`; thread sessions started before it had one are known by
+  `WHEEMS_CONVERSATION`). That's convenience, not proof, on a machine with one person; the
+  short-lived credential that tasks get in milestone 5 covers sessions too. You, at a terminal,
+  aren't a session: you may name the workspace with `--workspace`.
 
 ```yaml
-# workspaces/acme/workspace.yaml (proposed format)
+# workspaces/acme/workspace.yaml
 sessions:
   max_open_per_owner: 3
   max_depth: 2
-  end_after_idle: 7d # ends an ad-hoc session nobody has used for this long
+  end_after_idle: 7d # planned: ends an ad-hoc session nobody has used for this long
 ```
 
 ### States and lifetimes
@@ -424,17 +441,22 @@ An ad-hoc session is **starting**, **working**, **idle**, **stopped** (its Herdr
 and its engine session can be resumed) or **ended**. An idle one may be stopped to make room, least
 recently used first, as thread sessions are today, and is resumed when it's next sent a message.
 
-`wheems session end <id>`, run by its owner or you, or `end_after_idle`, ends one: Wheems asks it
-for its note first, as it does before stopping a session today, then marks it ended. An ended
-session stays in the store and in search as a record, but can't be sent messages.
+`wheems session end <id>`, run by its owner or you, or (planned) `end_after_idle`, ends one:
+Wheems asks it for its note first, as it does before stopping a session today, and gives it up
+to ten minutes, then stops it and marks it ended. A stopped session is ended without a note. An
+ended session stays in the store and in search as a record, but can't be sent messages.
 
-| Command (planned)                                                    | What it does                                                                        |
+Until its Slack thread arrives, an ad-hoc session's answers aren't posted anywhere: the agent's
+last message of each turn is kept by its engine, and `wheems session show` displays the latest.
+`wheems reply` inside one says so.
+
+| Command                                                              | What it does                                                                        |
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, opens its Slack thread, prints its id |
+| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller (its Slack thread next), prints its id |
 | `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                                  |
 | `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                         |
-| `wheems session send <id> "<message>" [--wait]`                      | Sends a message into a session and returns its answer                               |
-| `wheems session show <id>`                                           | Its details, recent messages and the `hc attach` line                               |
+| `wheems session send <id> "<message>" [--wait]` (next)               | Sends a message into a session and returns its answer                               |
+| `wheems session show <id>`                                           | Its details, latest answer (recent messages next) and the `hc attach` line          |
 | `wheems session end <id>`                                            | Asks for its note, then ends it                                                     |
 
 The agent is any agent in the workspace's `agents/` (or, from milestone 4, the project's team); with

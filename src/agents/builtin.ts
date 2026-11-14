@@ -28,6 +28,83 @@ terminal.
   the next message.
 `;
 
+/** Instead of the chat instructions, for an ad-hoc session: what it's for and who it answers. */
+export function adhocInstructions(session: {
+  title: string;
+  purpose: string;
+  owner: string;
+}): string {
+  const purpose = session.purpose
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+  return `## This session (built into Wheems)
+
+You're an ad-hoc session, "${session.title}", started by ${session.owner} for this:
+
+${purpose}
+
+- Messages reach you through Wheems, from ${session.owner} or the person. Nobody watches this
+  terminal.
+- Answer normally. When you finish working on a message, your last message is your answer, and
+  Wheems passes it on. Lead with the answer and keep it short.
+- If you need a decision before going on, ask it and stop. The answer arrives as the next message.
+- The first message may end with a tag like \`<wheems conversation="…"/>\`. It is for Wheems;
+  ignore it and never repeat it.
+- You stay open until ${session.owner} or the person ends you, so you can be come back to. When
+  you're ended, Wheems first asks you for your note.
+`;
+}
+
+/** One open session, as the generated Sessions section lists it. */
+export interface OpenSession {
+  id: string;
+  title: string;
+  state: string;
+  summary: string;
+}
+
+/** How to start and find sessions, for an agent that may start them. */
+export function sessionsInstructions(options: { maxOpen: number; open: OpenSession[] }): string {
+  const open =
+    options.open.length === 0
+      ? 'None.'
+      : options.open.map((s) => `- \`${s.id}\` ${s.title} (${s.state}): ${s.summary}`).join('\n');
+  return `## Sessions (built into Wheems)
+
+An ad-hoc session is another agent session that works on one thing and stays open until it's
+ended, so you can come back to it. Start one for work that is long, or that you'll come back to;
+answer simple things yourself.
+
+- Search before you start one: one may already be working on it.
+
+  \`\`\`sh
+  wheems session search "packaging suppliers"
+  \`\`\`
+
+- Start one with a short title and a purpose that says what to do and what to hand back. It
+  starts working on the purpose at once, and \`new\` prints its id. It runs your own agent, or
+  another of this workspace's agents with \`--agent <name>\`.
+
+  \`\`\`sh
+  wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
+  \`\`\`
+
+- \`wheems session list\` shows this workspace's open sessions (\`--mine\` for yours),
+  \`wheems session show <id>\` one session's details and latest answer, and
+  \`wheems session end <id>\` ends one of yours once its work is done. It's asked for its note
+  first.
+- You may have ${String(options.maxOpen)} open at once. End the ones you're done with.
+- Titles and purposes appear in search. Never put passwords, tokens or other secrets in them.
+
+### Your open sessions
+
+As they were when this session started.
+
+${open}
+`;
+}
+
 export const NOTES_INSTRUCTIONS = `## Notes and the knowledge base (built into Wheems)
 
 This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never edit anything in
@@ -108,10 +185,19 @@ export interface Knowledge {
   brief: string | null;
 }
 
+/** What the built-ins say about the session an agent runs in. */
+export interface SessionBuiltins {
+  /** For an ad-hoc session, replacing the chat instructions. */
+  adhoc?: { title: string; purpose: string; owner: string };
+  /** For an agent that may start sessions. */
+  sessions?: { maxOpen: number; open: OpenSession[] };
+}
+
 /** An agent's instructions with the built-in ones appended, and what it knows at launch. */
 export function withBuiltins(
   instructions: string,
   knowledge: Knowledge = { aboutYou: null, brief: null },
+  session: SessionBuiltins = {},
 ): string {
   const known = [
     knowledge.aboutYou !== null && `### About the person\n\n${knowledge.aboutYou}`,
@@ -121,8 +207,14 @@ export function withBuiltins(
     known.length === 0
       ? ''
       : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
-  return `${instructions.trim()}\n\n${CHAT_INSTRUCTIONS}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${knows}`;
+  const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
+  const sessions = session.sessions ? `\n${sessionsInstructions(session.sessions)}` : '';
+  return `${instructions.trim()}\n\n${chat}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
 }
+
+/** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */
+export const END_NOTE_REQUEST =
+  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
 
 /** The message Wheems sends when it asks an agent for its note. */
 export const NOTE_REQUEST =

@@ -556,7 +556,7 @@ describe('wheems skill', () => {
   it('proposes only from inside a conversation', async () => {
     const result = await cli(['skill', 'propose', 'weekly-report']);
     expect(result.code).toBe(1);
-    expect(result.err).toContain('works inside a conversation started by Wheems');
+    expect(result.err).toContain('works inside a session started by Wheems');
     expect(existsSync(join(home, '.wheems'))).toBe(false);
   });
 });

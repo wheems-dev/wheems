@@ -39,7 +39,7 @@ machines:
     always_on: true
 
 accounts: # what pays for models
-  claude-subscription: { driver: claude }
+  claude-subscription: { driver: claude, max_sessions: 6 } # optional: most sessions at once
   openrouter: { driver: openrouter, secret: openrouter-key }
 
 connections: # channels and integrations, connected once, shared by every workspace
@@ -90,6 +90,10 @@ knowledge:
     account: claude-subscription # the chief of staff's account
   tidy_at: '03:00' # local time of the nightly tidy (reports and the brief); false is off
 
+sessions: # limits on ad-hoc sessions; each defaults as shown
+  max_open_per_owner: 3 # open sessions one owner (a chief, a session or you) may have
+  max_depth: 2 # a chief's session may start one level of sessions, and those one more
+
 identity: { name: Acme chief of staff, icon: ':office:' } # how its posts appear, where supported
 
 channels: # chat, approvals and updates are built in; add any others
@@ -111,6 +115,10 @@ rules:
     action: deploy
     approval: approvals
 ```
+
+`sessions` limits [ad-hoc sessions](architecture.md#sessions), so they can't multiply or loop.
+`max_sessions` on an account counts every running session on it, of every kind and in every
+workspace; beyond it, `wheems session new` is refused (from milestone 5, tasks queue instead).
 
 `direct: true` means the app's direct messages. Only one workspace per connection can have them;
 every other workspace chats in a channel, by name or id, that the app has been invited to.
@@ -261,7 +269,7 @@ machine: lab-server # where it runs; defaults to its project's, then its workspa
 
 ```yaml
 accounts:
-  claude-subscription: { driver: claude, max_sessions: 4 } # queues tasks beyond this
+  claude-subscription: { driver: claude, max_sessions: 4 } # refuses new sessions now; queues tasks from milestone 5
   openrouter: { driver: openrouter, secret: openrouter-key } # also serves model steps
 ```
 
