@@ -3,7 +3,10 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.0.3
+
+A new look for the cloud in the terminal, and clearer help when a Slack token is wrong. Still an
+early preview: not ready for real use. The first release published from GitHub.
 
 **Changed**
 
