@@ -551,16 +551,16 @@ async function openStore(
 }
 
 /**
+ * Whether inviting the app to a channel sets up a chief there, so the greeting can say so. It
+ * does, through channel onboarding (onboarding.ts).
+ */
+export const INVITES_SET_UP_CHIEFS: boolean = true;
+
+/**
  * The first chief greets the person in chat, through the channel driver: the chief in direct
  * messages if there is one, else the first that chats in a channel. Says where, or throws why it
  * couldn't.
  */
-/**
- * Whether inviting the app to a channel sets up a chief there, so the greeting can say so. That
- * arrives with channel onboarding (pull request #31); until then the greeting leaves it out
- * rather than promise what this build doesn't do.
- */
-export const INVITES_SET_UP_CHIEFS: boolean = false;
 
 async function greet(
   config: InstallConfig,
