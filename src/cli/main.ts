@@ -17,5 +17,6 @@ process.exitCode = await run(process.argv.slice(2), {
   err: (text) => process.stderr.write(text),
   env: process.env,
   color,
+  columns: process.stdout.isTTY ? process.stdout.columns : undefined,
   ...defaultIo(),
 });

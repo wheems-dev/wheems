@@ -5,7 +5,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, packageVersion, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
-import { CLOUD, renderWelcome, TAGLINE, welcomeStatus } from '../src/cli/welcome.js';
+import {
+  CLOUD,
+  renderWelcome,
+  showCloud,
+  TAGLINE,
+  WELCOME_WIDTH,
+  welcomeStatus,
+} from '../src/cli/welcome.js';
 import { proposeSkill } from '../src/skills/proposals.js';
 
 describe('the welcome screen', () => {
@@ -30,7 +37,7 @@ describe('the welcome screen', () => {
     CLOUD.forEach((row, i) => {
       expect(lines[i + 1]?.startsWith(row), `row ${String(i)}`).toBe(true);
     });
-    expect(lines[5]).toMatch(/█ {3,}wheems 0\.0\.1$/);
+    expect(lines[5]).toMatch(/[█▀▄] {3,}wheems 0\.0\.1$/);
     expect(lines[6]).toMatch(new RegExp(`${TAGLINE.replace('.', '\\.')}$`));
     expect(text).toContain('\n✓ The service is running\n! Something to do\n');
     expect(text).toMatch(/wheems setup · wheems doctor · wheems --help\n$/);
@@ -39,8 +46,37 @@ describe('the welcome screen', () => {
 
   it('colours the cloud and the marks only when asked', () => {
     const text = renderWelcome({ version: '0.0.1', status: [], color: true, hints: false });
-    expect(text).toContain('\x1b[38;5;69m            ▄▄██▄▄▄\x1b[0m');
+    expect(text).toContain(`\x1b[38;5;69m${CLOUD[0] ?? ''}\x1b[0m`);
     expect(text).not.toContain('wheems setup ·');
+  });
+
+  it('is an outline of one width, with a face', () => {
+    const widths = new Set(CLOUD.map((row) => row.length));
+    expect(Math.max(...widths)).toBe(24);
+    expect(CLOUD).toHaveLength(10);
+    // The eye and the smile sit inside the outline.
+    expect(CLOUD[5]).toContain('  ██  ');
+    expect(CLOUD[7]).toContain('▀▄▄▀');
+  });
+
+  it('leaves the cloud out when asked, keeping the name and tagline', () => {
+    const text = renderWelcome({
+      version: '0.0.1',
+      status: [{ mark: '✓', text: 'The service is running' }],
+      color: false,
+      cloud: false,
+    });
+    expect(text).toBe(
+      `\nwheems 0.0.1\n${TAGLINE}\n\n✓ The service is running\n\nwheems setup · wheems doctor · wheems --help\n`,
+    );
+  });
+
+  it('draws the cloud only in a terminal wide enough for it', () => {
+    expect(WELCOME_WIDTH).toBe(24 + 3 + TAGLINE.length);
+    expect(showCloud(undefined)).toBe(false);
+    expect(showCloud(WELCOME_WIDTH - 1)).toBe(false);
+    expect(showCloud(WELCOME_WIDTH)).toBe(true);
+    expect(showCloud(120)).toBe(true);
   });
 
   it('says to run setup when there is no install', async () => {
@@ -94,6 +130,21 @@ describe('the welcome screen', () => {
     expect(code).toBe(0);
     expect(out).toContain(`wheems ${packageVersion()}`);
     expect(out).toContain('No install at ~/none yet: run wheems setup');
+    // Not a terminal (no columns), so no cloud.
+    expect(out).not.toContain(CLOUD[0]);
+  });
+
+  it('draws the cloud with no command in a wide terminal', async () => {
+    let out = '';
+    await run([], {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: () => undefined,
+      env: { WHEEMS_HOME: join(home, 'none'), HOME: home },
+      color: false,
+      columns: 80,
+    });
+    expect(out).toContain(CLOUD[0]);
   });
 
   it("still greets when the install can't be read, and says why", async () => {

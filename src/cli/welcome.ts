@@ -7,25 +7,41 @@ import { request } from '../service/control.js';
 import { listProposals } from '../skills/proposals.js';
 
 /**
- * The cloud, from the brand kit's terminal mark (Unicode half blocks, drawn from the mascot's
- * silhouette). Its eye and smile are the gaps the half blocks leave.
+ * The cloud: the mascot's outline (the brand kit's mascot.svg), traced in Unicode half blocks,
+ * with its eye and smile placed by hand so they read at this size. Half blocks are in every
+ * monospace font and most terminals draw them as exact rectangles, so it looks the same
+ * everywhere; an outline also reads on light and dark backgrounds alike.
  */
 // Every character is one UTF-16 unit, so .length is the width in columns.
 export const CLOUD = [
-  '            ▄▄██▄▄▄',
-  '          ██████████',
-  '     ▄██▄████████████',
-  '    █████████████████',
-  '   ▄█████████████████',
-  ' ▄████▀█████████████▄▄',
-  '▄██████████████████████',
-  '▀████▄▀▄████████████████',
-  ' ██████████████████████',
-  '  ▀▀▀███████████████▀▀',
+  '           ▄█████▄▄',
+  '         ▄█▀     ▀▀█▄',
+  '    ▄█████▀        ▀█▄',
+  '   ██               ██',
+  '  ▄██               █▀',
+  ' ██▀  ██           ▀█▄▄',
+  '██                   ▀█▄',
+  '██   ▀▄▄▀             ██',
+  ' ██▄                 ▄█▀',
+  '  ▀▀█████████████████▀',
 ];
 
 /** The brand line under the name. */
 export const TAGLINE = 'Your crew, ready for work.';
+
+const CLOUD_WIDTH = Math.max(...CLOUD.map((line) => line.length));
+
+/** The columns the cloud and the words beside it need. */
+export const WELCOME_WIDTH = CLOUD_WIDTH + 3 + TAGLINE.length;
+
+/**
+ * Whether to draw the cloud: only in a terminal wide enough for it and the words beside it.
+ * Piped into a file or another program, or read out by a screen reader, it would only be
+ * noise. `columns` is undefined when the output isn't a terminal.
+ */
+export function showCloud(columns: number | undefined): boolean {
+  return columns !== undefined && columns >= WELCOME_WIDTH;
+}
 
 /**
  * A blue between the brand's cobalt (light backgrounds) and its dark-mode blue, from the
@@ -48,20 +64,22 @@ export function renderWelcome(options: {
   color: boolean;
   /** Ends with the commands to try next. On by default. */
   hints?: boolean;
+  /** Draws the cloud. On by default; see showCloud for when to leave it out. */
+  cloud?: boolean;
 }): string {
   const paint = (code: string, text: string) => (options.color ? `${code}${text}${RESET}` : text);
-  const width = Math.max(...CLOUD.map((line) => line.length));
-  const beside: Record<number, string> = {
-    4: paint(BOLD, 'wheems') + ' ' + paint(DIM, options.version),
-    5: TAGLINE,
-  };
-  const lines = CLOUD.map((line, row) => {
-    const text = beside[row];
-    const padded = line + ' '.repeat(width - line.length);
-    return text === undefined
-      ? paint(CLOUD_COLOUR, line)
-      : `${paint(CLOUD_COLOUR, padded)}   ${text}`;
-  });
+  const name = paint(BOLD, 'wheems') + ' ' + paint(DIM, options.version);
+  const beside: Record<number, string> = { 4: name, 5: TAGLINE };
+  const lines =
+    options.cloud === false
+      ? [name, TAGLINE]
+      : CLOUD.map((line, row) => {
+          const text = beside[row];
+          const padded = line.padEnd(CLOUD_WIDTH);
+          return text === undefined
+            ? paint(CLOUD_COLOUR, line)
+            : `${paint(CLOUD_COLOUR, padded)}   ${text}`;
+        });
   const marks = { '✓': '\x1b[32m', '!': '\x1b[33m', '-': DIM } as const;
   return [
     '',

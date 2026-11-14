@@ -19,7 +19,7 @@ import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { ensureInstall, setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
-import { renderWelcome, welcomeStatus } from './welcome.js';
+import { renderWelcome, showCloud, welcomeStatus } from './welcome.js';
 import { installAndWait, serviceAnswers } from './commands/service.js';
 import { runCommand, runInteractive } from '../util/process.js';
 import { SetupCancelled } from '../contracts/setup.js';
@@ -33,6 +33,8 @@ export interface Io {
   err: (text: string) => void;
   env: NodeJS.ProcessEnv;
   color: boolean;
+  /** The terminal's width, or undefined when the output isn't a terminal. */
+  columns?: number | undefined;
   registry: () => DriverRegistry;
   stdin: () => Promise<string>;
 }
@@ -115,7 +117,13 @@ export function createProgram(io: Io): Command {
       const registry = io.registry();
       const ui = clackUi();
       io.out(
-        renderWelcome({ version: packageVersion(), status: [], color: io.color, hints: false }),
+        renderWelcome({
+          version: packageVersion(),
+          status: [],
+          color: io.color,
+          hints: false,
+          cloud: showCloud(io.columns),
+        }),
       );
       ui.intro(' Wheems setup ');
       try {
@@ -259,7 +267,14 @@ export async function run(argv: string[], io: Io): Promise<number> {
         text: `Couldn't read the install at ${home}: ${error instanceof Error ? error.message : String(error)}. Run wheems doctor.`,
       },
     ]);
-    io.out(renderWelcome({ version: packageVersion(), status, color: io.color }));
+    io.out(
+      renderWelcome({
+        version: packageVersion(),
+        status,
+        color: io.color,
+        cloud: showCloud(io.columns),
+      }),
+    );
     return 0;
   }
   const program = createProgram(io);
