@@ -23,6 +23,8 @@ One set of verbs, so the next command can be guessed:
 | `rename <name> <new>`       | Its display name; ids and folders stay        | `wheems ws rename acme "Acme"` |
 | `archive <name>`, `restore` | Put away, keeping everything; and bring back  | `wheems ws archive acme`       |
 | `remove <name>`             | Delete for good, after asking                 | `wheems ws remove acme`        |
+| `add <name>`                | Install from the library into a workspace     | `wheems blueprint add crm`     |
+| `run <name>`                | Run something once, now                       | `wheems workflow run leads`    |
 | `start`, `stop`, `restart`  | Processes                                     | `wheems service restart`       |
 
 A few areas have a verb of their own where none of these says what happens: a session is
@@ -54,24 +56,47 @@ appears without being added there on purpose. Everything else goes under an area
 
 ✓ built, ○ planned (with the milestone that brings it).
 
-| Area                                                              | Actions                                                                           |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `workspace` (`ws`)                                                | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
-| `session`                                                         | ✓ `list`, `search`, `show`, `new` (to become `create`), `send`, `end`             |
-| `kb`                                                              | ✓ `search`, `reindex`; next `note` (now `wheems note`)                            |
-| `chat`                                                            | next `reply` (now `wheems reply`); ○ `post <channel>`, `ask <channel>` (M3)       |
-| `skill`                                                           | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
-| `channel`                                                         | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
-| `engine`                                                          | ✓ `list`, `install`, `login`, `trust`                                             |
-| `service`                                                         | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
-| `config`                                                          | ✓ `validate`; ○ `show`                                                            |
-| `agent`                                                           | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
-| `project`                                                         | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
-| `task`                                                            | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
-| `routine`, `workflow`, `eval`, `integration`, `plugin`, `machine` | ○ later milestones                                                                |
+| Area               | Actions                                                                           |
+| ------------------ | --------------------------------------------------------------------------------- |
+| `workspace` (`ws`) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
+| `session`          | ✓ `list`, `search`, `show`, `new` (to become `create`), `send`, `end`             |
+| `kb`               | ✓ `search`, `reindex`; next `note` (now `wheems note`)                            |
+| `chat`             | next `reply` (now `wheems reply`); ○ `post <channel>`, `ask <channel>` (M3)       |
+| `skill`            | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
+| `channel`          | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
+| `engine`           | ✓ `list`, `install`, `login`, `trust`                                             |
+| `service`          | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
+| `config`           | ✓ `validate`; ○ `show`                                                            |
+| `agent`            | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
+| `project`          | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
+| `task`             | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
+| `routine`          | ○ `list`, `show`, `create`, `run`, `pause` (M5)                                   |
+| `pair`             | ○ `run` (M5)                                                                      |
+| `workflow`         | ○ `list`, `show`, `run` (M7)                                                      |
+| `eval`             | ○ `run`, `report` (M7)                                                            |
+| `blueprint`        | ○ `list`, `add`, `create` (M8)                                                    |
+| `integration`      | ○ `list`, `connect <name>`, `grant <name> <workspace>` (M9)                       |
+| `action`           | ○ `run <action>`, through the broker (M9)                                         |
+| `purchase`         | ○ `request` (M9)                                                                  |
+| `machine`          | ○ `list`, `run` (the worker on each machine) (M10)                                |
+| `plugin`           | ○ `add`, `list`, `remove` (M11)                                                   |
 
-The planned commands in other documents follow these names: `wheems task done`, `wheems integration
-connect github` (was `connect github`), `wheems machine run` (was `node`), `wheems blueprint add`.
+Laravel's `make:` generators become each area's `create`. Older documents named some commands
+differently; the docs now use these names:
+
+| Before                  | Now                                 |
+| ----------------------- | ----------------------------------- |
+| `wheems project new`    | `wheems project create`             |
+| `wheems task new`       | `wheems task create`                |
+| `wheems step`           | `wheems task step`                  |
+| `wheems post updates`   | `wheems chat post updates`          |
+| `wheems ask approvals`  | `wheems chat ask approvals`         |
+| `wheems connect github` | `wheems integration connect github` |
+| `wheems grant github`   | `wheems integration grant github`   |
+| `wheems do deploy`      | `wheems action run deploy`          |
+| `wheems buy`            | `wheems purchase request`           |
+| `wheems node`           | `wheems machine run`                |
+| `wheems make:blueprint` | `wheems blueprint create`           |
 
 ### Workspaces: archive and remove
 

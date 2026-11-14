@@ -158,6 +158,8 @@ export class SessionService {
   /** Who's waiting on whom with `send --wait`: a session's id, then the ones it waits on. */
   private readonly waits = new Map<string, string[]>();
   private stopped = false;
+  /** Workspaces no longer served (archived or removed): no session starts or resumes in them. */
+  private readonly retired = new Set<string>();
   /**
    * Ad-hoc sessions whose turn didn't finish and couldn't be stopped: the runtime session, and
    * the answer before that turn. Nothing more is typed into one until that turn is over.
@@ -190,6 +192,29 @@ export class SessionService {
     while (this.inbox.size > 0) await Promise.allSettled([...this.inbox.values()]);
   }
 
+  /**
+   * Starts and resumes nothing more in a workspace, and waits for what was already admitted or
+   * queued for its sessions to end. The service then stops its sessions.
+   */
+  async retire(workspace: string): Promise<void> {
+    this.retired.add(workspace);
+    await this.admitting.catch(() => undefined);
+    const pending = [...this.inbox].filter(
+      ([id]) => this.options.state.callingSession(id)?.workspace === workspace,
+    );
+    await Promise.allSettled(pending.map(([, work]) => work));
+  }
+
+  /** Serves a workspace again: one made afresh under the name of one retired earlier. */
+  unretire(workspace: string): void {
+    this.retired.delete(workspace);
+  }
+
+  /** Refuses work in a workspace that's no longer served. */
+  private served(workspace: string): void {
+    if (this.retired.has(workspace)) throw new Error(`Workspace ${workspace} is no longer served`);
+  }
+
   /** Works out who's calling. The workspace comes from the calling session when there is one. */
   caller(ref: CallerRef): Caller {
     const { state } = this.options;
@@ -211,6 +236,7 @@ export class SessionService {
           `A session can only act in its own workspace, ${session.workspace}, not ${ref.workspace}`,
         );
       }
+      this.served(session.workspace);
       const owner = session.kind === 'thread' ? (session.agent ?? session.id) : session.id;
       return { workspace: this.workspace(session.workspace), session, owner };
     }
@@ -240,6 +266,7 @@ export class SessionService {
 
   private async createNow(caller: Caller, request: NewSessionRequest): Promise<SessionRecord> {
     const workspace = caller.workspace;
+    this.served(workspace.id);
     const config = workspace.config;
     if (!config)
       throw new Error(`Workspace ${workspace.id} has config problems; run wheems doctor`);
@@ -297,6 +324,8 @@ export class SessionService {
         engineId: engine.findSession ? null : id,
         task: launchTag !== undefined ? `${purpose}\n\n${launchTag}` : purpose,
       });
+      // Retired while it started: the catch below stops it.
+      this.served(workspace.id);
       sessions.update(id, {
         state: 'working',
         launchStartedAt: now.toISOString(),
@@ -919,6 +948,7 @@ export class SessionService {
       this.ending.has(target.id) || (sessions.session(target.id)?.state ?? 'ended') === 'ended';
     // Read again: it may have been ended while this waited its turn.
     if (isEnded()) throw new Error('it has ended');
+    this.served(workspace.id);
     const engineId = engine.findSession ? target.engineSessionId : target.id;
     if (engineId === null) {
       throw new Error(
@@ -939,6 +969,7 @@ export class SessionService {
       // Ended while it started: it mustn't keep running.
       const now = sessions.session(target.id);
       if (isEnded() || !now) throw new Error('it was ended while it started again');
+      this.served(workspace.id);
       sessions.update(
         target.id,
         { state: 'working', launchedAt: new Date().toISOString() },

@@ -63,8 +63,14 @@ describe('wheems areas', () => {
     }
   };
 
+  let root: string;
+
   beforeEach(() => {
-    home = mkdtempSync(join(tmpdir(), 'wa-'));
+    // The install sits three folders deep in a folder of its own, so even a path that escapes
+    // the install (as `ws remove ../..` once could) stays inside this test's own folder.
+    root = mkdtempSync(join(tmpdir(), 'wa-'));
+    home = join(root, 'a', 'b', 'install');
+    mkdirSync(home, { recursive: true });
     env = { WHEEMS_HOME: home, WHEEMS_SECRETS: join(home, 'secrets.json') };
     writeFileSync(join(home, 'install.yaml'), installYaml());
     runtime = new MemoryRuntime({
@@ -73,7 +79,7 @@ describe('wheems areas', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true });
   });
 
   it('keeps the top level to the commands meant for it, each in a group', () => {
@@ -198,6 +204,42 @@ describe('wheems areas', () => {
       expect(after.workspace('personal').sessions()).toHaveLength(1);
       after.close();
       expect((await wheems('ws', 'remove', 'team', '--yes')).err).toContain('No workspace team');
+    });
+
+    it('refuses an id that is a path, and leaves everything as it is', async () => {
+      await wheems('ws', 'create', 'team', '--channel', 'team-chat');
+      // Each would resolve inside this test's own folder, never above it.
+      for (const id of ['../..', '..', 'team/../..', '/abs']) {
+        const result = await wheems('ws', 'remove', id, '--yes');
+        expect(result.err).toContain("isn't a workspace id");
+      }
+      expect((await wheems('ws', 'archive', '../team', '--yes')).err).toContain(
+        "isn't a workspace id",
+      );
+      expect(existsSync(join(home, 'install.yaml'))).toBe(true);
+      expect(existsSync(join(home, 'workspaces', 'team'))).toBe(true);
+    });
+
+    it("moves nothing when a session can't be stopped, or Herdr can't be asked", async () => {
+      await wheems('ws', 'create', 'team', '--channel', 'team-chat');
+      await runtime.start({
+        name: 'team-abc',
+        command: ['agent'],
+        cwd: home,
+        env: {},
+        labels: sessionLabels('s1', 'team'),
+      });
+      const stop = runtime.stop.bind(runtime);
+      runtime.stop = () => Promise.reject(new Error('Herdr is busy'));
+      expect((await wheems('ws', 'archive', 'team', '--yes')).err).toContain('Herdr is busy');
+      expect(existsSync(join(home, 'workspaces', 'team'))).toBe(true);
+      runtime.stop = stop;
+      const list = runtime.list.bind(runtime);
+      runtime.list = () => Promise.reject(new Error('hc is not answering'));
+      expect((await wheems('ws', 'remove', 'team', '--yes')).err).toContain('hc is not answering');
+      expect(existsSync(join(home, 'workspaces', 'team'))).toBe(true);
+      runtime.list = list;
+      expect((await wheems('ws', 'archive', 'team', '--yes')).code).toBe(0);
     });
 
     it('removes an archived workspace too', async () => {

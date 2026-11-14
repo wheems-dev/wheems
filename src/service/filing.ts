@@ -59,6 +59,8 @@ export class FilingQueue {
   /** Workspaces with a tidy queued or running. */
   private readonly tidying = new Set<string>();
   private stopped = false;
+  /** Workspaces no longer served (archived or removed): nothing more is filed in them. */
+  private readonly retired = new Set<string>();
 
   constructor(options: FilingOptions) {
     this.options = {
@@ -72,7 +74,7 @@ export class FilingQueue {
 
   /** Files whatever is in a workspace's inbox, after any pass already running. */
   file(workspace: string): Promise<void> {
-    if (this.stopped) return Promise.resolve();
+    if (this.stopped || this.retired.has(workspace)) return Promise.resolve();
     if (this.queued.has(workspace)) return this.chains.get(workspace) ?? Promise.resolve();
     this.queued.add(workspace);
     const next = (this.chains.get(workspace) ?? Promise.resolve())
@@ -90,6 +92,17 @@ export class FilingQueue {
   /** Files every workspace's inbox, as after a restart. */
   async fileAll(): Promise<void> {
     await Promise.all(this.options.workspaces.map((w) => this.file(w.id)));
+  }
+
+  /** Files nothing more in a workspace, and waits for work already queued there to end. */
+  async retire(workspace: string): Promise<void> {
+    this.retired.add(workspace);
+    await this.chains.get(workspace)?.catch(() => undefined);
+  }
+
+  /** Files in a workspace again: one made afresh under the name of one retired earlier. */
+  unretire(workspace: string): void {
+    this.retired.delete(workspace);
   }
 
   async whenIdle(): Promise<void> {
@@ -124,7 +137,7 @@ export class FilingQueue {
 
   /** Runs the nightly tidy in a workspace now, after any filing already queued there. */
   tidy(workspace: string, now = new Date()): Promise<TidyResult> {
-    if (this.stopped) return Promise.resolve('skipped');
+    if (this.stopped || this.retired.has(workspace)) return Promise.resolve('skipped');
     this.tidying.add(workspace);
     const next = (this.chains.get(workspace) ?? Promise.resolve()).then(() =>
       this.tidyOne(workspace, now),

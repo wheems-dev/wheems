@@ -45,7 +45,7 @@ Wheems was formerly called Opinr.
 - [Search](#search)
 - [Skills and review](#skills-and-review)
 - [The service](#the-service)
-- [Doctor and validate](#doctor-and-validate)
+- [Doctor and config validate](#doctor-and-config-validate)
 - [Command reference](#command-reference)
 - [Configuration reference](#configuration-reference)
 - [Engines](#engines)
@@ -614,7 +614,7 @@ date when the service starts. The first time a Wheems with the store starts, it 
 file, it leaves it where it is and won't start, and the log and `wheems doctor` say why: fix the
 file, or remove it to start its threads afresh, then run `wheems restart`.
 
-## Doctor and validate
+## Doctor and config validate
 
 `wheems doctor` checks everything, in sections:
 
@@ -946,14 +946,14 @@ Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 | 6         | A second workspace, kept apart                                                                                                                                                                                          |
 | 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                     |
 | 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                              |
-| 9         | Integrations, guardrails and the vault: `connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                                    |
-| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems node`, Telegram and email                                                                                                           |
-| 11        | Plugins and release: `make:` commands, npm plugins, and the open-source release on npm                                                                                                                                  |
+| 9         | Integrations, guardrails and the vault: `integration connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                        |
+| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                    |
+| 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                  |
 
 Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
 awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's
 built, with a worked example: growing a website into a lead generator.
-[docs/ideas/](docs/ideas/) keeps the original ideas, the two design proposals and the
+[docs/cli.md](docs/cli.md) has how the commands are organised. [docs/ideas/](docs/ideas/) keeps the original ideas, the two design proposals and the
 [decisions](docs/ideas/decisions.md) taken from them.
 
 ## Developing Wheems
@@ -1014,6 +1014,7 @@ yet:
 - [The product](docs/product.md): what Wheems is, and the opinions it holds
 - [Getting started](docs/getting-started.md): the setup walk-through
 - [Architecture](docs/architecture.md): what's built and what's planned: projects, tasks and their evaluation, routines, workflows, the vault, with a worked example
+- [The `wheems` command](docs/cli.md): how the commands are organised by area, and the rules for adding one
 - [Config formats](docs/config.md): every config file, including the parts not used yet
 - [Drivers and plugins](docs/drivers.md): the contracts and their contract tests
 - [The Herdr runtime driver](docs/herdr.md)

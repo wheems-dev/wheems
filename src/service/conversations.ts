@@ -145,6 +145,8 @@ export class ConversationManager {
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
+  /** Workspaces no longer served (archived or removed): no session starts for them. */
+  private readonly retired = new Set<string>();
   /**
    * Why each workspace's chief can't answer, as already said in chat: each problem is said once,
    * until the chief answers again, so a person isn't told the same thing on every message.
@@ -423,6 +425,21 @@ export class ConversationManager {
     });
   }
 
+  /**
+   * Starts nothing more for a workspace, and waits for the work already queued for its
+   * conversations to end. The service then stops its sessions.
+   */
+  async retire(workspace: string): Promise<void> {
+    this.retired.add(workspace);
+    const pending = [...this.queues].filter(([key]) => key.startsWith(`${workspace}:`));
+    await Promise.allSettled(pending.map(([, work]) => work));
+  }
+
+  /** Serves a workspace again: one made afresh under the name of one retired earlier. */
+  unretire(workspace: string): void {
+    this.retired.delete(workspace);
+  }
+
   private async deliver(
     key: string,
     binding: Binding,
@@ -430,6 +447,10 @@ export class ConversationManager {
     /** The person's message, to mark as seen; null for a message from Wheems. */
     seen: MessageRef | null = { channel: event.channel, messageId: event.messageId },
   ): Promise<void> {
+    if (this.retired.has(binding.workspace.id)) {
+      this.options.log(`Conversation ${key}: its workspace is no longer served`);
+      return;
+    }
     const channel = this.channel(binding.connection);
     if (seen && channel.capabilities.reactions)
       await channel.react(seen, 'eyes', true).catch(() => undefined);
@@ -523,6 +544,12 @@ export class ConversationManager {
       engineId,
       launchTag,
     );
+    if (this.retired.has(binding.workspace.id)) {
+      // Retired while it started: it mustn't keep running.
+      await this.options.runtime.stop(started.id).catch(() => undefined);
+      await this.options.runtime.remove(started.id).catch(() => undefined);
+      return;
+    }
     const launchedAt = new Date();
     await this.options.store.set(key, {
       workspace: binding.workspace.id,

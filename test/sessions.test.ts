@@ -11,6 +11,7 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
 import { writeSecret } from '../src/secrets.js';
 import { conversationKey, uuidFor } from '../src/service/conversations.js';
+import { request } from '../src/service/control.js';
 import { runService, type RunningService } from '../src/service/service.js';
 import { StateStore, type SessionRecord } from '../src/state/store.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
@@ -440,6 +441,32 @@ describe('wheems session', () => {
     );
     expect((await wheems(['session', 'list'])).err).toContain('Say which workspace');
   });
+  it('starts nothing for a workspace while it is retired, even what was already queued', async () => {
+    // A session's start waits in Herdr while the workspace is retired.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const start = runtime.start.bind(runtime);
+    runtime.start = async (options) => {
+      await held;
+      return start(options);
+    };
+    const creating = wheems(['session', 'new', '--title', 'late', '--purpose', 'research late']);
+    await new Promise((r) => setTimeout(r, 50));
+    const retiring = request(paths(home, env).socket, {
+      op: 'workspace-retire',
+      id: 'personal',
+      forget: true,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    expect(await retiring).toMatchObject({ ok: true });
+    expect((await creating).err).toContain('no longer served');
+    expect(
+      (await runtime.list({ labels: { workspace: 'personal' } })).filter((x) => x.state === 'live'),
+    ).toEqual([]);
+    expect(await stored((s) => s.workspace('personal').sessions({ kind: 'adhoc' }))).toEqual([]);
+  });
+
   describe('send', () => {
     /** Waits until a session has answered its purpose and is idle. */
     const settled = async (id: string) => {

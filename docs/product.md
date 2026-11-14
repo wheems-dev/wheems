@@ -158,7 +158,7 @@ that explain the data. `wheems blueprint add crm` installs one into a workspace.
 a driver, SQLite by default and Postgres for larger installs. Wheems ships a handful of
 blueprints, the CRM first. A blueprint is defined in code with a documented shape, so the chief
 of staff can adapt one (add a field, a table or a tool) or build a new one with
-`wheems make:blueprint`, and the change is applied once you approve it. Like skills, each
+`wheems blueprint create`, and the change is applied once you approve it. Like skills, each
 workspace pins the blueprint versions it uses.
 
 **Isolation, stated per workspace**

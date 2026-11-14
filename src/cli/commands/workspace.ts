@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import type { Command } from 'commander';
 import { parseDocument } from 'yaml';
 import { loadInstall, type LoadedWorkspace } from '../../config/load.js';
+import { nameSchema } from '../../config/schemas.js';
 import { defaultHome, paths, tilde, type Paths } from '../../home.js';
 import { request, type ServiceReport } from '../../service/control.js';
 import { stopWorkspaceSessions } from '../../service/retire.js';
@@ -154,6 +155,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     .option('--json', 'print it as JSON')
     .option('--home <dir>', homeHelp)
     .action(async (id: string, options: { json?: boolean; home?: string }) => {
+      workspaceId(id);
       const where = paths(home(io, options), io.env);
       const workspace = await findWorkspace(where, id);
       const row = describeWorkspace(workspace, await serviceReport(where));
@@ -201,6 +203,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     .argument('<name>', 'the new display name')
     .option('--home <dir>', homeHelp)
     .action(async (id: string, name: string, options: { home?: string }) => {
+      workspaceId(id);
       const where = paths(home(io, options), io.env);
       const workspace = await findWorkspace(where, id);
       const trimmed = name.trim();
@@ -225,6 +228,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     .option('--yes', "don't ask first")
     .option('--home <dir>', homeHelp)
     .action(async (id: string, options: { yes?: boolean; home?: string }) => {
+      workspaceId(id);
       const where = paths(home(io, options), io.env);
       const workspace = await findWorkspace(where, id);
       if (options.yes !== true) {
@@ -232,8 +236,9 @@ export function registerWorkspace(program: Command, io: Io): void {
           `Archive ${id}? Its chief stops answering and the workspace moves to the archive, with its knowledge base. wheems ws restore brings it back.`,
         );
       }
+      inside(where.workspaces, workspace.dir);
       const stopped = await retire(io, where, id, false);
-      const dest = archiveFolder(where, id);
+      const dest = inside(join(where.home, 'archive'), archiveFolder(where, id));
       await mkdir(join(where.home, 'archive'), { recursive: true });
       await rename(workspace.dir, dest);
       await writeFile(
@@ -252,6 +257,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     .argument('<id>', "the archived workspace's id")
     .option('--home <dir>', homeHelp)
     .action(async (id: string, options: { home?: string }) => {
+      workspaceId(id);
       const where = paths(home(io, options), io.env);
       const archived = (await archivedWorkspaces(where)).filter((a) => a.id === id).at(-1);
       if (!archived)
@@ -260,7 +266,7 @@ export function registerWorkspace(program: Command, io: Io): void {
       if (existsSync(dir))
         throw new Error(`There's already a workspace ${id} at ${tilde(dir, io.env)}`);
       await mkdir(where.workspaces, { recursive: true });
-      await rename(archived.dir, dir);
+      await rename(inside(join(where.home, 'archive'), archived.dir), dir);
       await rm(join(dir, ARCHIVED), { force: true });
       io.out(`Restored ${id}. Restart the service for its chief to answer again: wheems restart\n`);
     });
@@ -271,6 +277,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     .option('--yes', "don't ask first")
     .option('--home <dir>', homeHelp)
     .action(async (id: string, options: { yes?: boolean; home?: string }) => {
+      workspaceId(id);
       const where = paths(home(io, options), io.env);
       const active = join(where.workspaces, id);
       const target = existsSync(active)
@@ -285,16 +292,41 @@ export function registerWorkspace(program: Command, io: Io): void {
           `This deletes ${id} for good: ${tilde(target, io.env)}, with its agents and knowledge base, and its sessions, messages and search index. It can't be undone. Type ${id} to go ahead`,
         );
       }
+      inside(existsSync(active) ? where.workspaces : join(where.home, 'archive'), target);
       const stopped = await retire(io, where, id, true);
       await rm(target, { recursive: true, force: true });
-      for (const dir of stateFolders(where, id)) await rm(dir, { recursive: true, force: true });
-      await rm(join(where.state, 'tidy', `${id}.json`), { force: true });
+      for (const dir of stateFolders(where, id)) {
+        await rm(inside(where.state, dir), { recursive: true, force: true });
+      }
+      await rm(inside(where.state, join(where.state, 'tidy', `${id}.json`)), { force: true });
       io.out(`Removed ${id}${stopped}.\n`);
     });
 }
 
 /** Marks an archived workspace's folder, with its id and when it was archived. */
 const ARCHIVED = '.archived.json';
+
+/** A workspace id from the command line: a name, never a path. */
+function workspaceId(id: string): string {
+  if (!nameSchema.safeParse(id).success) {
+    throw new Error(`"${id}" isn't a workspace id: they're lowercase letters, digits and dashes`);
+  }
+  return id;
+}
+
+/** Refuses a path that isn't inside `parent`, before anything is moved or deleted. */
+function inside(parent: string, path: string): string {
+  const rel = relative(resolve(parent), resolve(path));
+  if (
+    rel === '' ||
+    rel.startsWith('..') ||
+    rel.startsWith(sep) ||
+    resolve(path) === resolve(parent)
+  ) {
+    throw new Error(`Refusing to touch ${path}: it isn't inside ${parent}`);
+  }
+  return path;
+}
 
 function home(io: Io, options: { home?: string }): string {
   return resolve(options.home ?? defaultHome(io.env));
@@ -376,7 +408,8 @@ async function retire(io: Io, where: Paths, id: string, forget: boolean): Promis
     ...(herdr?.binary !== undefined && { binary: herdr.binary }),
     ...(herdr?.version !== undefined && { minimumVersion: herdr.version }),
   });
-  const stopped = await stopWorkspaceSessions(runtime, id).catch(() => 0);
+  // A failure here stops the command: nothing moves while an agent may still be running.
+  const stopped = await stopWorkspaceSessions(runtime, id);
   if (forget && existsSync(where.store)) {
     const state = await StateStore.open(where.store);
     try {
