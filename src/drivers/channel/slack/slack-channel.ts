@@ -164,6 +164,26 @@ export class SlackChannel implements ChannelDriver {
     }
   }
 
+  async listChannels(): Promise<{ id: string; name: string }[]> {
+    const found: { id: string; name: string }[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.transport.call('conversations.list', {
+        types: 'public_channel,private_channel',
+        exclude_archived: true,
+        limit: 200,
+        ...(cursor !== undefined && { cursor }),
+      });
+      for (const channel of (page.channels as { id: string; name: string }[] | undefined) ?? []) {
+        this.channelIds.set(channel.name, channel.id);
+        found.push({ id: channel.id, name: channel.name });
+      }
+      const next = (page.response_metadata as { next_cursor?: string } | undefined)?.next_cursor;
+      cursor = next !== undefined && next !== '' ? next : undefined;
+    } while (cursor !== undefined);
+    return found;
+  }
+
   async isMember(channelId: string): Promise<boolean | null> {
     try {
       const info = await this.transport.call('conversations.info', { channel: channelId });

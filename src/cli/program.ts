@@ -9,6 +9,7 @@ import type { DriverRegistry } from '../contracts/registry.js';
 import { createDriverRegistry } from '../drivers/index.js';
 import { slackManifest } from '../drivers/channel/slack/setup.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
+import { offerFixes } from '../doctor/fix.js';
 import { stat } from 'node:fs/promises';
 import { initWorkspace } from './commands/init.js';
 import { registerKb } from './commands/kb.js';
@@ -73,16 +74,59 @@ export function createProgram(io: Io): Command {
     .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
     .option('--quick', 'skip starting a test session in Herdr core')
     .option('--json', 'print the report as JSON')
-    .action(async (options: { home?: string; quick?: boolean; json?: boolean }) => {
-      const report = await runDoctor({
-        home: resolve(options.home ?? defaultHome(io.env)),
-        registry: io.registry(),
-        quick: options.quick === true,
-        env: io.env,
-      });
+    .option(
+      '--fix',
+      'offer to fix what it safely can, asking before each fix (never the chat app or its tokens)',
+    )
+    .action(async (options: { home?: string; quick?: boolean; json?: boolean; fix?: boolean }) => {
+      const home = resolve(options.home ?? defaultHome(io.env));
+      const fixing = options.fix === true;
+      if (fixing && (options.json === true || !process.stdin.isTTY || !process.stdout.isTTY)) {
+        throw new Error('wheems doctor --fix asks before each fix, so it needs a terminal.');
+      }
+      const where = paths(home, io.env);
+      const doctor = () =>
+        runDoctor({
+          home,
+          registry: io.registry(),
+          quick: options.quick === true,
+          env: io.env,
+          ...(fixing && {
+            fixes: {
+              startService: () => installAndWait(where),
+              run: (command: string[], cwd: string) =>
+                runInteractive(command[0] ?? '', command.slice(1), { cwd }),
+              reindex: async (workspace: string) => {
+                const answer = await request(
+                  where.socket,
+                  { op: 'reindex', workspace },
+                  60 * 60_000,
+                );
+                if (!answer.ok) throw new Error(answer.error);
+              },
+            },
+          }),
+        });
+      const report = await doctor();
       if (options.json === true) io.out(`${JSON.stringify(report, null, 2)}\n`);
       else io.out(formatReport(report, io.color));
-      if (!report.ok) process.exitCode = 1;
+      if (!fixing) {
+        if (!report.ok) process.exitCode = 1;
+        return;
+      }
+      const ui = clackUi();
+      const { fixed } = await offerFixes(report, {
+        ask: (question) => ui.confirm(question, false).catch(() => false),
+        out: io.out,
+      });
+      if (fixed === 0) {
+        if (!report.ok) process.exitCode = 1;
+        return;
+      }
+      io.out('\nChecking again.\n\n');
+      const after = await runDoctor({ home, registry: io.registry(), quick: true, env: io.env });
+      io.out(formatReport(after, io.color));
+      if (!after.ok) process.exitCode = 1;
     });
 
   program
