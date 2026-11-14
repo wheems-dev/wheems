@@ -28,7 +28,8 @@ TypeScript first.
 - **The service**: always running, under launchd on a Mac and systemd on Linux. It holds the
   channel connections and routes messages, files notes, keeps search indexes and runs the
   nightly tidy (built). It will also run tasks, approvals, routines and workflows, and keep a
-  small SQLite store of what's waiting (planned).
+  small SQLite store of every session it runs and what's waiting (planned, see
+  [Sessions](#sessions)).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems post updates "…"`,
   `wheems ask approvals "Deploy?"` and `wheems note`. It replaces hand-written scripts and
   hard-coded channel IDs.
@@ -91,7 +92,8 @@ and never pass through an agent.
 
 Running state, never committed, lives in `.wheems/`: the control socket, logs, conversations, the
 filer's working copies, the search indexes (`.wheems/index/`) and what waits for review
-(`.wheems/review/`).
+(`.wheems/review/`). From milestone 3 the session store, `.wheems/state.sqlite`, replaces
+`conversations.json` (see [The session store](#the-session-store)).
 
 Agents are told never to write into `knowledge/` or `about-you.md` themselves; that's an
 instruction, not a lock, until permission rules arrive (milestone 6). They write notes with
@@ -330,6 +332,145 @@ default, where its lead posts under its own name and icon. `approvals` and `upda
 workspace, each post tagged with its project. `wheems project new` creates the channel when the
 app may, and otherwise tells you to create it and invite the app; doctor checks it.
 
+## Sessions
+
+Planned, milestone 3, built first in it. Wheems keeps a record of every agent session it runs:
+which workspace, project and agent it belongs to, who started it, what it's for and what state
+it's in. That lets the service pick up after a restart, and lets a chief find the right session
+to talk to. Two kinds of thing are recorded:
+
+- **Standing agents**: each workspace's chief and, from milestone 4, each project's lead. One row
+  per agent, written by code from `workspace.yaml` and `project.yaml` at every service start,
+  never by an agent. They're always there, whether a session of theirs is running or not. Their
+  sessions are thread sessions: one per Slack thread, as now.
+- **Ad-hoc sessions**: started on the fly for one piece of work, by a chief or by you. "Open a
+  session to research packaging suppliers and keep it going" starts one. Each has an owner, a
+  title, a purpose and a one-line summary, and stays open until it's ended, so its owner can come
+  back to it.
+
+From milestone 5, [tasks](#tasks) are recorded the same way, as sessions of kind `task`.
+
+### The first test: several chiefs, each with a few sessions
+
+The test this milestone is built for: two or three chiefs in Slack, each with two or three ad-hoc
+sessions beneath it, used every day.
+
+- **Each chief is a workspace's chief**, in that workspace's own Slack channel. The service
+  already runs every workspace in `install.yaml` side by side. Keeping them apart arrives in
+  milestone 6, so until then, use workspaces that don't need to be secret from each other.
+- **You ask a chief to start a session.** It runs `wheems session new`, which starts the agent in
+  Herdr, records the session with the chief as its owner, and opens a Slack thread for it in the
+  chief's channel, where the session posts under its own name. Every message to it, from you or
+  from a chief, and every answer appears in that thread, so you can watch it, or reply there to
+  talk to it directly.
+- **The chief talks to it** with `wheems session send`, and finds it again later, from any of
+  its threads, with `wheems session search`.
+
+### Finding a session
+
+`wheems session search "<words>"` searches the caller's workspace: titles, purposes, summaries,
+and agent and project names, with SQLite's full-text search (the same built-in search the
+knowledge base uses). Each result shows the id, agent, owner, state, when it was last active and
+its summary, most recently active first. `wheems session list` filters by owner, agent, project,
+kind and state. A chief's instructions get a generated Sessions section at launch listing its own
+open sessions, as they were then.
+
+**The summary is written by code, not by the agent**, the same rule as project cards: the purpose
+given to `session new` at first, then the first line of the session's latest note (or, from
+milestone 5, its latest task result). An agent can't describe itself into someone else's search
+results.
+
+### Talking to another session
+
+`wheems session send <id> "<message>"` delivers a message into an existing session, resuming it
+first if it was stopped. With `--wait` the caller gets the answer back (up to a timeout);
+without, the answer arrives in the caller's own session as a message from that session.
+
+Until tasks arrive, a send is a plain message and its answer, both kept as files and recorded in
+the store. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
+`task.md`) instead of a fresh one, so the task stays the one hand-off: a brief, a result, the same
+checks and the same run record. The only difference is that the session receiving it keeps its
+context.
+
+**Rules**
+
+- **Within one workspace only.** A session can't find, see or message another workspace's
+  sessions. Every query is filtered by the caller's workspace in one place in code, taken from
+  who's calling, never from an argument.
+- **Who may send to whom.** A chief may send to any session in its workspace, and a lead to any
+  session in its project. Any other session may send to its owner and to the sessions it owns.
+  You may send to any of them from Slack.
+- **Limits, so sessions can't multiply or loop.** `max_open_per_owner` (3 by default) caps the
+  open ad-hoc sessions one owner has; `max_depth` (2 by default) lets a chief's session start one
+  more level and no further; `max_sessions` per account counts every session of every kind. A
+  `--wait` send to a session that's already waiting on the sender is refused, so two sessions
+  can't wait on each other.
+- **Who's calling.** The control socket knows the caller by the session id Wheems put in its
+  environment at launch. That's convenience, not proof, on a machine with one person; the
+  short-lived credential that tasks get in milestone 5 covers sessions too.
+
+```yaml
+# workspaces/acme/workspace.yaml (proposed format)
+sessions:
+  max_open_per_owner: 3
+  max_depth: 2
+  end_after_idle: 7d # ends an ad-hoc session nobody has used for this long
+```
+
+### States and lifetimes
+
+An ad-hoc session is **starting**, **working**, **idle**, **stopped** (its Herdr session has gone,
+and its engine session can be resumed) or **ended**. An idle one may be stopped to make room, least
+recently used first, as thread sessions are today, and is resumed when it's next sent a message.
+
+`wheems session end <id>`, run by its owner or you, or `end_after_idle`, ends one: Wheems asks it
+for its note first, as it does before stopping a session today, then marks it ended. An ended
+session stays in the store and in search as a record, but can't be sent messages.
+
+| Command (planned)                                                    | What it does                                                                        |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, opens its Slack thread, prints its id |
+| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                                  |
+| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                         |
+| `wheems session send <id> "<message>" [--wait]`                      | Sends a message into a session and returns its answer                               |
+| `wheems session show <id>`                                           | Its details, recent messages and the `hc attach` line                               |
+| `wheems session end <id>`                                            | Asks for its note, then ends it                                                     |
+
+The agent is any agent in the workspace's `agents/` (or, from milestone 4, the project's team); with
+none named, the session runs the owner's own agent file.
+
+### The session store
+
+`.wheems/state.sqlite`, one per install, using Node's built-in `node:sqlite` as the search index
+does.
+
+- **Herdr says whether a session is alive; the store says what it's for.** The store doesn't copy
+  Herdr's live state. Every session Wheems starts is labelled `wheems=<session id>` in Herdr, and
+  at service start the store is matched against `hc`'s list: a row whose Herdr session has gone
+  becomes stopped, still resumable; a Herdr session with a Wheems label and no row is reported by
+  doctor and left alone, never adopted or removed. This is how a running session is picked up
+  again after a restart and never started twice.
+- **Only the service writes to it.** The CLI and agents go through the control socket, as they do
+  now, so there's one writer and every change passes the same checks.
+- **Ids, states and short text, not content.** Messages, briefs, results and notes stay as files
+  under `.wheems/` and in the knowledge base. Titles, purposes and summaries go through the same
+  credential check as notes.
+- **One store per install, not per workspace.** It holds no content, every row carries its
+  workspace, and `max_sessions` counts across workspaces. The workspace filter lives in one module,
+  like `hc` calls do.
+- **Migrations in code.** The schema version is kept in `PRAGMA user_version` and migrations run at
+  service start. On the first start, `.wheems/conversations.json` is imported and renamed
+  `conversations.json.imported`.
+
+| Table (proposed)    | One row per                          | Holds                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `agents`            | Standing agent                       | Id (`acme/chief-of-staff`, `acme/reviews/lead`), workspace, project, role and engine, from config                                                                                                        |
+| `sessions`          | Session Wheems started               | Id, workspace, project, agent, kind (`thread`, `adhoc`, `task`), owner, parent, title, purpose, summary, state, Herdr address, engine session id, folder, and when it started, was last active and ended |
+| `threads`           | Chat thread                          | Connection, channel and thread, the session it belongs to, and what `conversations.json` keeps per thread today: the answer position, the waiting count and the note state                               |
+| `messages`          | Message sent between sessions        | Sender, receiver, the files holding the message and its answer, state and times                                                                                                                          |
+| `tasks`, `attempts` | Task and attempt (milestone 5)       | See [How a task runs](#how-a-task-runs)                                                                                                                                                                  |
+| `session_search`    | Session, in a full-text search index | Title, purpose, summary, agent and project                                                                                                                                                               |
+
 ## Tasks
 
 Planned, milestone 5. **The task is the one hand-off between agents**: a written brief to an
@@ -345,7 +486,11 @@ every judge are all tasks. It's built on the task runner that the filer already 
 | Workspace chief                                         | One session per Slack thread, resumable (built)          | You talk to it                      |
 | Project lead                                            | Per thread in its channel; fresh per task when sent work | Tasks don't clutter your threads    |
 | Workers, pair members, judges, routines, workflow steps | Fresh per task                                           | Clean context; runs can be repeated |
+| Ad-hoc sessions                                         | Until ended; stopped when idle, resumed when sent work   | Work you come back to               |
 | Filer                                                   | Fresh per note (built)                                   |                                     |
+
+A task goes to a fresh session by default, or to an existing [ad-hoc session](#sessions) when
+`task.md` names one with `session: <id>`.
 
 Agent front matter gains `lifetime: thread | task`: `thread` by default for chiefs and leads,
 `task` for everyone else. Each agent session gets **its own folder**
@@ -387,7 +532,7 @@ CRM row, a draft). The result is filed as the session's note, so a task needs no
 ### How a task runs
 
 1. `wheems task new` (or a routine, a workflow or a pair) writes `task.md` and records the task in
-   the service's SQLite store.
+   the [session store](#the-session-store).
 2. The runner prepares the agent in the task's own folder and starts it through the runtime
    driver, on the agent's machine, labelled with the task's id.
 3. It follows the session as conversations are followed today: by status, or by answers for

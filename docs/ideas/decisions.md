@@ -85,3 +85,16 @@ Three tiers, chosen per job:
 Rule of thumb: a single output for a person to read → a routine. Several touchpoints, outside side effects (sending, publishing, money, customers), approvals in the middle, or hand-offs between agents → a workflow. Promote a skill procedure to a workflow when its trace checks show drift, or as soon as it acts on the outside world.
 
 **Learning what repeats.** The knowledge loop already sees every request and task. Add detection to the nightly tidy: cluster similar requests (by meaning), and when one recurs (for example three times in two weeks, or at a regular time), the chief proposes "Shall I make this a routine?" with a suggested schedule, the skill it would use (drafted as a skill proposal, which already exists), and the tier. The owner approves; it starts in shadow mode where it acts on the outside world; it graduates as its evaluation earns it. The same detector can propose promoting a routine to a workflow.
+
+## Sessions: standing agents and ad-hoc sessions (14 November)
+
+The owner: "there are the chiefs of staff, which is a static row in the table, but then there are obviously also sessions that might just be used for a one-off or an on-the-fly session. We just need a way to keep track of them, and it also helps when we've got a chief of staff who wants to talk to another session. It's able to search those sessions to get the right one." The aim is to start soon: two or three chiefs in Slack, each with two or three sessions beneath it, to see how it works.
+
+What it changes (designed in [architecture.md](../architecture.md#sessions)):
+
+- **A session store**, `.wheems/state.sqlite`, one per install, built first in milestone 3 (now "Sessions, approvals and updates"), replacing `conversations.json`. Herdr says whether a session is alive; the store says what it's for. Only the service writes to it.
+- **Standing agents** (chiefs, later leads) are rows written by code from config. **Ad-hoc sessions** are started on the fly by a chief or a person, with an owner, title, purpose and a summary written by code, and stay open until ended.
+- **Chiefs find sessions by full-text search** and talk to them with `wheems session send`. Each ad-hoc session gets a Slack thread in its chief's channel, so every exchange is visible and the person can talk to it directly.
+- **The task stays the one hand-off.** Until milestone 5 a send is a plain message and its answer; from milestone 5 it's a task aimed at an existing session instead of a fresh one.
+- **Guardrails:** search and sends stay within one workspace; limits on open sessions per owner, on depth, and per account; no two sessions waiting on each other.
+- **Several chiefs means several workspaces** in one install, which the service already runs side by side. They're kept apart only from milestone 6, so the first test uses workspaces that needn't be secret from each other.

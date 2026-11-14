@@ -777,18 +777,18 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
 
 Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 
-| Milestone | What it brings                                                                                                                                        |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                       |
-| 3         | Approvals and updates: buttons on your phone, the `approvals` and `updates` channels, and a first version of the broker                               |
-| 4         | Projects and leads: any body of work as a project, with a lead in its own channel and its own knowledge base, and the chief routing questions to them |
-| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                               |
-| 6         | A second workspace, kept apart                                                                                                                        |
-| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                   |
-| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                            |
-| 9         | Integrations, guardrails and the vault: `connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                  |
-| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems node`, Telegram and email                                         |
-| 11        | Plugins and release: `make:` commands, npm plugins, and the open-source release on npm                                                                |
+| Milestone | What it brings                                                                                                                                                                                                          |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                                                                                         |
+| 3         | Sessions, approvals and updates: a record of every session, so a chief can start sessions, find them and talk to them; buttons on your phone, the `approvals` and `updates` channels, and a first version of the broker |
+| 4         | Projects and leads: any body of work as a project, with a lead in its own channel and its own knowledge base, and the chief routing questions to them                                                                   |
+| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                                                                                                 |
+| 6         | A second workspace, kept apart                                                                                                                                                                                          |
+| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                     |
+| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                              |
+| 9         | Integrations, guardrails and the vault: `connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                                    |
+| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems node`, Telegram and email                                                                                                           |
+| 11        | Plugins and release: `make:` commands, npm plugins, and the open-source release on npm                                                                                                                                  |
 
 Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
 awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's
