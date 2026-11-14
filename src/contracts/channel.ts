@@ -54,6 +54,9 @@ export interface ChannelDriver extends Driver<'channel'> {
    * be, so Wheems can write to them first, as setup's greeting does.
    */
   openDirect?(userId: string): Promise<string>;
+
+  /** Optional: a channel's name from its id, to write in config; null when it can't tell. */
+  channelName?(channelId: string): Promise<string | null>;
 }
 
 export interface MessageRef {
@@ -70,11 +73,16 @@ export interface ChannelCapabilities {
   reactions: boolean;
   /** Posts can carry a per-workspace name and icon. Drivers without it ignore `identity`. */
   identities: boolean;
+  /**
+   * Optional: the driver reports `joined` events when the app is added to a channel, so Wheems
+   * can offer to set one up there. Without it, the first message there does instead.
+   */
+  joins?: boolean;
 }
 
 export type InboundHandler = (event: InboundEvent) => void | Promise<void>;
 
-export type InboundEvent = InboundMessage | ButtonPress;
+export type InboundEvent = InboundMessage | ButtonPress | ChannelJoined;
 
 export interface InboundMessage {
   type: 'message';
@@ -101,6 +109,15 @@ export interface ButtonPress {
   userId: string;
   /** The `id` the button was sent with. */
   buttonId: string;
+  receivedAt: Date;
+}
+
+/** The app was added to a channel, on drivers with `joins`. */
+export interface ChannelJoined {
+  type: 'joined';
+  channel: string;
+  /** The driver's id for the person who added the app, or null when it doesn't say. */
+  userId: string | null;
   receivedAt: Date;
 }
 
@@ -134,6 +151,6 @@ export interface SentMessage {
 }
 
 /** The thread to reply in to keep a conversation together. */
-export function replyThread(event: InboundEvent): string {
+export function replyThread(event: InboundMessage | ButtonPress): string {
   return event.threadId ?? event.messageId;
 }

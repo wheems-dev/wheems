@@ -24,6 +24,7 @@ export class SlackChannel implements ChannelDriver {
     buttons: false,
     reactions: true,
     identities: true,
+    joins: true,
   };
   private readonly transport: SlackTransport;
   private handler: InboundHandler | undefined;
@@ -184,6 +185,18 @@ export class SlackChannel implements ChannelDriver {
     return found;
   }
 
+  async channelName(channelId: string): Promise<string | null> {
+    try {
+      const info = await this.transport.call('conversations.info', { channel: channelId });
+      const name = (info.channel as { name?: unknown } | undefined)?.name;
+      if (typeof name !== 'string') return null;
+      this.channelIds.set(name, channelId);
+      return name;
+    } catch {
+      return null;
+    }
+  }
+
   async isMember(channelId: string): Promise<boolean | null> {
     try {
       const info = await this.transport.call('conversations.info', { channel: channelId });
@@ -203,7 +216,23 @@ export class SlackChannel implements ChannelDriver {
 
   private async onEvent(event: SlackEvent): Promise<void> {
     const handler = this.handler;
-    if (!handler || event.type !== 'message') return;
+    if (!handler) return;
+    // The app was added to a channel: member_joined_channel (needs that bot event), or the
+    // channel_join message Slack also posts, for apps that only get message events.
+    const joined =
+      event.type === 'member_joined_channel' ||
+      (event.type === 'message' && event.subtype === 'channel_join');
+    if (joined) {
+      if (event.user !== this.botUserId || typeof event.channel !== 'string') return;
+      await handler({
+        type: 'joined',
+        channel: event.channel,
+        userId: typeof event.inviter === 'string' ? event.inviter : null,
+        receivedAt: new Date(),
+      });
+      return;
+    }
+    if (event.type !== 'message') return;
     // Edits, deletions, joins and bot posts arrive as subtypes; only plain messages, and
     // messages with files attached, count.
     if (typeof event.subtype === 'string' && event.subtype !== 'file_share') return;
@@ -223,12 +252,20 @@ export class SlackChannel implements ChannelDriver {
       messageId: event.ts,
       threadId: threadTs,
       userId: event.user,
-      text: typeof event.text === 'string' ? event.text : '',
+      text: typeof event.text === 'string' ? this.withoutLeadingMention(event.text) : '',
       direct: event.channel_type === 'im',
       receivedAt: new Date(Number.parseFloat(event.ts) * 1000),
       ...(Array.isArray(event.files) &&
         event.files.length > 0 && { files: fileNames(event.files) }),
     });
+  }
+
+  /** "@Wheems Marketing" reads as "Marketing": a mention of the app that starts a message. */
+  private withoutLeadingMention(text: string): string {
+    if (this.botUserId === undefined) return text;
+    const mention = `<@${this.botUserId}>`;
+    const trimmed = text.trimStart();
+    return trimmed.startsWith(mention) ? trimmed.slice(mention.length).trimStart() : text;
   }
 
   private toDriverError(error: unknown, what: string): DriverError {

@@ -88,6 +88,43 @@ wheems doctor           # health check, any time
 The user types channel tokens in themselves. They're saved to a private file on that machine
 and never pass through an agent.
 
+### Use the terminal once, then everything else in chat
+
+After `wheems setup`, inviting the app to a channel is the whole setup of another chief (built).
+The flow lives in the core, in `src/service/onboarding.ts`, and works for any channel driver.
+
+- **The driver only reports two things**, through the `ChannelDriver` contract:
+  - the app being added to a channel, as a `joined` event, on drivers with the optional `joins`
+    capability. Slack reports it from the `member_joined_channel` bot event, which needs no
+    scope beyond `channels:read` and `groups:read`, and from the `channel_join` message as a
+    fallback;
+  - messages from channels no workspace uses, which every driver passes on anyway.
+
+  An optional `channelName(id)` lets the new `workspace.yaml` name the channel rather than give
+  its id.
+
+- **Every event goes through onboarding first.** Events for bound channels, direct messages and
+  button presses go straight on to the conversation manager. Before this, events from unbound
+  channels were dropped without a word.
+- **In a channel no workspace uses**, someone in the connection's `allowed_users` is offered a
+  chief of staff: once per channel, when the app is added or on their first message there. The
+  offer is kept in memory, so it's made again after a restart if no one answered. Anyone else is
+  ignored, as before.
+- **They reply with a name.** It counts in the offer's thread, or alone in the channel if it's
+  just a short name (up to four words of letters and digits), so ordinary chatter isn't taken
+  for one. Wheems then:
+  - creates the workspace and its chief, as `wheems init <id> --channel <channel>` does, on the
+    engine, model and account of the first workspace's chief, which the install already has;
+  - loads it into the running service;
+  - adds its binding, so the chief answers in that channel straight away, with no restart.
+- **A workspace whose configured channel the app couldn't see** at start is kept waiting. It's
+  bound as soon as the app is added there, whoever added it, since the channel is already that
+  workspace's, and its chief says it's there.
+
+`wheems restart` now waits for launchd to unload the old job before loading it again. A
+bootstrap straight after `bootout` could fail with "5: Input/output error" and leave the service
+stopped.
+
 ## On disk
 
 ```text

@@ -11,19 +11,16 @@ import { offerFixes } from '../src/doctor/fix.js';
 import { writeSecret } from '../src/secrets.js';
 import { MemoryChannel, MemoryRuntime, StubEngine } from '../src/testing/index.js';
 
-/** A channel driver that sees some channels by name, as Slack does. */
+/** A channel driver that sees some channels by name, as Slack does, and is in all of them. */
 class SeesChannels extends MemoryChannel {
-  constructor(private readonly visible: Record<string, string>) {
-    super();
-  }
-  resolveChannel(name: string) {
-    return Promise.resolve(this.visible[name.replace(/^#/, '')] ?? null);
+  readonly listChannels: () => Promise<{ id: string; name: string }[]>;
+  constructor(visible: Record<string, string>) {
+    super({}, { channels: visible });
+    this.listChannels = () =>
+      Promise.resolve(Object.entries(visible).map(([name, id]) => ({ id, name })));
   }
   isMember() {
     return Promise.resolve(true);
-  }
-  listChannels() {
-    return Promise.resolve(Object.entries(this.visible).map(([name, id]) => ({ id, name })));
   }
 }
 

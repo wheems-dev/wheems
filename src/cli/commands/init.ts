@@ -21,6 +21,8 @@ export interface InitOptions {
   name?: string;
   /** A channel to chat in, instead of the bot's direct messages. */
   channel?: string;
+  /** The install connection the channel is on. Defaults to `slack`. */
+  connection?: string;
   /** The engine the chief of staff runs in. Defaults to Claude Code. */
   engine?: EngineChoice;
   /** The install account's driver, added to install.yaml if the account isn't there. */
@@ -68,6 +70,7 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
     id: options.id,
     name: name ?? options.id.charAt(0).toUpperCase() + options.id.slice(1).replaceAll('-', ' '),
     channel: channel ?? null,
+    ...(options.connection !== undefined && { connection: options.connection }),
     engine: options.engine ?? DEFAULT_ENGINE,
   };
   await ensureAccount(where.install, template.engine.account, options.accountDriver ?? 'claude');

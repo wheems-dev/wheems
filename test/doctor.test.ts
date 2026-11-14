@@ -292,8 +292,8 @@ describe('doctor', () => {
     await initWorkspace({ home, id: 'team', channel: 'team-chat' });
     await initWorkspace({ home, id: 'typo', channel: 'no-such-channel' });
     class SeesChannels extends MemoryChannel {
-      resolveChannel(name: string) {
-        return Promise.resolve(name === 'team-chat' ? 'C0TEAM001' : null);
+      constructor() {
+        super({}, { channels: { 'team-chat': 'C0TEAM001' } });
       }
       // Slack lists public channels the app isn't in; this one it isn't.
       isMember() {

@@ -2,7 +2,7 @@ import { access, chmod, mkdir, writeFile } from 'node:fs/promises';
 import type { Server } from 'node:net';
 import { join } from 'node:path';
 import { crossCheck } from '../config/check.js';
-import { loadInstall, type LoadedWorkspace } from '../config/load.js';
+import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import type { ChannelDriver } from '../contracts/channel.js';
 import type { EngineDriver } from '../contracts/engine.js';
@@ -10,7 +10,10 @@ import type { SessionInfo } from '../contracts/runtime.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { paths, tilde, type Paths } from '../home.js';
 import { readSecrets } from '../secrets.js';
+import { DEFAULT_ENGINE } from '../cli/templates.js';
+import { initWorkspace } from '../cli/commands/init.js';
 import { ConversationManager, type Binding } from './conversations.js';
+import { Onboarding, type NewChannelWorkspace, type WaitingWorkspace } from './onboarding.js';
 import {
   listen,
   type ControlRequest,
@@ -114,6 +117,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
 
   const bindings: Binding[] = [];
   const workspaceReport: ServiceReport['workspaces'] = [];
+  /** Workspaces whose channel the app can't see yet: bound once it's invited there. */
+  const waiting: WaitingWorkspace[] = [];
   for (const workspace of install.workspaces) {
     const chat = workspace.config?.channels.chat;
     if (!chat) {
@@ -131,9 +136,10 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         ? await channel.resolveChannel(chat.channel)
         : chat.channel;
       if (channelId === null) {
-        const problem = `the app can't see ${place}. Check the name in workspace.yaml and invite the app to the channel, then run wheems restart.`;
+        const problem = `the app can't see ${place}. Invite the app to the channel, and the chief of staff answers there at once; or check the name in workspace.yaml.`;
         log(`Workspace ${workspace.id}: ${problem}`);
         workspaceReport.push({ id: workspace.id, chat: place, problem });
+        waiting.push({ workspace, connection: chat.connection, channel: chat.channel });
         continue;
       }
       // Slack lists public channels the app isn't in, and sends no messages from them.
@@ -261,6 +267,32 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
   });
 
+  // Inviting the app to a channel is the whole setup: see onboarding.ts.
+  const onboarding = new Onboarding({
+    install: config,
+    channels,
+    bindings,
+    workspaces: install.workspaces,
+    waiting,
+    create: async (request) => {
+      const workspace = await createChannelWorkspace(options.home, env, config, install, request);
+      state.writeAgents(standingAgents(install.workspaces));
+      return workspace;
+    },
+    bound: (binding) => {
+      const place = `${binding.channel ?? 'direct messages'} on ${binding.connection}`;
+      const report = workspaceReport.find((w) => w.id === binding.workspace.id);
+      if (report) {
+        report.chat = place;
+        delete report.problem;
+      } else {
+        workspaceReport.push({ id: binding.workspace.id, chat: place });
+      }
+    },
+    deliver: (connection, event) => manager.handle(connection, event),
+    log,
+  });
+
   // Connect every channel first, then open the control socket: a service that answers
   // ping is one that is connected. If anything fails, undo what started, so the process
   // exits and launchd restarts it.
@@ -269,7 +301,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   let server: Server | undefined;
   try {
     for (const [connection, channel] of channels) {
-      await channel.start((event) => manager.handle(connection, event));
+      await channel.start((event) => onboarding.handle(connection, event));
       started.push(channel);
       log(`Connected ${connection}`);
     }
@@ -577,6 +609,46 @@ async function exists(path: string): Promise<boolean> {
     () => true,
     () => false,
   );
+}
+
+/**
+ * Creates a workspace and its chief of staff for a channel, as `wheems init <id> --channel`
+ * does, and loads it into the running service's workspaces. Its chief runs on the same engine,
+ * model and account as the first workspace's, which the install already has.
+ */
+async function createChannelWorkspace(
+  home: string,
+  env: NodeJS.ProcessEnv,
+  config: InstallConfig,
+  install: LoadedInstall,
+  request: NewChannelWorkspace,
+): Promise<LoadedWorkspace> {
+  const model = install.workspaces
+    .map((w) => w.agents.find((a) => a.definition.name === w.config?.chief_of_staff))
+    .find((agent) => agent !== undefined)?.definition;
+  const engine = model
+    ? { name: model.engine, model: model.model, account: model.account }
+    : DEFAULT_ENGINE;
+  if (!(engine.account in config.accounts)) {
+    throw new Error(
+      `the install has no ${engine.account} account yet. Set up a first workspace with wheems setup.`,
+    );
+  }
+  await initWorkspace({
+    home,
+    id: request.id,
+    name: request.name,
+    channel: request.channelName ?? request.channelId,
+    connection: request.connection,
+    engine,
+    env,
+  });
+  const loaded = (await loadInstall(home)).workspaces.find((w) => w.id === request.id);
+  if (!loaded?.config) {
+    throw new Error(`workspace ${request.id} was made but has config problems: run wheems doctor`);
+  }
+  install.workspaces.push(loaded);
+  return loaded;
 }
 
 /** Each workspace's chief of staff, as the store records standing agents. */

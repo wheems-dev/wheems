@@ -150,11 +150,27 @@ One Slack app serves every workspace, so you do this once.
 
 ### Inviting the app to a channel
 
-A workspace that chats in a channel needs the app in that channel: in the channel, type
-`/invite` and choose the app. Slack lists public channels the app isn't in, so a channel name
-that's spelt right can still hear nothing; the service warns at start-up and `wheems doctor`
-checks it, and `wheems status` shows it while the service runs. The service looks channels up
-when it starts, so after creating a channel or renaming one, run `wheems restart`.
+You use the terminal once, for `wheems setup`; everything after that happens in chat. To add
+another chief of staff, invite the app to a Slack channel (type `@Wheems` there, or `/invite`,
+and accept). Wheems says it isn't set up there yet and asks for a name. Reply in its thread with
+one, such as `Marketing`, and Wheems creates the workspace with its chief, on the same engine
+and account as your first, and the chief answers in that channel at once. There's nothing to
+restart.
+
+- Only people in `allowed_users` get the offer. It's made once per channel, and again after the
+  service restarts if no one answered.
+- A name counts in the offer's thread, or alone in the channel if it's just a short name (up to
+  four words). Ordinary chatter isn't taken for one.
+- A workspace you made with `wheems init <id> --channel <name>`, or whose channel the app
+  couldn't see, starts answering as soon as you invite the app there, and its chief says so.
+- The offer comes the moment the app is invited, through Slack's `member_joined_channel` event,
+  which the manifest subscribes to. An app made before this version needs that event added under
+  **Event Subscriptions → Subscribe to bot events** (no new scope). Without it, the offer comes
+  with your first message in the channel.
+
+Slack lists public channels the app isn't in, so a channel name that's spelt right can still
+hear nothing until you invite the app. The service warns at start-up, `wheems doctor` checks
+it, and `wheems status` shows it while the service runs.
 
 ### Trusting the install folder
 
@@ -565,7 +581,7 @@ invited to:
 ✓ Running: Wheems 0.0.4, pid 4242, up 2h 14m
 ✓ Connected to slack
 ✓ personal: direct messages on slack
-! marketing: the app can't see #marketing-chat on slack. Check the name in workspace.yaml and invite the app to the channel, then run wheems restart.
+! marketing: the app can't see #marketing-chat on slack. Invite the app to the channel, and the chief of staff answers there at once; or check the name in workspace.yaml.
 Log: ~/wheems/.wheems/logs/service.log
 ```
 

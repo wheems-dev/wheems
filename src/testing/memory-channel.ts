@@ -22,15 +22,34 @@ export class MemoryChannel implements ChannelDriver {
   readonly reactions = new Map<string, Set<string>>();
   private handler: InboundHandler | undefined;
   private nextId = 1;
+  /** With `channels`: the channels the app can see, name to id. Without it, names are ids. */
+  private readonly visible: Map<string, string> | undefined;
+  resolveChannel?: (nameOrId: string) => Promise<string | null>;
+  channelName?: (channelId: string) => Promise<string | null>;
 
-  constructor(capabilities: Partial<ChannelCapabilities> = {}) {
+  constructor(
+    capabilities: Partial<ChannelCapabilities> = {},
+    options: { channels?: Record<string, string> } = {},
+  ) {
     this.capabilities = {
       threads: true,
       buttons: true,
       reactions: true,
       identities: true,
+      joins: true,
       ...capabilities,
     };
+    if (options.channels !== undefined) {
+      const visible = new Map(Object.entries(options.channels));
+      this.visible = visible;
+      this.resolveChannel = (nameOrId) => {
+        const name = nameOrId.replace(/^#/, '');
+        if ([...visible.values()].includes(name)) return Promise.resolve(name);
+        return Promise.resolve(visible.get(name) ?? null);
+      };
+      this.channelName = (channelId) =>
+        Promise.resolve([...visible].find(([, id]) => id === channelId)?.[0] ?? null);
+    }
   }
 
   check(): Promise<HealthCheck[]> {
@@ -112,6 +131,18 @@ export class MemoryChannel implements ChannelDriver {
       ...(message.files !== undefined && { files: message.files }),
     });
     return messageId;
+  }
+
+  /**
+   * The app is added to a channel: it can see it from now on (by `name`, when given), and a
+   * `joined` event is delivered, from `userId` (null when the driver wouldn't know who).
+   */
+  async join(
+    channel: { id: string; name?: string },
+    userId: string | null = 'person',
+  ): Promise<void> {
+    if (channel.name !== undefined) this.visible?.set(channel.name, channel.id);
+    await this.handler?.({ type: 'joined', channel: channel.id, userId, receivedAt: new Date() });
   }
 
   /** Delivers a press of a button on a message the driver sent. */
