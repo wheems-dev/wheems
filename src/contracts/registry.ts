@@ -30,6 +30,8 @@ export interface DriverInfo {
   engine?: EngineSetup;
   /** For embeddings drivers: which models it has and how to get one. */
   embeddings?: EmbeddingsSetup;
+  /** For channel drivers: the app definition to create the app from, such as Slack's manifest. */
+  manifest?: () => string;
 }
 
 /** A driver as `wheems setup` lists it: one that works, or one that is coming later. */

@@ -14,6 +14,7 @@ import { DEFAULT_ENGINE } from '../cli/templates.js';
 import { initWorkspace } from '../cli/commands/init.js';
 import { ConversationManager, type Binding } from './conversations.js';
 import { Onboarding, type NewChannelWorkspace, type WaitingWorkspace } from './onboarding.js';
+import { stopWorkspaceSessions } from './retire.js';
 import {
   listen,
   type ControlRequest,
@@ -414,6 +415,24 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
               sent: sent.message,
               ...(sent.answer !== null && { answer: sent.answer }),
               message: sent.next,
+            };
+          }
+          case 'workspace-retire': {
+            for (let i = bindings.length - 1; i >= 0; i--) {
+              if (bindings[i]?.workspace.id === request.id) bindings.splice(i, 1);
+            }
+            const loaded = install.workspaces.findIndex((w) => w.id === request.id);
+            if (loaded >= 0) install.workspaces.splice(loaded, 1);
+            const reported = workspaceReport.findIndex((w) => w.id === request.id);
+            if (reported >= 0) workspaceReport.splice(reported, 1);
+            const stopped = await stopWorkspaceSessions(runtime, request.id);
+            if (request.forget) state.forgetWorkspace(request.id);
+            log(
+              `Stopped serving workspace ${request.id}: ${String(stopped)} ${stopped === 1 ? 'session' : 'sessions'} stopped${request.forget ? ', its records forgotten' : ''}`,
+            );
+            return {
+              ok: true,
+              message: `${String(stopped)} ${stopped === 1 ? 'session' : 'sessions'} stopped`,
             };
           }
           case 'greet': {

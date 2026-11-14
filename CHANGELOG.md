@@ -7,6 +7,16 @@ change anything, including commands and config formats, without a migration path
 
 **Added**
 
+- Commands are grouped by area, like `php artisan`: `wheems <area> <action>` (see docs/cli.md).
+  `wheems list` prints them by area.
+  - New `wheems ws` (`workspace`): `list`, `show`, `create` (was `wheems init`), `rename`,
+    `archive` (stops serving it and moves it to `archive/`), `restore`, and `remove` (deletes the
+    workspace, its knowledge base, state and records, after you type its id).
+  - New `wheems channel` (`list`, `connect <driver>`, `manifest <driver>`, which was
+    `wheems slack manifest`) and `wheems engine` (`list`, `install`, `login`, `trust`), which run
+    setup's own steps.
+  - `wheems config validate` replaces `wheems validate`.
+  - The old names still work for a release, and say what they're called now.
 - Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, how to talk to it, and that inviting it to any channel adds another chief. If it can't, setup says why.
 - `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before
   each fix: trusting the install folder, starting the service, rebuilding a stale search index,

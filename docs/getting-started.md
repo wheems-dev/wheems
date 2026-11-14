@@ -79,8 +79,9 @@ When you choose **Done** with the service running, your chief of staff says hell
 direct messages: that's how you know it works, and where to find it. If it can't, setup says
 why.
 
-Each part also has its own command for scripts: `wheems init <workspace> [--engine codex]
-[--model gpt-6.1-sol]`, `wheems start` and `wheems doctor`.
+Each part also has its own command for scripts: `wheems engine install <engine>`,
+`wheems channel connect slack`, `wheems ws create <workspace> [--engine codex] [--model …]`,
+`wheems start` and `wheems doctor`. `wheems list` shows every command, grouped by area.
 
 ## 3. Chat
 

@@ -113,3 +113,12 @@ The owner: "we need to make this easy to onboard." He invited the app to a Slack
 - **Inviting the app to a channel is the whole setup of another chief.** Wheems offers a chief of staff there, to allowed users only and once per channel, and creates the workspace from the name given, answering at once with no restart. A workspace whose configured channel the app couldn't see is picked up as soon as the app is invited there.
 - **The terminal is for the first setup only.** One `wheems setup`, then everything else in chat. This is a milestone 3 goal: a new user goes from `npm install` to talking to two chiefs in two channels with one `wheems setup`, and adds the second just by inviting the app.
 - **It stays channel-agnostic.** The flow lives in the core. A driver only reports the app being added to a channel (an optional `joins` capability) and passes on messages from channels no workspace uses, so Telegram, email or Teams get onboarding by implementing the same two things.
+
+## Commands by area, like `php artisan` (14 November)
+
+The owner, looking at all the `wheems` commands: restructure them "to be a little more domain driven... like laravels php artisan commands", for example `wheems ws create` and `wheems ws remove`. The flat set had grown inconsistent: `init` against `session new`, the service commands twice over, a top-level `slack` named after one channel, and no way to list workspaces, channels or engines.
+
+- **`wheems <area> <action>`, with spaces**, and one set of verbs (list, show, create, rename, archive, restore, remove, start, stop, restart), plus a few verbs of an area's own. Written up in [cli.md](../cli.md).
+- **Archive and remove are different.** `ws archive` unbinds a workspace and moves it to an archive, keeping everything. `ws remove` deletes it: the workspace, its knowledge base, its state and its records.
+- **The agents' commands move too** (`chat reply`, `kb note`), in a second step, with the old names kept for a release.
+- **The top level stays small**, kept by a test: setup, doctor, list, review and the service shortcuts.

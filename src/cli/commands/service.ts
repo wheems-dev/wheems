@@ -315,8 +315,9 @@ export function registerService(program: Command, io: Io): void {
       await running.stop();
     });
 
+  // An old name for wheems start, kept for a release.
   service
-    .command('install')
+    .command('install', { hidden: true })
     .description('The same as wheems start')
     .option(homeOption, homeHelp)
     .action(async (options: { home?: string }) => {

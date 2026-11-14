@@ -81,7 +81,7 @@ Part of using the terminal once, then everything else in chat (built):
 npm install -g wheems   # the same way Claude Code is installed; the command is wheems
 wheems setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
-wheems init acme        # creates a workspace
+wheems ws create acme   # creates a workspace
 wheems doctor           # health check, any time
 ```
 
@@ -373,7 +373,7 @@ happened without anything being posted.
 **Cards are generated, never written by an agent.** `knowledge/cards/<project>.md` holds the
 project's name, description, lead, channel, status, a "can answer about" list taken from its
 brief's headings, and the latest lines of activity. Code writes it at `project new`, after each
-project note is filed, and at the nightly tidy, so it can't drift; `wheems validate` reports a
+project note is filed, and at the nightly tidy, so it can't drift; `wheems config validate` reports a
 card without a project or a project without a card. The chief's built-in instructions get a
 generated Projects section at each launch, from the `project.yaml` files.
 

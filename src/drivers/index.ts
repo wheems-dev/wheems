@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { DriverError } from '../contracts/driver.js';
 import { DriverRegistry } from '../contracts/registry.js';
 import { slackConnectFlow } from './channel/slack/connect.js';
+import { slackManifest } from './channel/slack/setup.js';
 import { SlackChannel } from './channel/slack/slack-channel.js';
 import { SocketModeTransport } from './channel/slack/transport.js';
 import { OllamaEmbeddings, ollamaSetup } from './embeddings/ollama.js';
@@ -83,6 +84,7 @@ export function createDriverRegistry(): DriverRegistry {
         label: 'Slack',
         description: 'chat with your agents in Slack',
         connect: slackConnectFlow(),
+        manifest: () => slackManifest(),
       },
     )
     .register(

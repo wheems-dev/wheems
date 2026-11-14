@@ -1,0 +1,112 @@
+# The `wheems` command
+
+How the commands are organised, and the rules for adding one. Decided on 14 November 2026 (see
+[decisions](ideas/decisions.md)).
+
+## The shape: `wheems <area> <action> [name] [--options]`
+
+Commands are grouped by area, the way Laravel's `php artisan` groups them by namespace, but with
+spaces rather than colons: `wheems ws create acme`, not `wheems ws:create acme`. An area is one of
+the things Wheems is made of: workspaces, sessions, the knowledge base, skills, channels, engines,
+the service, config, and later projects, tasks, routines and workflows. `wheems list` prints
+every command by area, and `wheems <area> --help` one area's.
+
+### Actions
+
+One set of verbs, so the next command can be guessed:
+
+| Verb                        | For                                           | Example                        |
+| --------------------------- | --------------------------------------------- | ------------------------------ |
+| `list`                      | Every one, one per line; `--json` for scripts | `wheems ws list`               |
+| `show <name>`               | One, in detail; `--json` for scripts          | `wheems ws show acme`          |
+| `create <name>`             | A new one, made in config                     | `wheems ws create acme`        |
+| `rename <name> <new>`       | Its display name; ids and folders stay        | `wheems ws rename acme "Acme"` |
+| `archive <name>`, `restore` | Put away, keeping everything; and bring back  | `wheems ws archive acme`       |
+| `remove <name>`             | Delete for good, after asking                 | `wheems ws remove acme`        |
+| `start`, `stop`, `restart`  | Processes                                     | `wheems service restart`       |
+
+A few areas have a verb of their own where none of these says what happens: a session is
+`end`ed (it stays as a record), a message is `send`, a knowledge base is `search`ed, a channel is
+`connect`ed, an engine is `install`ed, `login`, or told to `trust` a folder.
+
+### Options
+
+- `--home <dir>`: the install folder, on every command that uses it (default `$WHEEMS_HOME`, then
+  `~/wheems`).
+- `--json`: on every `list` and `show`.
+- `--workspace <id>`: on everything scoped to a workspace that isn't named as the argument.
+- `--yes`: skips the question on commands that ask first (`archive`, `remove`). Without a
+  terminal they refuse rather than act unasked.
+
+### The top level
+
+Only install-wide commands, and the ones used every day:
+
+- **Start here:** `setup`, `doctor`, `list`.
+- **Every day:** `review`, and `status`, `start`, `stop`, `restart`, `logs` as shortcuts for
+  `wheems service …`.
+- **Agents run these:** `reply` and `note`, until they move under their areas (below).
+
+`COMMAND_GROUPS` in `src/cli/program.ts` lists them, and a test fails when a new top-level command
+appears without being added there on purpose. Everything else goes under an area.
+
+## The areas
+
+✓ built, ○ planned (with the milestone that brings it).
+
+| Area                                                              | Actions                                                                           |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `workspace` (`ws`)                                                | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
+| `session`                                                         | ✓ `list`, `search`, `show`, `new` (to become `create`), `send`, `end`             |
+| `kb`                                                              | ✓ `search`, `reindex`; next `note` (now `wheems note`)                            |
+| `chat`                                                            | next `reply` (now `wheems reply`); ○ `post <channel>`, `ask <channel>` (M3)       |
+| `skill`                                                           | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
+| `channel`                                                         | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
+| `engine`                                                          | ✓ `list`, `install`, `login`, `trust`                                             |
+| `service`                                                         | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
+| `config`                                                          | ✓ `validate`; ○ `show`                                                            |
+| `agent`                                                           | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
+| `project`                                                         | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
+| `task`                                                            | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
+| `routine`, `workflow`, `eval`, `integration`, `plugin`, `machine` | ○ later milestones                                                                |
+
+The planned commands in other documents follow these names: `wheems task done`, `wheems integration
+connect github` (was `connect github`), `wheems machine run` (was `node`), `wheems blueprint add`.
+
+### Workspaces: archive and remove
+
+- **`ws archive <id>`** stops serving a workspace and keeps everything:
+  - a running service unbinds it and stops its sessions in Herdr (through the `workspace-retire`
+    control request); with no service running, the command stops them itself;
+  - the folder moves to `archive/<id>/` (dated if that's taken), marked with `.archived.json`;
+  - its search index is dropped, since it's rebuilt from the files.
+
+  `ws restore <id>` moves it back; restart the service for its chief to answer again.
+
+- **`ws remove <id>`** deletes it for good, after you type its id (or with `--yes`):
+  - its folder, with its agents and knowledge base;
+  - its state under `.wheems/`: search index, session folders, messages, tidy and quarantine;
+  - its records in the session store.
+
+  It works on an archived workspace too. Accounts in `install.yaml` and the chat app are left as
+  they are.
+
+## Old names
+
+Renamed commands keep working for a release, hidden from help, and say what they're called now on
+standard error:
+
+| Old                      | Now                             |
+| ------------------------ | ------------------------------- |
+| `wheems init`            | `wheems ws create`              |
+| `wheems validate`        | `wheems config validate`        |
+| `wheems slack manifest`  | `wheems channel manifest slack` |
+| `wheems service install` | `wheems service start`          |
+
+## Next
+
+The second step moves the agents' commands under their areas: `wheems reply` becomes
+`wheems chat reply`, `wheems note` becomes `wheems kb note` and `wheems session new` becomes
+`wheems session create`. Agents' built-in instructions change at once; sessions already running
+keep working through the old names until the release after. It also defaults `--workspace` to the
+workspace whose folder you're in, the way Artisan finds the project it's run in.
