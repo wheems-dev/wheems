@@ -49,9 +49,12 @@ describe('the welcome screen', () => {
     expect(text).not.toContain('\x1b[');
   });
 
-  it('colours the cloud and the marks only when asked', () => {
+  it("draws the cloud in the terminal's text colour, and styles the name only when asked", () => {
     const text = renderWelcome({ version: '0.0.1', status: [], color: true, hints: false });
-    expect(text).toContain(`\x1b[38;5;69m${CLOUD[0] ?? ''}\x1b[0m`);
+    // No colour of its own: white on a dark terminal, near-black on a light one.
+    expect(text).toContain(`\n${CLOUD[0] ?? ''}\n`);
+    expect(text).toContain('\x1b[1mwheems\x1b[0m');
+    expect(text).not.toContain('\x1b[38;5;');
     expect(text).not.toContain('wheems setup ·');
   });
 

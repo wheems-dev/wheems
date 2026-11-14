@@ -10,7 +10,9 @@ import { listProposals } from '../skills/proposals.js';
  * The cloud: the mascot's outline (the brand kit's mascot.svg), traced in Unicode half blocks,
  * with its eye and smile placed by hand so they read at this size. Half blocks are in every
  * monospace font and most terminals draw them as exact rectangles, so it looks the same
- * everywhere; an outline also reads on light and dark backgrounds alike.
+ * everywhere; an outline also reads on light and dark backgrounds alike. It has no colour of
+ * its own: it's drawn in the terminal's text colour, like the brand's ink app icon, so it's white
+ * on a dark terminal and near-black on a light one.
  */
 // Every character is one UTF-16 unit, so .length is the width in columns.
 export const CLOUD = [
@@ -43,11 +45,6 @@ export function showCloud(columns: number | undefined): boolean {
   return columns !== undefined && columns >= WELCOME_WIDTH;
 }
 
-/**
- * A blue between the brand's cobalt (light backgrounds) and its dark-mode blue, from the
- * 256-colour palette, so the cloud reads on light and dark terminals alike.
- */
-const CLOUD_COLOUR = '\x1b[38;5;69m';
 const BOLD = '\x1b[1m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
@@ -82,9 +79,7 @@ function cloudRow(options: Pick<WelcomeOptions, 'version' | 'color'>, row: numbe
     5: TAGLINE,
   };
   const text = beside[row];
-  return text === undefined
-    ? paint(CLOUD_COLOUR, line)
-    : `${paint(CLOUD_COLOUR, line.padEnd(CLOUD_WIDTH))}   ${text}`;
+  return text === undefined ? line : `${line.padEnd(CLOUD_WIDTH)}   ${text}`;
 }
 
 /** The top of the welcome screen: the cloud and the words beside it, or just the words. */
