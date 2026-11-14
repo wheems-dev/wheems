@@ -152,7 +152,7 @@ describe('wheems session', () => {
     expect(id).toBeDefined();
 
     const session = await stored((s) => s.workspace('personal').session(id!));
-    const folder = join(home, '.wheems', 'sessions', 'personal', id!);
+    const folder = join(home, '.wheems', 'sessions', 'personal', 'adhoc', id!);
     expect(session).toMatchObject({
       kind: 'adhoc',
       agent: 'personal/chief-of-staff',
@@ -368,7 +368,7 @@ describe('wheems session', () => {
     );
     expect((await wheems(['session', 'search', 'shortlisted'])).out).toContain(session.id);
     const reply = await wheems(['reply', 'hi'], as);
-    expect(reply.err).toContain('no chat thread to reply in yet');
+    expect(reply.err).toContain('Answer your owner instead');
   });
 
   it('finds the answers of an engine that chooses its own ids and reports no status', async () => {

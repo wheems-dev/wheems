@@ -194,7 +194,7 @@ function agentName(session: SessionRecord): string {
 }
 
 function ownerName(session: SessionRecord): string {
-  if (session.kind === 'thread') return 'Slack thread';
+  if (session.kind === 'thread') return 'a conversation';
   return session.owner === null ? 'you' : (session.owner.split('/').at(-1) ?? session.owner);
 }
 

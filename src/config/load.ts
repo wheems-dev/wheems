@@ -116,6 +116,9 @@ async function loadWorkspace(
 }
 
 /** Parses an agent file: YAML front matter between `---` lines, then Markdown instructions. */
+/** Ad-hoc sessions' folders sit beside per-agent ones, under this name. */
+export const RESERVED_AGENT_NAME = 'adhoc';
+
 export function parseAgent(file: string, text: string, problems: Problem[]): LoadedAgent | null {
   const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!match) {
@@ -136,6 +139,13 @@ export function parseAgent(file: string, text: string, problems: Problem[]): Loa
       level: 'error',
       file,
       message: `The agent's name "${config.name}" must match its file name "${fileName}"`,
+    });
+  }
+  if (name === RESERVED_AGENT_NAME) {
+    problems.push({
+      level: 'error',
+      file,
+      message: `"${RESERVED_AGENT_NAME}" can't be an agent's name: Wheems keeps ad-hoc sessions' folders under it. Rename the file.`,
     });
   }
   return {

@@ -262,8 +262,10 @@ Message the Slack app (or the workspace's channel). Each message you send starts
 
 ## Sessions
 
-Besides a session per Slack thread, a chief can start **ad-hoc sessions**: other agent sessions
+Besides a session per chat thread, a chief can start **ad-hoc sessions**: other agent sessions
 that work on one thing and stay open until they're ended, so the chief can come back to them.
+You only ever talk to your chief. Ad-hoc sessions have no channel or thread of their own: they
+work behind the chief, and it tells you what you need to know.
 Ask your chief "open a session to research packaging suppliers and keep it going", and it runs:
 
 ```bash
@@ -276,8 +278,9 @@ wheems session new --title "Packaging suppliers" --purpose "Find five UK packagi
 - A session the chief starts is owned by the chief, whichever thread started it, so it's the
   chief's from any of its threads. Each new thread's session is told the chief's open sessions
   when it starts.
-- Each ad-hoc session runs in a folder of its own, `.wheems/sessions/<workspace>/<id>/`, where its
-  engine's instructions file is written, so it never replaces the chief's.
+- Each ad-hoc session runs in a folder of its own, `.wheems/sessions/<workspace>/adhoc/<id>/`, where
+  its engine's instructions file is written, so it never replaces the chief's. (So no agent can be
+  called `adhoc`.)
 - `wheems session list` and `wheems session search "…"` find sessions in the workspace, most
   recently active first. Search looks at titles, purposes, summaries and agent names. A session's
   summary is written by Wheems: its purpose at first, then the title of its latest note.
@@ -293,9 +296,15 @@ each owner may have three open (`sessions.max_open_per_owner`), a chief's sessio
 level of sessions and those one more (`sessions.max_depth`), and an account may cap how many
 sessions run at once (`max_sessions` in `install.yaml`).
 
-Coming next: a Slack thread for each ad-hoc session in its chief's channel, and
-`wheems session send` to talk to one. Until then a session's answers are kept, and shown by
-`wheems session show`.
+A session's answers are never posted to a channel. Its last message of each turn is its answer,
+kept by its engine and shown by `wheems session show`; you can also watch it with `hc attach`.
+Inside an ad-hoc session, `wheems reply` is refused, since there's no chat to reply in: it
+answers its owner instead.
+
+Sessions don't depend on Slack: they live in Wheems's core, and only a chief's conversation
+reaches you, through whatever channel it uses.
+
+Coming next: `wheems session send` to talk to a session.
 
 ## The knowledge loop
 

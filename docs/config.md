@@ -147,7 +147,8 @@ permissions: ask # ask (default), auto or skip
 Review the pull request you are given. Report findings; do not change code.
 ```
 
-`name` defaults to the file name, and must match it if given.
+`name` defaults to the file name, and must match it if given. `adhoc` is reserved: ad-hoc
+sessions' folders use it.
 
 `permissions` says how much the agent may do without asking: `ask` uses the engine's normal
 prompts, `auto` lets the engine allow routine actions and ask for risky ones, and `skip` never

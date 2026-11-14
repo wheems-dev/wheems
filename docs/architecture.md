@@ -335,15 +335,15 @@ app may, and otherwise tells you to create it and invite the app; doctor checks 
 ## Sessions
 
 Milestone 3, built first in it. The session store and `wheems session new`, `list`, `search`,
-`show` and `end` are built; a Slack thread per ad-hoc session and `send` come next. Wheems keeps
-a record of every agent session it runs: which workspace, project and agent it belongs to, who
-started it, what it's for and what state it's in. That lets the service pick up after a restart,
-and lets a chief find the right session to talk to. Two kinds of thing are recorded:
+`show` and `end` are built; `send` comes next. Wheems keeps a record of every agent session it
+runs: which workspace, project and agent it belongs to, who started it, what it's for and what
+state it's in. That lets the service pick up after a restart, and lets a chief find the right
+session to talk to. Two kinds of thing are recorded:
 
 - **Standing agents**: each workspace's chief and, from milestone 4, each project's lead. One row
   per agent, written by code from `workspace.yaml` and `project.yaml` at every service start,
   never by an agent. They're always there, whether a session of theirs is running or not. Their
-  sessions are thread sessions: one per Slack thread, as now.
+  sessions are thread sessions: one per chat thread, as now.
 - **Ad-hoc sessions**: started on the fly for one piece of work, by a chief or by you. "Open a
   session to research packaging suppliers and keep it going" starts one. Each has an owner, a
   title, a purpose and a one-line summary, and stays open until it's ended, so its owner can come
@@ -351,21 +351,31 @@ and lets a chief find the right session to talk to. Two kinds of thing are recor
 
 From milestone 5, [tasks](#tasks) are recorded the same way, as sessions of kind `task`.
 
+**Chiefs are the only agents people talk to.** Only a chief (and, from milestone 4, a project's
+lead) has a channel. An ad-hoc session has no channel and no thread of its own, and never posts
+anywhere: it works behind its owner, and the chief tells you what you need to know from its
+answers, in its own conversation with you. You can still watch any session in Herdr
+(`hc attach`) or with `wheems session show`.
+
+**The session layer knows nothing about channels.** Slack is the first of many channels
+(Telegram, email, Teams and more), each a driver behind the `ChannelDriver` contract, like
+Laravel's mail drivers. Sessions, sends and answers live in the core: no channel's names, ids or
+wording appear in the sessions code or the store. Anything a person sees goes through a chief's
+conversation and its channel's driver, never a path of its own.
+
 ### The first test: several chiefs, each with a few sessions
 
-The test this milestone is built for: two or three chiefs in Slack, each with two or three ad-hoc
-sessions beneath it, used every day.
+The test this milestone is built for: two or three chiefs, each with two or three ad-hoc sessions
+beneath it, used every day.
 
-- **Each chief is a workspace's chief**, in that workspace's own Slack channel. The service
-  already runs every workspace in `install.yaml` side by side. Keeping them apart arrives in
-  milestone 6, so until then, use workspaces that don't need to be secret from each other.
+- **Each chief is a workspace's chief**, in that workspace's own channel (in Slack, for now). The
+  service already runs every workspace in `install.yaml` side by side. Keeping them apart arrives
+  in milestone 6, so until then, use workspaces that don't need to be secret from each other.
 - **You ask a chief to start a session.** It runs `wheems session new`, which starts the agent in
-  Herdr, records the session with the chief as its owner, and opens a Slack thread for it in the
-  chief's channel, where the session posts under its own name. Every message to it, from you or
-  from a chief, and every answer appears in that thread, so you can watch it, or reply there to
-  talk to it directly.
-- **The chief talks to it** with `wheems session send`, and finds it again later, from any of
-  its threads, with `wheems session search`.
+  Herdr and records the session with the chief as its owner. The session starts on its purpose at
+  once.
+- **The chief talks to it** with `wheems session send`, finds it again later, from any of its
+  threads, with `wheems session search`, and passes on what you need to know.
 
 ### Finding a session
 
@@ -382,8 +392,9 @@ the chief's agent (`acme/chief-of-staff`), so they're the chief's from every one
 them. The thread session that started one is its parent. A session an ad-hoc session starts is
 owned by that session; one you start from a terminal is yours (no owner).
 
-**Each ad-hoc session runs in a folder of its own**, `.wheems/sessions/<workspace>/<id>/`. The
-engine writes the agent's instructions file into the folder a session runs in, so a session
+**Each ad-hoc session runs in a folder of its own**, `.wheems/sessions/<workspace>/adhoc/<id>/`.
+Under `adhoc/`, an id can never collide with the per-agent folders milestone 5 puts at
+`.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. The engine writes the agent's instructions file into the folder a session runs in, so a session
 running another agent, or the chief's own with a different Sessions section, would otherwise
 replace the chief's `CLAUDE.md` in the workspace folder. It's inside the install folder, which
 the engines already trust, and reaches the knowledge base through `wheems kb` as every agent
@@ -398,7 +409,8 @@ results.
 
 `wheems session send <id> "<message>"` delivers a message into an existing session, resuming it
 first if it was stopped. With `--wait` the caller gets the answer back (up to a timeout);
-without, the answer arrives in the caller's own session as a message from that session.
+without, the answer is typed into the caller's own session as a message from that session. A
+chief's thread session then answers in its own conversation, on whatever channel that is.
 
 Until tasks arrive, a send is a plain message and its answer, both kept as files and recorded in
 the store. **From milestone 5 a send is a task aimed at an existing session** (`session: <id>` in
@@ -413,7 +425,7 @@ context.
   who's calling, never from an argument.
 - **Who may send to whom.** A chief may send to any session in its workspace, and a lead to any
   session in its project. Any other session may send to its owner and to the sessions it owns.
-  You may send to any of them from Slack.
+  You may send to any of them from a terminal.
 - **Limits, so sessions can't multiply or loop.** `max_open_per_owner` (3 by default) caps the
   open (not ended) ad-hoc sessions one owner has. `max_depth` (2 by default) counts levels of
   ad-hoc sessions: one a chief's thread or you start is at level 1, one it starts at level 2, and
@@ -439,26 +451,27 @@ sessions:
 
 An ad-hoc session is **starting**, **working**, **idle**, **stopped** (its Herdr session has gone,
 and its engine session can be resumed) or **ended**. An idle one may be stopped to make room, least
-recently used first, as thread sessions are today, and is resumed when it's next sent a message. Until its turns are followed in its Slack thread, an ad-hoc session's state is brought up to
-date from Herdr whenever sessions are listed, searched or shown.
+recently used first, as thread sessions are today, and is resumed when it's next sent a message.
+Its state is brought up to date from Herdr whenever sessions are listed, searched or shown.
 
 `wheems session end <id>`, run by its owner or you, or (planned) `end_after_idle`, ends one:
 Wheems asks it for its note first, as it does before stopping a session today, and gives it up
 to ten minutes, then stops it and marks it ended. A stopped session is ended without a note. An
 ended session stays in the store and in search as a record, but can't be sent messages.
 
-Until its Slack thread arrives, an ad-hoc session's answers aren't posted anywhere: the agent's
-last message of each turn is kept by its engine, and `wheems session show` displays the latest.
-`wheems reply` inside one says so.
+An ad-hoc session's answers are never posted anywhere. The agent's last message of each turn is
+its answer: its engine keeps it, `wheems session show` displays the latest, and from `send` on,
+it goes back to whoever sent the message. `wheems reply`, which posts into a chat, is refused
+inside an ad-hoc session and tells it to answer its owner instead.
 
-| Command                                                              | What it does                                                                        |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller (its Slack thread next), prints its id |
-| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                                  |
-| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                         |
-| `wheems session send <id> "<message>" [--wait]` (next)               | Sends a message into a session and returns its answer                               |
-| `wheems session show <id>`                                           | Its details, latest answer (recent messages next) and the `hc attach` line          |
-| `wheems session end <id>`                                            | Asks for its note, then ends it                                                     |
+| Command                                                              | What it does                                                               |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, prints its id                |
+| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                         |
+| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                |
+| `wheems session send <id> "<message>" [--wait]` (next)               | Sends a message into a session and returns its answer                      |
+| `wheems session show <id>`                                           | Its details, latest answer (recent messages next) and the `hc attach` line |
+| `wheems session end <id>`                                            | Asks for its note, then ends it                                            |
 
 The agent is any agent in the workspace's `agents/` (or, from milestone 4, the project's team); with
 none named, the session runs the owner's own agent file.

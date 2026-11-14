@@ -273,7 +273,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             const from = speaker(request);
             if ('session' in from) {
               throw new Error(
-                'An ad-hoc session has no chat thread to reply in yet. Your last message of each turn is your answer: Wheems keeps it, and wheems session show displays it.',
+                'An ad-hoc session never talks to the person directly, so wheems reply is not for you. Answer your owner instead: your last message of each turn is your answer, and Wheems passes it on.',
               );
             }
             await manager.reply(from.conversation, request.text);

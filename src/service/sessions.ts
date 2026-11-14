@@ -82,7 +82,10 @@ export interface SessionServiceOptions {
   state: StateStore;
   runtime: RuntimeDriver;
   engine: (name: string) => EngineDriver;
-  /** Where ad-hoc sessions' folders go: `<stateDir>/sessions/<workspace>/<id>/`. */
+  /**
+   * Where ad-hoc sessions' folders go: `<stateDir>/sessions/<workspace>/adhoc/<id>/`, under
+   * `adhoc/` so an id can never collide with a per-agent folder beside it.
+   */
   stateDir: string;
   /** Environment every agent session gets, such as PATH with the `wheems` command first. */
   sessionEnv: Record<string, string>;
@@ -200,7 +203,7 @@ export class SessionService {
     await this.checkAccountLimit(agent.definition.account);
 
     const id = randomUUID();
-    const folder = join(this.options.stateDir, 'sessions', workspace.id, id);
+    const folder = join(this.options.stateDir, 'sessions', workspace.id, 'adhoc', id);
     await mkdir(folder, { recursive: true });
     const now = new Date();
     const record = sessions.create({
@@ -472,7 +475,7 @@ export class SessionService {
       else if (runtime.status !== null) state = 'idle';
       else if (!this.engineOf(caller, session).capabilities.status) {
         // An engine that reports no status has finished its turn once its answer is there.
-        // This milestone only follows its first turn; its Slack thread will follow the rest.
+        // Only its first turn is followed here; wheems session send will follow the turns it starts.
         const answered = (await this.answers(caller, session, null).catch(() => [])).length > 0;
         state = answered ? 'idle' : 'working';
       }

@@ -230,6 +230,12 @@ describe('agent files', () => {
     parseAgent('agents/a.md', '---\nname: b\nengine: e\nmodel: m\naccount: a\n---\n', problems);
     expect(problems[0]?.message).toMatch(/must match its file name "a"/);
   });
+
+  it("refuses the name adhoc, which ad-hoc sessions' folders use", () => {
+    const problems: Problem[] = [];
+    parseAgent('agents/adhoc.md', '---\nengine: e\nmodel: m\naccount: a\n---\n', problems);
+    expect(problems[0]?.message).toMatch(/"adhoc" can't be an agent's name/);
+  });
 });
 
 describe('skills.yaml', () => {
