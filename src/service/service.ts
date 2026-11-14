@@ -336,12 +336,12 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
           }
           case 'session-list': {
             const { op: _op, caller, ...filter } = request;
-            return { ok: true, sessions: sessions.list(sessions.caller(caller), filter) };
+            return { ok: true, sessions: await sessions.list(sessions.caller(caller), filter) };
           }
           case 'session-search':
             return {
               ok: true,
-              sessions: sessions.search(sessions.caller(request.caller), request.words),
+              sessions: await sessions.search(sessions.caller(request.caller), request.words),
             };
           case 'session-show':
             return {

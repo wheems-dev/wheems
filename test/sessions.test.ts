@@ -251,6 +251,64 @@ describe('wheems session', () => {
     expect(grandchild.err).toContain('2 levels deep');
   });
 
+  it('admits one session at a time, so two at once cannot both pass a limit', async () => {
+    const yaml = join(home, 'workspaces', 'personal', 'workspace.yaml');
+    writeFileSync(yaml, `${readFileSync(yaml, 'utf8')}\nsessions:\n  max_open_per_owner: 1\n`);
+    await service?.stop();
+    await start();
+    const results = await Promise.all(
+      ['one', 'two'].map((title) =>
+        wheems(['session', 'new', '--title', title, '--purpose', `research ${title}`]),
+      ),
+    );
+    expect(results.filter((r) => r.code === 0)).toHaveLength(1);
+    expect(results.map((r) => r.err).join('')).toContain('already has 1 open sessions');
+  });
+
+  it("counts the filer's sessions against its account's limit", async () => {
+    writeFileSync(
+      join(home, 'install.yaml'),
+      readFileSync(join(home, 'install.yaml'), 'utf8').replace(
+        'driver: claude\n',
+        'driver: claude\n    max_sessions: 1\n',
+      ),
+    );
+    await service?.stop();
+    await start();
+    await runtime.start({
+      name: 'personal-filer',
+      command: ['fake-agent'],
+      labels: { wheems: 'filer', workspace: 'personal' },
+    });
+    const refused = await wheems(['session', 'new', '--title', 'one', '--purpose', 'research']);
+    expect(refused.err).toContain('already runs 1 sessions');
+  });
+
+  it('shows a session idle once its turn is done, and stopped once its Herdr session has gone', async () => {
+    const session = await newSession('packaging');
+    await waitFor(async () =>
+      (await wheems(['session', 'list', '--state', 'idle'])).out.includes(session.id),
+    );
+    const [live] = await runtime.list({ labels: { wheems: session.id } });
+    await runtime.stop(live!.id);
+    await runtime.remove(live!.id);
+    expect((await wheems(['session', 'list', '--state', 'stopped'])).out).toContain(session.id);
+  });
+
+  it("doesn't mark a session ended while its agent may still be running", async () => {
+    const session = await newSession('packaging');
+    await waitFor(() => (answers.get(session.id) ?? []).length > 0);
+    const stop = runtime.stop.bind(runtime);
+    runtime.stop = () => Promise.reject(new Error('Herdr is busy'));
+    const failed = await wheems(['session', 'end', session.id]);
+    expect(failed.err).toContain("Couldn't stop session");
+    expect(await stored((s) => s.workspace('personal').session(session.id)?.state)).not.toBe(
+      'ended',
+    );
+    runtime.stop = stop;
+    expect((await wheems(['session', 'end', session.id])).code).toBe(0);
+  });
+
   it('limits sessions per account, across workspaces', async () => {
     writeFileSync(
       join(home, 'install.yaml'),

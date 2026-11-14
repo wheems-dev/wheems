@@ -84,7 +84,8 @@ answer simple things yourself.
 
 - Start one with a short title and a purpose that says what to do and what to hand back. It
   starts working on the purpose at once, and \`new\` prints its id. It runs your own agent, or
-  another of this workspace's agents with \`--agent <name>\`.
+  another of this workspace's agents when you name it first:
+  \`wheems session new researcher --title …\`.
 
   \`\`\`sh
   wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."

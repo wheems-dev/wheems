@@ -109,6 +109,7 @@ export class SessionService {
     aboutYouFile: string | undefined;
   };
   private readonly ending = new Set<string>();
+  private creating: Promise<unknown> = Promise.resolve();
 
   constructor(options: SessionServiceOptions) {
     this.options = {
@@ -160,7 +161,14 @@ export class SessionService {
   }
 
   /** Starts an ad-hoc session owned by the caller, working on its purpose at once. */
-  async create(caller: Caller, request: NewSessionRequest): Promise<SessionRecord> {
+  create(caller: Caller, request: NewSessionRequest): Promise<SessionRecord> {
+    // One at a time, so two requests can't both pass the limits before either has started.
+    const next = this.creating.then(() => this.createNow(caller, request));
+    this.creating = next.catch(() => undefined);
+    return next;
+  }
+
+  private async createNow(caller: Caller, request: NewSessionRequest): Promise<SessionRecord> {
     const workspace = caller.workspace;
     const config = workspace.config;
     if (!config)
@@ -224,14 +232,23 @@ export class SessionService {
         `Started session ${id} (${started.id}) in ${workspace.id} for ${ownerName(caller)}: ${title}`,
       );
     } catch (error) {
-      sessions.update(id, { state: 'ended', endedAt: new Date().toISOString() });
+      // It may have started before the launch failed, such as when typing its first message.
+      if (await this.stopRuntimeSession(record.herdrName ?? '')) {
+        sessions.update(id, { state: 'ended', endedAt: new Date().toISOString() });
+      } else {
+        sessions.update(id, { state: 'stopped' });
+        this.options.log(
+          `Session ${id} failed to start, and its Herdr session couldn't be stopped`,
+        );
+      }
       throw error;
     }
     return sessions.session(id) ?? record;
   }
 
   /** The caller's workspace's sessions: open ones unless asked for ended ones too. */
-  list(caller: Caller, request: ListRequest = {}): SessionRecord[] {
+  async list(caller: Caller, request: ListRequest = {}): Promise<SessionRecord[]> {
+    await this.refresh(caller);
     const filter: SessionFilter = {
       ...(request.kind !== undefined && { kind: request.kind }),
       ...(request.state !== undefined && { state: request.state }),
@@ -249,12 +266,14 @@ export class SessionService {
       : found.filter((s) => s.state !== 'ended');
   }
 
-  search(caller: Caller, words: string): SessionRecord[] {
+  async search(caller: Caller, words: string): Promise<SessionRecord[]> {
+    await this.refresh(caller);
     return this.sessions(caller).search(words);
   }
 
   /** One session in the caller's workspace, with what Herdr says now and its latest answer. */
   async show(caller: Caller, id: string): Promise<SessionDetails> {
+    await this.refresh(caller);
     const session = this.find(caller, id);
     const live =
       session.herdrName !== null && session.state !== 'ended'
@@ -293,10 +312,11 @@ export class SessionService {
       const live =
         session.herdrName !== null ? await this.options.runtime.get(session.herdrName) : null;
       let noted = false;
-      if (live?.state === 'live') {
-        noted = await this.askForNote(caller, session, live);
-        await this.options.runtime.stop(live.id).catch(() => undefined);
-        await this.options.runtime.remove(live.id).catch(() => undefined);
+      if (live?.state === 'live') noted = await this.askForNote(caller, session, live);
+      if (session.herdrName !== null && !(await this.stopRuntimeSession(session.herdrName))) {
+        throw new Error(
+          `Couldn't stop session ${id}'s agent, so it hasn't ended. Its Herdr session is ${session.herdrName}; try again, or stop it with hc kill.`,
+        );
       }
       const now = new Date().toISOString();
       sessions.update(id, { state: 'ended', endedAt: now, lastActiveAt: now });
@@ -407,6 +427,53 @@ export class SessionService {
       untilReady: (id) => this.untilReady(id),
       typeDelayMs: this.options.typeDelayMs,
     });
+  }
+
+  /**
+   * Stops and removes a runtime session, if there is one. True once it's certainly not
+   * running; false when it may still be.
+   */
+  private async stopRuntimeSession(name: string): Promise<boolean> {
+    const { runtime } = this.options;
+    try {
+      const live = await runtime.get(name);
+      if (!live) return true;
+      if (live.state === 'live') await runtime.stop(live.id);
+      await runtime.remove(live.id).catch(() => undefined);
+      return (await runtime.get(name))?.state !== 'live';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Brings the caller's workspace's ad-hoc sessions' states up to date with Herdr before they're
+   * read: working while Herdr says so, idle once a turn has finished (which counts as activity),
+   * stopped when its Herdr session has gone.
+   */
+  private async refresh(caller: Caller): Promise<void> {
+    const sessions = this.sessions(caller);
+    const open = sessions
+      .sessions({ kind: 'adhoc' })
+      .filter((s) => s.state !== 'ended' && s.state !== 'starting' && s.herdrName !== null);
+    if (open.length === 0) return;
+    const live = new Map(
+      (await this.options.runtime.list({ labels: { workspace: caller.workspace.id } })).map((s) => [
+        s.name,
+        s,
+      ]),
+    );
+    const now = new Date().toISOString();
+    for (const session of open) {
+      const runtime = live.get(session.herdrName);
+      const state: SessionState =
+        runtime === undefined ? 'stopped' : runtime.status === 'working' ? 'working' : 'idle';
+      if (state === session.state) continue;
+      sessions.update(session.id, {
+        state,
+        ...(session.state === 'working' && state === 'idle' && { lastActiveAt: now }),
+      });
+    }
   }
 
   /** Asks a running session for its note and waits for that turn. Returns whether it ended in time. */
@@ -528,6 +595,11 @@ export class SessionService {
     for (const live of await this.options.runtime.list()) {
       const label = live.labels[SESSION_LABEL];
       if (label === undefined) continue;
+      if (label === 'filer') {
+        const workspace = this.options.workspaces.find((w) => w.id === live.labels.workspace);
+        if (workspace && filerAccount(workspace) === account) running++;
+        continue;
+      }
       const session = state.callingSession(label);
       const workspace = this.options.workspaces.find(
         (w) => w.id === (session?.workspace ?? live.labels.workspace),
@@ -571,6 +643,13 @@ export class SessionService {
       await sleep(this.options.pollMs);
     }
   }
+}
+
+/** The account a workspace's filer runs on: its own setting, else the chief's. */
+function filerAccount(workspace: LoadedWorkspace): string | undefined {
+  const config = workspace.config;
+  const chief = workspace.agents.find((a) => a.definition.name === config?.chief_of_staff);
+  return config?.knowledge.filer?.account ?? chief?.definition.account;
 }
 
 /** How the built-ins and messages name a caller. */

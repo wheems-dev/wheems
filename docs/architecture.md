@@ -439,7 +439,8 @@ sessions:
 
 An ad-hoc session is **starting**, **working**, **idle**, **stopped** (its Herdr session has gone,
 and its engine session can be resumed) or **ended**. An idle one may be stopped to make room, least
-recently used first, as thread sessions are today, and is resumed when it's next sent a message.
+recently used first, as thread sessions are today, and is resumed when it's next sent a message. Until its turns are followed in its Slack thread, an ad-hoc session's state is brought up to
+date from Herdr whenever sessions are listed, searched or shown.
 
 `wheems session end <id>`, run by its owner or you, or (planned) `end_after_idle`, ends one:
 Wheems asks it for its note first, as it does before stopping a session today, and gives it up
