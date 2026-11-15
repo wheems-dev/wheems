@@ -5,7 +5,7 @@
 <h1 align="center">Wheems</h1>
 
 > [!WARNING]
-> **Early preview (0.0.x).** Wheems isn't ready for real use yet. Everything may change between
+> **Early preview (0.x).** Wheems isn't ready for real use yet. Everything may change between
 > releases, including commands, config formats and where files live, with no migration path.
 > Try it, but don't rely on it.
 
