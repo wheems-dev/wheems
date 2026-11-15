@@ -76,7 +76,9 @@ Part of using the terminal once, then everything else in chat (built):
   Claude Code, `[projects."<folder>"] trust_level = "trusted"` in Codex's `config.toml`
   (`src/util/trust-write.ts`). The write refuses a file it can't fully parse, checks that the
   result differs by that entry alone, renames a new copy into place, and starts over if the
-  engine wrote the file meanwhile. The Claude Code flag is internal state, not a documented
+  engine wrote the file meanwhile. For Claude Code it holds Claude Code's own save lock
+  (`.claude.json.lock`, a proper-lockfile folder) throughout; Codex has none, so a Codex save
+  in the moment between Wheems's last read and its rename could be lost. The Claude Code flag is internal state, not a documented
   setting, so doctor checks it rather than assume it lasts. Every session starts in a folder
   inside the install, so no session ever stops at a trust question; before a chief's ad-hoc
   session starts or resumes, the session service asks the same `trustProblem` the chiefs' check

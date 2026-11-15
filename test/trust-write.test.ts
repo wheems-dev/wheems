@@ -9,6 +9,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -158,6 +159,69 @@ describe('marking a folder trusted', () => {
         numStartups: 2,
         projects: { [install]: { hasTrustDialogAccepted: true } },
       });
+      expect(files(root)).toEqual(['.claude.json', 'wheems']);
+    });
+
+    it("holds Claude Code's own lock while it writes, so Claude Code can't save in between", async () => {
+      const file = join(root, '.claude.json');
+      writeFileSync(file, '{}\n');
+      const lock = `${file}.lock`;
+      let claudeCouldLock: boolean | null = null;
+      await markClaudeTrusted(install, file, {
+        // Claude Code tries to save after Wheems's last read: proper-lockfile's mkdir fails.
+        beforeCheck: () => {
+          try {
+            mkdirSync(lock);
+            claudeCouldLock = true;
+          } catch {
+            claudeCouldLock = false;
+          }
+          return Promise.resolve();
+        },
+      });
+      expect(claudeCouldLock).toBe(false);
+      expect(await claudeTrusts(install, file)).toBe(true);
+      // Let go of afterwards.
+      expect(files(root)).toEqual(['.claude.json', 'wheems']);
+    });
+
+    it('waits while Claude Code holds its lock, and writes once it lets go', async () => {
+      const file = join(root, '.claude.json');
+      writeFileSync(file, '{}\n');
+      const lock = `${file}.lock`;
+      mkdirSync(lock);
+      setTimeout(() => {
+        // Claude Code saves, then lets go.
+        writeFileSync(file, '{\n  "numStartups": 7\n}\n');
+        rmSync(lock, { recursive: true });
+      }, 150);
+      await markClaudeTrusted(install, file);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
+        numStartups: 7,
+        projects: { [install]: { hasTrustDialogAccepted: true } },
+      });
+    });
+
+    it('leaves the file and the lock alone when Claude Code keeps holding it', async () => {
+      const file = join(root, '.claude.json');
+      writeFileSync(file, '{}\n');
+      const lock = `${file}.lock`;
+      mkdirSync(lock);
+      await expect(markClaudeTrusted(install, file, { lockWaitMs: 200 })).rejects.toThrow(
+        /The engine is saving .* so Wheems left it alone/,
+      );
+      expect(readFileSync(file, 'utf8')).toBe('{}\n');
+      expect(statSync(lock).isDirectory()).toBe(true);
+    });
+
+    it('takes over a lock left behind by a Claude Code that died', async () => {
+      const file = join(root, '.claude.json');
+      writeFileSync(file, '{}\n');
+      const lock = `${file}.lock`;
+      mkdirSync(lock);
+      const old = new Date(Date.now() - 60_000);
+      utimesSync(lock, old, old);
+      expect(await markClaudeTrusted(install, file, { lockWaitMs: 200 })).toBe('marked');
       expect(files(root)).toEqual(['.claude.json', 'wheems']);
     });
 

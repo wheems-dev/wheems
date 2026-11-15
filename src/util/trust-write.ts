@@ -11,10 +11,15 @@
  * - it writes a temporary file beside the real one and renames it into place, keeping the file's
  *   permissions, so the file is never half written;
  * - just before the rename it reads the file again, and if the engine changed it meanwhile it
- *   starts over from the new contents (a few times, then gives up and says so).
+ *   starts over from the new contents (a few times, then gives up and says so);
+ * - for Claude Code, it holds the lock Claude Code itself takes to save the file (a folder named
+ *   `.claude.json.lock` beside it, made by proper-lockfile, checked in Claude Code 2.1.325), so
+ *   Claude Code can't save in between. Codex has no such lock, so for Codex the re-read is all
+ *   there is: a Codex save in the moment between that read and the rename would be lost. Codex
+ *   only saves config.toml when you change a setting in it, and doctor checks the trust after.
  */
 import { randomBytes } from 'node:crypto';
-import { readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse as parseToml } from 'smol-toml';
@@ -37,6 +42,8 @@ export async function markClaudeTrusted(
   const folder = await realpath(dir).catch(() => dir);
   return rewrite(
     file,
+    // Claude Code locks the path it was given, not the file a symlink leads to.
+    { lock: `${file}.lock`, ...options },
     (text) => {
       if (text === null) {
         throw new Error(
@@ -45,7 +52,6 @@ export async function markClaudeTrusted(
       }
       return claudeWithTrust(text, folder, file);
     },
-    options,
   );
 }
 
@@ -59,7 +65,7 @@ export async function markCodexTrusted(
   options: RewriteOptions = {},
 ): Promise<MarkResult> {
   const folder = await realpath(dir).catch(() => dir);
-  return rewrite(file, (text) => codexWithTrust(text ?? '', folder, file), options);
+  return rewrite(file, options, (text) => codexWithTrust(text ?? '', folder, file));
 }
 
 /** ~/.claude.json with the folder marked trusted, or null when it already is. */
@@ -143,6 +149,15 @@ export interface RewriteOptions {
   pauseMs?: number;
   /** Runs between the check and the write; tests use it to change the file at that moment. */
   beforeCheck?: () => Promise<void>;
+  /** The lock folder the engine takes to save the file, held throughout. */
+  lock?: string;
+  /** How long to wait for the engine's lock. Default: 5 seconds. */
+  lockWaitMs?: number;
+  /**
+   * When a lock folder counts as left behind by a process that died: its holder renews it every
+   * few seconds while it holds it (proper-lockfile's own rule, with a wider margin). Default: 30 s.
+   */
+  lockStaleMs?: number;
 }
 
 /**
@@ -151,8 +166,51 @@ export interface RewriteOptions {
  */
 async function rewrite(
   file: string,
-  change: (text: string | null) => string | null,
   options: RewriteOptions,
+  change: (text: string | null) => string | null,
+): Promise<MarkResult> {
+  if (options.lock === undefined) return rewriteLocked(file, options, change);
+  const lock = options.lock;
+  await takeLock(lock, file, options);
+  try {
+    return await rewriteLocked(file, options, change);
+  } finally {
+    await rmdir(lock).catch(() => undefined);
+  }
+}
+
+/**
+ * Takes an engine's lock folder, as proper-lockfile does: making the folder is the lock. Waits
+ * while another process holds it, and takes over one left behind by a process that died.
+ */
+async function takeLock(lock: string, file: string, options: RewriteOptions): Promise<void> {
+  const deadline = Date.now() + (options.lockWaitMs ?? 5000);
+  const stale = options.lockStaleMs ?? 30_000;
+  for (;;) {
+    try {
+      await mkdir(lock);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const held = await stat(lock).catch(() => null);
+    if (held !== null && held.mtimeMs < Date.now() - stale) {
+      await rmdir(lock).catch(() => undefined);
+      continue;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(
+        `The engine is saving ${file} (it holds ${lock}), so Wheems left it alone. Try again in a moment.`,
+      );
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+}
+
+async function rewriteLocked(
+  file: string,
+  options: RewriteOptions,
+  change: (text: string | null) => string | null,
 ): Promise<MarkResult> {
   const attempts = options.attempts ?? 5;
   // Write through a symlink to the file it points to, rather than replace the link.
