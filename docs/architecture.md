@@ -513,9 +513,9 @@ does. Chiefs' thread sessions stay in the workspace folder until milestone 5's s
 
 **Sessions always start in their own folder inside the install**, never in a folder of the
 person's: the install is trusted once, at setup, and every session beneath it starts without a
-trust prompt. Before a session starts or resumes, Wheems checks its engine trusts that folder, as
-it checks chiefs, and refuses with a plain reason the chief can pass on, rather than start a
-session that waits at a question nobody sees. A project's own folder reaches its sessions as an
+trust prompt. Being built next: before a session starts or resumes, Wheems checks its engine
+trusts that folder, as it checks chiefs, and refuses with a plain reason the chief can pass on,
+rather than start a session that waits at a question nobody sees. A project's own folder reaches its sessions as an
 extra folder: see [A project's folder](#a-projects-folder-approved-once-never-at-the-mac).
 
 **The summary is written by code, not by the agent**, the same rule as project cards: the purpose
