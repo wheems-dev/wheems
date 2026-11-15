@@ -255,9 +255,20 @@ team: [writer] # workspace agents this project may use, besides its own agents/
 skills: [review-replies] # narrows the workspace's skills.yaml
 integrations: [reviews] # narrows the workspace's integrations
 routing: search # search (default): the workspace chief searches it; ask: send it a task
-folder: ~/Projects/acme-site # only for projects with code
+folder: ~/Projects/acme-site # only for projects with code; given to its sessions as an extra folder
+start_in: install # install (default) or folder: where its sessions start
 machine: server # default machine for its agents (milestone 10)
 ```
+
+**`folder:`** is a folder of yours that the project works on, such as a website's code. Its
+sessions still start in their own folder inside the install, which is trusted once at setup, and
+get `folder:` as an extra folder (`--add-dir` for Claude Code and Codex), so no engine ever asks
+whether to trust it. You approve it once, when it's linked: a yes in chat, or `wheems project
+create --folder` at the terminal. A chief can't link a folder itself; it asks you. Because
+sessions start outside it, the folder's own hooks and settings don't load; Wheems tells the agent
+to read its `CLAUDE.md` or `AGENTS.md`. **`start_in: folder`** starts sessions inside it instead,
+so they do load, and Wheems marks the folder trusted when it's linked. See
+[architecture.md](architecture.md#a-projects-folder-approved-once-never-at-the-mac).
 
 ### Agent front matter (milestones 5 and 10)
 

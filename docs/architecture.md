@@ -375,7 +375,8 @@ team: [writer] # workspace agents this project may use, besides its own agents/
 skills: [review-replies] # narrows the workspace's skills.yaml
 integrations: [reviews] # narrows the workspace's integrations
 routing: search # search (the default) or ask
-# folder: ~/Projects/acme-site   only for projects with code; tasks get a worktree of it
+# folder: ~/Projects/acme-site   only for projects with code; given to its sessions, see below
+# start_in: install               or folder, to start sessions inside the folder (see below)
 ```
 
 **Notes and knowledge.** The service stamps each note with its project, as it stamps the
@@ -407,6 +408,50 @@ with `routing: ask` is left out of that search, and the chief must send it a tas
 state ("has the refund gone through?") always go to the project's lead as a [task](#tasks). A
 question about several projects sends tasks in parallel, and the chief combines the answers
 without hiding disagreements; a timeout gives a partial answer, not an invented one.
+
+### A project's folder: approved once, never at the Mac
+
+The owner's rule: **the person approves a folder once** (once for the install, and once per
+project), and the chief manages every session beneath it without anyone answering a trust prompt.
+People chat to chiefs; they never trust a folder for a child session.
+
+Claude Code and Codex ask "trust this folder?" the first time they start in a folder, at the
+terminal, where nobody in chat can answer it, so a session started there waits forever. Wheems
+keeps two things apart:
+
+- **Trust: where an engine starts.** Every session starts in its own folder inside the install
+  (`.wheems/sessions/…`, `.wheems/tasks/…`), which is trusted once, at setup, and holds the
+  instructions Wheems wrote. No session ever starts anywhere else by default, so no trust prompt
+  ever appears.
+- **Access: what it may read and edit.** A project's folder (`folder:` in `project.yaml`, such as
+  `~/Projects/acme-site`) is given to its sessions as an extra folder at launch. Checked against
+  the installed versions on 15 November 2026:
+
+  | Engine                | Extra folder                                                                                                                                                               |
+  | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Claude Code (2.1.325) | `--add-dir <folders...>`: its tools may read and edit there. The folder's own settings aren't loaded                                                                       |
+  | Codex (0.169.0)       | `--add-dir <folder>`: writable alongside the folder it starts in (`-C`/`--cd` sets that one)                                                                               |
+  | opencode (1.19.5)     | No flag. It starts in the folder it's given; work outside it goes through its `external_directory` permission in the `opencode.json` Wheems writes (to confirm when built) |
+
+**The person approves a folder once, when they link it to a project**: a yes in chat, through
+[approvals](roadmap.md), never per session and never at the Mac. `wheems project create --folder`
+from the terminal counts as that yes. **A chief can't add folders itself.** To work in a folder no
+project has linked, it asks the person in chat, and the yes links it (to the project, or to a new
+one).
+
+**Starting outside the project's folder** means the project's own hooks, settings and
+instructions don't load by themselves. That's the safe default: a folder's hooks run code, and
+linking a folder for an agent to edit shouldn't also run whatever it carries. Wheems's built-in
+instructions tell the agent to read the project's own `CLAUDE.md` or `AGENTS.md` first.
+
+**Optional: start inside the folder.** `start_in: folder` in `project.yaml` starts the project's
+sessions in its folder, so its hooks and settings apply. Wheems then marks that folder trusted
+for the project's engines at the moment it's linked, as it marks the install at setup, so there's
+still no prompt.
+
+**Code tasks work in worktrees under `.wheems/`** (a git worktree of the project's folder, at
+`.wheems/tasks/<id>/work/`), which the install's trust covers. The project's folder is still
+given as an extra folder, since the worktree's git data lives in the project's `.git`.
 
 **Slack.** One app, as now. Each project with a lead gets a channel, `<workspace>-<project>` by
 default, where its lead posts under its own name and icon. `approvals` and `updates` stay one per
@@ -478,8 +523,15 @@ Under `adhoc/`, an id can never collide with the per-agent folders milestone 5 p
 `.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. The engine writes the agent's instructions file into the folder a session runs in, so a session
 running another agent, or the chief's own with a different Sessions section, would otherwise
 replace the chief's `CLAUDE.md` in the workspace folder. It's inside the install folder, which
-the engines already trust, and reaches the knowledge base through `wheems kb` as every agent
+the engines trust from setup, and reaches the knowledge base through `wheems kb` as every agent
 does. Chiefs' thread sessions stay in the workspace folder until milestone 5's session folders.
+
+**Sessions always start in their own folder inside the install**, never in a folder of the
+person's: the install is trusted once, at setup, and every session beneath it starts without a
+trust prompt. Being built next: before a session starts or resumes, Wheems checks its engine
+trusts that folder, as it checks chiefs, and refuses with a plain reason the chief can pass on,
+rather than start a session that waits at a question nobody sees. A project's own folder reaches its sessions as an
+extra folder: see [A project's folder](#a-projects-folder-approved-once-never-at-the-mac).
 
 **The summary is written by code, not by the agent**, the same rule as project cards: the purpose
 given to `session create` at first, then the first line of the session's latest note (or, from
@@ -666,7 +718,9 @@ Agent front matter gains `lifetime: thread | task`: `thread` by default for chie
 (`.wheems/sessions/<workspace>/<agent>/` for thread agents, `.wheems/tasks/<id>/work/` for
 tasks), so the engine driver writes that agent's instructions file and only its pinned skills
 there. A task on a project with code works in a git worktree of the project's folder, on a branch
-`wheems/<task-id>`.
+`wheems/<task-id>`, kept at `.wheems/tasks/<id>/work/` inside the install, so it starts without a
+trust prompt; the project's folder is given as an extra folder (see
+[A project's folder](#a-projects-folder-approved-once-never-at-the-mac)).
 
 ### The brief and the result
 
