@@ -230,6 +230,35 @@ describe('setting Wheems up by inviting it to a channel', () => {
     expect(posts('C0MKTCHAT1')).toEqual([]);
   });
 
+  it('binds no archived workspace, and loses no other, when it was archived during a lookup', async () => {
+    await initWorkspace({ home, id: 'marketing', channel: 'marketing-chat' });
+    await initWorkspace({ home, id: 'sales', channel: 'sales-chat' });
+    await start();
+    // The channel lookup is held open while marketing is archived.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const channelName = channel.channelName!;
+    channel.channelName = async (id) => {
+      await held;
+      return channelName(id);
+    };
+    const joining = channel.join({ id: 'C0MKTCHAT1', name: 'marketing-chat' }, null);
+    await new Promise((r) => setTimeout(r, 50));
+    const socket = paths(home, env).socket;
+    expect(
+      await request(socket, { op: 'workspace-retire', id: 'marketing', forget: false }),
+    ).toMatchObject({ ok: true });
+    release();
+    await joining;
+    channel.channelName = channelName;
+    expect(posts('C0MKTCHAT1')).toEqual([]);
+    // Sales still waits for its channel, and is picked up when the app is invited there.
+    await channel.join({ id: 'C0SALESCH1', name: 'sales-chat' }, null);
+    expect(posts('C0SALESCH1').at(-1)?.text).toBe(
+      "Sales's chief of staff is here. Start a thread with what you need.",
+    );
+  });
+
   it('serves a workspace made afresh under the name of one removed earlier', async () => {
     await start();
     const socket = paths(home, env).socket;

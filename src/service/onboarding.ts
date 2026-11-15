@@ -243,10 +243,13 @@ export class Onboarding {
           conclusive = false;
         }
       }
-      if (matches) {
-        this.options.waiting.splice(this.options.waiting.indexOf(candidate), 1);
-        return candidate;
-      }
+      if (!matches) continue;
+      // The lookups were awaited: it may have been archived or removed meanwhile, and taken off
+      // the waiting list. Then it isn't bound, and nothing else is taken off in its place.
+      const at = this.options.waiting.indexOf(candidate);
+      if (at < 0) continue;
+      this.options.waiting.splice(at, 1);
+      return candidate;
     }
     if (conclusive) this.checked.add(key);
     return undefined;
