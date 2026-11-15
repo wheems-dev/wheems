@@ -11,9 +11,9 @@ editor at one for completion and hover help, for example with the YAML language 
 # yaml-language-server: $schema=/path/to/wheems/schemas/workspace.schema.json
 ```
 
-`wheems config validate` checks files or a whole install folder, with line numbers. For a folder it also
-checks the links between files: that names point at things that exist, and that each level only
-picks from the level above. `wheems doctor` runs the same checks.
+`wheems configuration validate` checks files or a whole install folder, with line numbers. For a
+folder it also checks the links between files: that names point at things that exist, and that each
+level only picks from the level above. `wheems doctor` runs the same checks.
 
 Keys are `snake_case`. Names (of workspaces, agents, accounts, connections, channels, skills and
 workflows) are lowercase letters, digits and dashes. Unknown keys are errors, so a typo never
@@ -178,8 +178,9 @@ skills:
   code-review: 1
 ```
 
-`wheems review` adds the pin when you approve a skill an agent proposed. `wheems config validate` and
-doctor report a pin with no such skill or version in the library.
+`wheems review` adds the pin when you approve a skill an agent proposed.
+`wheems configuration validate` and doctor report a pin with no such skill or version in the
+library.
 
 ## library/skills/
 

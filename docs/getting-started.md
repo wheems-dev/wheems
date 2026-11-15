@@ -81,8 +81,9 @@ direct messages: that's how you know it works, and where to find it. If it can't
 why.
 
 Each part also has its own command for scripts: `wheems engine install <engine>`,
-`wheems channel connect slack`, `wheems ws create <workspace> [--engine codex] [--model …]`,
-`wheems start` and `wheems doctor`. `wheems list` shows every command, grouped by area.
+`wheems channel connect slack`,
+`wheems workspace create <workspace> [--engine codex] [--model …]`, `wheems start` and
+`wheems doctor`. `wheems list` shows every command, grouped by area.
 
 ## 3. Chat
 

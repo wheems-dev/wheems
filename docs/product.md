@@ -93,10 +93,9 @@ and adds roles when needed. Starter sets, such as "lead-generation site", "onlin
 - A built-in filing job turns each note into knowledge-base pages and work-tracker entries,
   and keeps the note as the source. Users never see it as an agent.
 - The chief of staff reads the knowledge base to answer questions and brief agents.
-- The knowledge base is searched by meaning as well as by words. Turning text into
-  embeddings and storing them are both drivers, the way Laravel's storage has disks: local by
-  default, free and private, with hosted services as other drivers. `wheems kb reindex` rebuilds
-  the index.
+- The knowledge base is searched by meaning as well as by words. Turning text into embeddings and
+  storing them are both drivers, the way Laravel's storage has disks: local by default, free and
+  private, with hosted services as other drivers. `wheems knowledgebase reindex` rebuilds the index.
 - Agents improve themselves the same way. An agent that learns how to do something proposes a
   skill. The proposal goes to the library and waits for approval, like any outside skill.
 

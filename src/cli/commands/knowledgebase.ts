@@ -10,14 +10,30 @@ import { addNote } from './note.js';
 
 const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 
-export function registerKb(program: Command, io: Io): void {
-  const kb = program
-    .command('kb')
-    .description("Search and rebuild the workspaces' knowledge bases");
+/**
+ * `wheems knowledgebase`: notes, search and the search index. `kb`, its old name, still works
+ * hidden, so agents' prompts and skills that use it don't break; it says what it's called now.
+ */
+export function registerKnowledgebase(program: Command, io: Io): void {
+  addActions(
+    program
+      .command('knowledgebase')
+      .description("Search and rebuild the workspaces' knowledge bases"),
+    io,
+  );
+  addActions(
+    program.command('kb', { hidden: true }).hook('preAction', () => {
+      io.err('wheems kb is now wheems knowledgebase.\n');
+    }),
+    io,
+  );
+}
 
-  addNote(kb.command('note'), io, 'wheems kb note');
+function addActions(area: Command, io: Io): void {
+  addNote(area.command('note'), io, `wheems ${area.name()} note`);
 
-  kb.command('search')
+  area
+    .command('search')
     .description('Search the knowledge base by keyword and by meaning (agents run this)')
     .argument('<query...>', 'what to look for, in plain words')
     .option(
@@ -57,7 +73,8 @@ export function registerKb(program: Command, io: Io): void {
       },
     );
 
-  kb.command('reindex')
+  area
+    .command('reindex')
     .description('Rebuild the search index from the files, and swap it in when it is done')
     .option('--workspace <id>', 'only this workspace (default: every workspace)')
     .option('--home <dir>', homeHelp)

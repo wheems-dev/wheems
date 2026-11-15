@@ -287,7 +287,7 @@ export class StateStore {
 
   /**
    * Forgets everything the store holds for a workspace: its standing agents, sessions, threads
-   * and messages. For `wheems ws remove`, which deletes the workspace itself.
+   * and messages. For `wheems workspace remove`, which deletes the workspace itself.
    */
   forgetWorkspace(workspace: string): void {
     this.transaction(() => {

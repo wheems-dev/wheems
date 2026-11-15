@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /**
  * A workspace's knowledge folder. Sessions never write here directly: notes reach the inbox
- * through `wheems kb note`, and the filing job turns them into pages.
+ * through `wheems knowledgebase note`, and the filing job turns them into pages.
  */
 export interface KnowledgePaths {
   root: string;

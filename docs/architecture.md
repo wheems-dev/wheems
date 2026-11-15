@@ -31,9 +31,9 @@ TypeScript first.
   small SQLite store of every session it runs (built) and what's waiting (planned), see
   [Sessions](#sessions).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems chat post updates "…"`,
-  `wheems chat ask approvals "Deploy?"` and `wheems kb note`. Commands are grouped by area, like
-  `php artisan` ([cli.md](cli.md)). It replaces hand-written scripts and
-  hard-coded channel IDs.
+  `wheems chat ask approvals "Deploy?"` and `wheems knowledgebase note`. Commands are grouped by
+  area, like `php artisan` ([cli.md](cli.md)), and named in full words (`knowledgebase`, not `kb`);
+  short forms are only aliases. It replaces hand-written scripts and hard-coded channel IDs.
 - **Config**: YAML and Markdown in a git folder. Adding an agent, channel or workflow means
   editing config, not code. See [config.md](config.md).
 - **Built-in skills**: Markdown that teaches every agent the CLI.
@@ -97,7 +97,7 @@ Part of using the terminal once, then everything else in chat (built):
 npm install -g wheems   # the same way Claude Code is installed; the command is wheems
 wheems setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
-wheems ws create acme   # creates a workspace
+wheems workspace create acme   # creates a workspace
 wheems doctor           # health check, any time
 ```
 
@@ -165,7 +165,7 @@ stopped.
             ├── brief.md      short, capped; every agent here loads it at launch
             ├── activity.md   planned (4): one line per filed project note, newest first
             ├── cards/        planned (4): one generated card per project
-            ├── inbox/        notes land here, from wheems kb note
+            ├── inbox/        notes land here, from wheems knowledgebase note
             ├── notes/        filed notes, kept as the sources
             ├── pages/        the knowledge base, one topic per page
             └── reports/      nightly: contradictions and stale pages
@@ -178,12 +178,12 @@ Running state, never committed, lives in `.wheems/`: the control socket, logs, t
 
 Agents are told never to write into `knowledge/` or `about-you.md` themselves; that's an
 instruction, not a lock, until permission rules arrive (milestone 6). They write notes with
-`wheems kb note`, and the service saves each note to its workspace's inbox with where it came from:
-workspace, agent, engine, conversation and time. When a conversation has been quiet for
-`knowledge.note_after_idle` minutes after new work, and before the service stops an idle session
-to make room, the service asks the agent for its note as a turn of its own. The answer to that
-turn is never posted. Each agent's instructions file carries the brief and `about-you.md`, as they
-were when its session started.
+`wheems knowledgebase note`, and the service saves each note to its workspace's inbox with where it
+came from: workspace, agent, engine, conversation and time. When a conversation has been quiet for
+`knowledge.note_after_idle` minutes after new work, and before the service stops an idle session to
+make room, the service asks the agent for its note as a turn of its own. The answer to that turn is
+never posted. Each agent's instructions file carries the brief and `about-you.md`, as they were when
+its session started.
 
 When a note lands, and for any notes waiting when the service starts, the **filer** files it.
 The filer is a built-in agent, one note at a time per workspace, running in Herdr like any other
@@ -205,15 +205,16 @@ worked, such as an edit by hand, nothing is applied and the note is filed again 
 version, so an edit is never overwritten. A note the filer can't file stays in the inbox and is
 tried again; after three failed tries, it waits until the service restarts.
 
-Nothing that looks like a password, token or key is kept: `wheems kb note` refuses such a note, a
-note that reaches the inbox anyway is moved to `.wheems/quarantine/<workspace>/` and never filed or
-committed, and pages and the brief that hold one are not kept.
+Nothing that looks like a password, token or key is kept: `wheems knowledgebase note` refuses such a
+note, a note that reaches the inbox anyway is moved to `.wheems/quarantine/<workspace>/` and never
+filed or committed, and pages and the brief that hold one are not kept.
 
 ### Searching the knowledge base
 
-Agents search before answering about past work: `wheems kb search "what did we decide about the
-boat name"`, run in their session, searches their own workspace's pages and notes (filed and in
-the inbox). Their built-in instructions tell them to.
+Agents search before answering about past work:
+`wheems knowledgebase search "what did we decide about the boat name"`, run in their session,
+searches their own workspace's pages and notes (filed and in the inbox). Their built-in instructions
+tell them to.
 
 - **By keyword**, always: SQLite's full-text search, built into Node.js, so it needs nothing
   installed.
@@ -241,16 +242,17 @@ model built it. The service brings it up to date when it starts, after each note
 every ten minutes for edits by hand; only files whose size, time or content changed are read
 again, and only their passages embedded again.
 
-`wheems kb reindex` builds a new generation from the files and swaps it in when it's done, so
-search keeps working meanwhile. A search already running keeps the old generation until it finishes,
-and one that finds it gone tries again on the new one. Until an index built with another model
-is rebuilt, search uses keywords only. If the vector store holds fewer vectors than the index
-expects, such as after its files were lost, the next sync embeds everything again. If the service is running, it does the rebuild, so the two never
-write at once. The index rebuilds itself the same way when the embeddings driver or model
-changes, because vectors from different models can't be compared. If the embeddings driver can't
-be reached, such as when Ollama isn't running, new passages are found by keyword until it can
-be, a search says it fell back to keywords, and a rebuild keeps the index it has rather than
-lose its vectors. `wheems doctor` checks the driver and each workspace's index.
+`wheems knowledgebase reindex` builds a new generation from the files and swaps it in when it's
+done, so search keeps working meanwhile. A search already running keeps the old generation until it
+finishes, and one that finds it gone tries again on the new one. Until an index built with another
+model is rebuilt, search uses keywords only. If the vector store holds fewer vectors than the index
+expects, such as after its files were lost, the next sync embeds everything again. If the service is
+running, it does the rebuild, so the two never write at once. The index rebuilds itself the same way
+when the embeddings driver or model changes, because vectors from different models can't be
+compared. If the embeddings driver can't be reached, such as when Ollama isn't running, new passages
+are found by keyword until it can be, a search says it fell back to keywords, and a rebuild keeps
+the index it has rather than lose its vectors. `wheems doctor` checks the driver and each
+workspace's index.
 
 ### The nightly tidy
 
@@ -388,11 +390,11 @@ project's card and into the workspace's `knowledge/activity.md`, so the workspac
 happened without anything being posted.
 
 **Cards are generated, never written by an agent.** `knowledge/cards/<project>.md` holds the
-project's name, description, lead, channel, status, a "can answer about" list taken from its
-brief's headings, and the latest lines of activity. Code writes it at `project new`, after each
-project note is filed, and at the nightly tidy, so it can't drift; `wheems config validate` reports a
-card without a project or a project without a card. The chief's built-in instructions get a
-generated Projects section at each launch, from the `project.yaml` files.
+project's name, description, lead, channel, status, a "can answer about" list taken from its brief's
+headings, and the latest lines of activity. Code writes it at `project new`, after each project note
+is filed, and at the nightly tidy, so it can't drift; `wheems configuration validate` reports a card
+without a project or a project without a card. The chief's built-in instructions get a generated
+Projects section at each launch, from the `project.yaml` files.
 
 | Command (planned)                                                                     | What it does                                                                                                                                        |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -401,13 +403,13 @@ generated Projects section at each launch, from the `project.yaml` files.
 | `wheems project rename <old> <new>`                                                   | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                                                  |
 | `wheems project archive <name>`                                                       | Moves it to `projects/_archive/`, marks the card archived and stops its channel. Knowledge is never deleted                                         |
 
-**Routing: search first, ask for jobs.** The workspace chief's `wheems kb search` covers its own
-pages, the cards, and every project with `routing: search` (the default), with each result
+**Routing: search first, ask for jobs.** The workspace chief's `wheems knowledgebase search` covers
+its own pages, the cards, and every project with `routing: search` (the default), with each result
 labelled by project. If the pages answer the question, the chief replies with sources. A project
 with `routing: ask` is left out of that search, and the chief must send it a task. Work and live
 state ("has the refund gone through?") always go to the project's lead as a [task](#tasks). A
-question about several projects sends tasks in parallel, and the chief combines the answers
-without hiding disagreements; a timeout gives a partial answer, not an invented one.
+question about several projects sends tasks in parallel, and the chief combines the answers without
+hiding disagreements; a timeout gives a partial answer, not an invented one.
 
 ### A project's folder: approved once, never at the Mac
 
@@ -520,11 +522,12 @@ owned by that session; one you start from a terminal is yours (no owner).
 
 **Each ad-hoc session runs in a folder of its own**, `.wheems/sessions/<workspace>/adhoc/<id>/`.
 Under `adhoc/`, an id can never collide with the per-agent folders milestone 5 puts at
-`.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. The engine writes the agent's instructions file into the folder a session runs in, so a session
-running another agent, or the chief's own with a different Sessions section, would otherwise
-replace the chief's `CLAUDE.md` in the workspace folder. It's inside the install folder, which
-the engines trust from setup, and reaches the knowledge base through `wheems kb` as every agent
-does. Chiefs' thread sessions stay in the workspace folder until milestone 5's session folders.
+`.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. The engine writes the
+agent's instructions file into the folder a session runs in, so a session running another agent, or
+the chief's own with a different Sessions section, would otherwise replace the chief's `CLAUDE.md`
+in the workspace folder. It's inside the install folder, which the engines trust from setup, and
+reaches the knowledge base through `wheems knowledgebase` as every agent does. Chiefs' thread
+sessions stay in the workspace folder until milestone 5's session folders.
 
 **Sessions always start in their own folder inside the install**, never in a folder of the
 person's: the install is trusted once, at setup, and every session beneath it starts without a

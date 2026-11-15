@@ -391,7 +391,11 @@ describe('wheems session', () => {
   it("takes a session's notes, whose title becomes its summary, and has no thread to reply in yet", async () => {
     const session = await newSession('packaging');
     const as = { WHEEMS_SESSION: session.id };
-    const note = await wheems(['kb', 'note', '-'], as, '# Shortlisted three suppliers\n\nDetails.');
+    const note = await wheems(
+      ['knowledgebase', 'note', '-'],
+      as,
+      '# Shortlisted three suppliers\n\nDetails.',
+    );
     expect(note.err).toBe('');
     const inbox = join(home, 'workspaces', 'personal', 'knowledge', 'inbox');
     const [file] = readdirSync(inbox);

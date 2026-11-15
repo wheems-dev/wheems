@@ -505,12 +505,12 @@ async function knowledgeChecks(
       // or built for another model, is worth rebuilding now.
       const rebuild =
         check.status === 'warn' &&
-        check.hint?.includes('wheems kb reindex') === true &&
+        check.hint?.includes('wheems knowledgebase reindex') === true &&
         check.message !== 'Not built yet';
       if (fixes && rebuild) {
         const id = workspace.id;
         check.fix = {
-          what: `Rebuild ${id}'s search index, as wheems kb reindex does (the service must be running)`,
+          what: `Rebuild ${id}'s search index, as wheems knowledgebase reindex does (the service must be running)`,
           run: async () => {
             await fixes.reindex(id);
             return `${id}'s search index is rebuilt.`;
@@ -532,7 +532,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: `Can't read it: ${status instanceof Error ? status.message : String(status)}`,
-      hint: 'Run wheems kb reindex.',
+      hint: 'Run wheems knowledgebase reindex.',
     };
   }
   const index = status as IndexStatus;
@@ -541,7 +541,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: 'Not built yet',
-      hint: 'The service builds it when it starts, or run wheems kb reindex.',
+      hint: 'The service builds it when it starts, or run wheems knowledgebase reindex.',
     };
   }
   const files = `${String(index.documents)} ${index.documents === 1 ? 'file' : 'files'}`;
@@ -550,7 +550,7 @@ function indexCheck(workspace: string, status: unknown): HealthCheck {
       name,
       status: 'warn',
       message: `${files}, built ${index.embeddings ? `with ${index.embeddings.model}` : 'for keyword search'}, not the model in install.yaml`,
-      hint: 'The service rebuilds it when it next syncs, or run wheems kb reindex.',
+      hint: 'The service rebuilds it when it next syncs, or run wheems knowledgebase reindex.',
     };
   }
   const missing = index.chunks - index.embedded;

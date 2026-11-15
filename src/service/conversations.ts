@@ -249,7 +249,7 @@ export class ConversationManager {
   }
 
   /**
-   * Saves a note an agent wrote (`wheems kb note`) to its workspace's inbox, and counts the
+   * Saves a note an agent wrote (`wheems knowledgebase note`) to its workspace's inbox, and counts the
    * conversation's work so far as noted. Returns the note's file.
    */
   async note(key: string, text: string): Promise<string> {

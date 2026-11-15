@@ -6,26 +6,34 @@ How the commands are organised, and the rules for adding one. Decided on 14 Nove
 ## The shape: `wheems <area> <action> [name] [--options]`
 
 Commands are grouped by area, the way Laravel's `php artisan` groups them by namespace, but with
-spaces rather than colons: `wheems ws create acme`, not `wheems ws:create acme`. An area is one of
-the things Wheems is made of: workspaces, sessions, the knowledge base, skills, channels, engines,
-the service, config, and later projects, tasks, routines and workflows. `wheems list` prints
-every command by area, and `wheems <area> --help` one area's.
+spaces rather than colons: `wheems workspace create acme`, not `wheems workspace:create acme`.
+An area is one of the things Wheems is made of: workspaces, sessions, the knowledge base, skills,
+channels, engines, the service, configuration, and later projects, tasks, routines and workflows.
+`wheems list` prints every command by area, and `wheems <area> --help` one area's.
+
+### Full words
+
+Areas, actions and options are full words, never abbreviations: `wheems knowledgebase search`,
+not `wheems kb search`; `wheems configuration validate`, not `wheems config validate`. People
+read them in help and docs, and agents read them in their instructions, so a name says what it
+is. A short form may exist only as an alias of the full word. `ws` is the one alias shown, as
+`workspace` (`ws` for short); `kb` and `config`, the old names, stay working but hidden.
 
 ### Actions
 
 One set of verbs, so the next command can be guessed:
 
-| Verb                        | For                                           | Example                        |
-| --------------------------- | --------------------------------------------- | ------------------------------ |
-| `list`                      | Every one, one per line; `--json` for scripts | `wheems ws list`               |
-| `show <name>`               | One, in detail; `--json` for scripts          | `wheems ws show acme`          |
-| `create <name>`             | A new one, made in config                     | `wheems ws create acme`        |
-| `rename <name> <new>`       | Its display name; ids and folders stay        | `wheems ws rename acme "Acme"` |
-| `archive <name>`, `restore` | Put away, keeping everything; and bring back  | `wheems ws archive acme`       |
-| `remove <name>`             | Delete for good, after asking                 | `wheems ws remove acme`        |
-| `add <name>`                | Install from the library into a workspace     | `wheems blueprint add crm`     |
-| `run <name>`                | Run something once, now                       | `wheems workflow run leads`    |
-| `start`, `stop`, `restart`  | Processes                                     | `wheems service restart`       |
+| Verb                        | For                                           | Example                               |
+| --------------------------- | --------------------------------------------- | ------------------------------------- |
+| `list`                      | Every one, one per line; `--json` for scripts | `wheems workspace list`               |
+| `show <name>`               | One, in detail; `--json` for scripts          | `wheems workspace show acme`          |
+| `create <name>`             | A new one, made in config                     | `wheems workspace create acme`        |
+| `rename <name> <new>`       | Its display name; ids and folders stay        | `wheems workspace rename acme "Acme"` |
+| `archive <name>`, `restore` | Put away, keeping everything; and bring back  | `wheems workspace archive acme`       |
+| `remove <name>`             | Delete for good, after asking                 | `wheems workspace remove acme`        |
+| `add <name>`                | Install from the library into a workspace     | `wheems blueprint add crm`            |
+| `run <name>`                | Run something once, now                       | `wheems workflow run leads`           |
+| `start`, `stop`, `restart`  | Processes                                     | `wheems service restart`              |
 
 A few areas have a verb of their own where none of these says what happens: a session is
 `end`ed (it stays as a record), a message is `send`, a knowledge base is `search`ed, a channel is
@@ -55,30 +63,30 @@ appears without being added there on purpose. Everything else goes under an area
 
 ✓ built, ○ planned (with the milestone that brings it).
 
-| Area               | Actions                                                                           |
-| ------------------ | --------------------------------------------------------------------------------- |
-| `workspace` (`ws`) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
-| `session`          | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
-| `kb`               | ✓ `search`, `note`, `reindex`                                                     |
-| `chat`             | ✓ `reply`; ○ `post <channel>`, `ask <channel>` (M3)                               |
-| `skill`            | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
-| `channel`          | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
-| `engine`           | ✓ `list`, `install`, `login`, `trust`                                             |
-| `service`          | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
-| `config`           | ✓ `validate`; ○ `show`                                                            |
-| `agent`            | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
-| `project`          | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
-| `task`             | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
-| `routine`          | ○ `list`, `show`, `create`, `run`, `pause` (M5)                                   |
-| `pair`             | ○ `run` (M5)                                                                      |
-| `workflow`         | ○ `list`, `show`, `run` (M7)                                                      |
-| `eval`             | ○ `run`, `report` (M7)                                                            |
-| `blueprint`        | ○ `list`, `add`, `create` (M8)                                                    |
-| `integration`      | ○ `list`, `connect <name>`, `grant <name> <workspace>` (M9)                       |
-| `action`           | ○ `run <action>`, through the broker (M9)                                         |
-| `purchase`         | ○ `request` (M9)                                                                  |
-| `machine`          | ○ `list`, `run` (the worker on each machine) (M10)                                |
-| `plugin`           | ○ `add`, `list`, `remove` (M11)                                                   |
+| Area                         | Actions                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| `workspace` (`ws` for short) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
+| `session`                    | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
+| `knowledgebase`              | ✓ `search`, `note`, `reindex`                                                     |
+| `chat`                       | ✓ `reply`; ○ `post <channel>`, `ask <channel>` (M3)                               |
+| `skill`                      | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
+| `channel`                    | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
+| `engine`                     | ✓ `list`, `install`, `login`, `trust`                                             |
+| `service`                    | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
+| `configuration`              | ✓ `validate`; ○ `show`                                                            |
+| `agent`                      | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
+| `project`                    | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
+| `task`                       | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
+| `routine`                    | ○ `list`, `show`, `create`, `run`, `pause` (M5)                                   |
+| `pair`                       | ○ `run` (M5)                                                                      |
+| `workflow`                   | ○ `list`, `show`, `run` (M7)                                                      |
+| `eval`                       | ○ `run`, `report` (M7)                                                            |
+| `blueprint`                  | ○ `list`, `add`, `create` (M8)                                                    |
+| `integration`                | ○ `list`, `connect <name>`, `grant <name> <workspace>` (M9)                       |
+| `action`                     | ○ `run <action>`, through the broker (M9)                                         |
+| `purchase`                   | ○ `request` (M9)                                                                  |
+| `machine`                    | ○ `list`, `run` (the worker on each machine) (M10)                                |
+| `plugin`                     | ○ `add`, `list`, `remove` (M11)                                                   |
 
 Laravel's `make:` generators become each area's `create`. Older documents named some commands
 differently; the docs now use these names:
@@ -99,15 +107,15 @@ differently; the docs now use these names:
 
 ### Workspaces: archive and remove
 
-- **`ws archive <id>`** stops serving a workspace and keeps everything:
+- **`workspace archive <id>`** stops serving a workspace and keeps everything:
   - a running service unbinds it and stops its sessions in Herdr (through the `workspace-retire`
     control request); with no service running, the command stops them itself;
   - the folder moves to `archive/<id>/` (dated if that's taken), marked with `.archived.json`;
   - its search index is dropped, since it's rebuilt from the files.
 
-  `ws restore <id>` moves it back; restart the service for its chief to answer again.
+  `workspace restore <id>` moves it back; restart the service for its chief to answer again.
 
-- **`ws remove <id>`** deletes it for good, after you type its id (or with `--yes`):
+- **`workspace remove <id>`** deletes it for good, after you type its id (or with `--yes`):
   - its folder, with its agents and knowledge base;
   - its state under `.wheems/`: search index, session folders, messages, tidy and quarantine;
   - its records in the session store.
@@ -122,21 +130,24 @@ standard error:
 
 | Old                      | Now                             |
 | ------------------------ | ------------------------------- |
-| `wheems init`            | `wheems ws create`              |
-| `wheems validate`        | `wheems config validate`        |
+| `wheems init`            | `wheems workspace create`       |
+| `wheems validate`        | `wheems configuration validate` |
 | `wheems slack manifest`  | `wheems channel manifest slack` |
 | `wheems service install` | `wheems service start`          |
 | `wheems reply`           | `wheems chat reply`             |
-| `wheems note`            | `wheems kb note`                |
+| `wheems note`            | `wheems knowledgebase note`     |
 | `wheems session new`     | `wheems session create`         |
+| `wheems kb …`            | `wheems knowledgebase …`        |
+| `wheems config …`        | `wheems configuration …`        |
 
 The agents' built-in instructions use the new names; a session started before them keeps working
-through the old ones until the release after.
+through the old ones until the release after. `kb` and `config` are areas rather than single
+commands, and stay working, hidden, so agents' prompts and skills that use `kb` don't break.
 
 ## The workspace from the folder you're in
 
 In a workspace's folder (`~/wheems/workspaces/acme/` or anywhere below it), commands that take
 `--workspace` default to that workspace, the way Artisan finds the project it's run in:
-`wheems kb search …` and the `wheems session …` commands. Inside a session started by Wheems they
-always act in the session's own workspace, so this never applies there. `--workspace` still wins
-when it's given.
+`wheems knowledgebase search …` and the `wheems session …` commands. Inside a session started by
+Wheems they always act in the session's own workspace, so this never applies there. `--workspace`
+still wins when it's given.

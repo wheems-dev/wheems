@@ -91,7 +91,7 @@ describe('notes', () => {
 
   it("gives agents the notes instructions, and what they know when there's something to know", () => {
     const bare = withBuiltins('# Agent');
-    expect(bare).toContain('wheems kb note');
+    expect(bare).toContain('wheems knowledgebase note');
     expect(bare).not.toContain('What you know');
     const known = withBuiltins('# Agent', { aboutYou: 'Prefers short answers.', brief: null });
     expect(known).toContain('### About the person\n\nPrefers short answers.');
