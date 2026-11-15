@@ -221,7 +221,7 @@ there isn't one, so a fresh machine can start there. `wheems channel connect sla
 `wheems engine install` run setup's own steps, because you type tokens and sign in yourself:
 
 ```bash
-wheems ws create personal                                   # a workspace on Claude Code
+wheems ws create default                                    # a workspace on Claude Code
 wheems ws create acme --channel acme-chat --engine codex    # chat in a channel, on Codex
 wheems start
 wheems doctor
@@ -240,7 +240,7 @@ Projects inside a workspace (milestone 4) keep context clean but are never walls
 `archive`, `restore` and `remove` look after them; see the command reference):
 
 ```text
-workspaces/personal/
+workspaces/default/
 ├── workspace.yaml         its name, accounts, chat channel, knowledge settings
 ├── agents/
 │   └── chief-of-staff.md  the agent you talk to
@@ -297,7 +297,7 @@ Message the Slack app (or the workspace's channel). Each message you send starts
 **conversation**, and replies in its thread carry it on.
 
 - Each conversation is its own engine session in Herdr, named after the workspace with a short
-  id for the thread, such as `personal-3f9a2c1b`. Watch it or take over with
+  id for the thread, such as `default-3f9a2c1b`. Watch it or take over with
   `hc attach <session>`.
 - A 👀 reaction means your message has reached the agent. It goes when the agent answers.
 - The agent's last message of each turn is posted to the thread as its answer. The answer is
@@ -610,7 +610,7 @@ invited to:
 ```text
 ✓ Running: Wheems 0.0.4, pid 4242, up 2h 14m
 ✓ Connected to slack
-✓ personal: direct messages on slack
+✓ default: direct messages on slack
 ! marketing: the app can't see #marketing-chat on slack. Invite the app to the channel, and the chief of staff answers there at once; or check the name in workspace.yaml.
 Log: ~/wheems/.wheems/logs/service.log
 ```
@@ -835,12 +835,12 @@ Changing the embeddings driver or model rebuilds every index the next time the s
 ### workspace.yaml
 
 ```yaml
-name: Personal
+name: Default
 accounts: [claude-subscription] # install accounts this workspace may use
 chief_of_staff: chief-of-staff # the file in agents/; this is the default
 channels:
   chat: { connection: slack, direct: true } # or { connection: slack, channel: acme-chat }
-identity: { name: Personal chief of staff, icon: ':house:' } # how its posts appear
+identity: { name: Chief of staff, icon: ':house:' } # how its posts appear
 skill_budget: 20 # doctor warns past this many skills
 sessions: # limits on ad-hoc sessions; each defaults as shown
   max_open_per_owner: 3 # open sessions one owner (a chief, a session or you) may have

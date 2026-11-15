@@ -192,7 +192,7 @@ export function registerWorkspace(program: Command, io: Io): void {
     ws
       .command('create')
       .description('Create a workspace with its chief of staff (and the install, if there is none)')
-      .argument('<id>', 'the workspace id, such as personal'),
+      .argument('<id>', 'the workspace id, such as default'),
   ).action(async (id: string, options: CreateOptions) => {
     await createWorkspace(io, id, options);
   });

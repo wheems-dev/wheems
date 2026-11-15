@@ -7,6 +7,8 @@ export interface Shown {
   kind: 'note' | 'info' | 'success' | 'warn' | 'task' | 'invalid' | 'question';
   message: string;
   choices?: Choice<string>[];
+  /** The answer suggested, for a text question or a choice. */
+  initial?: string;
 }
 
 /**
@@ -17,8 +19,12 @@ export function scriptedUi(
   answers: Answer[],
 ): SetupUi & { shown: Shown[]; remaining: () => number } {
   const shown: Shown[] = [];
-  const next = (message: string, validate?: (value: string) => string | undefined): Answer => {
-    shown.push({ kind: 'question', message });
+  const next = (
+    message: string,
+    validate?: (value: string) => string | undefined,
+    initial?: string,
+  ): Answer => {
+    shown.push({ kind: 'question', message, ...(initial !== undefined && { initial }) });
     for (;;) {
       if (answers.length === 0) throw new Error(`No scripted answer for: ${message}`);
       const value = answers.shift() as Answer;
@@ -35,11 +41,12 @@ export function scriptedUi(
     info: (message) => shown.push({ kind: 'info', message }),
     success: (message) => shown.push({ kind: 'success', message }),
     warn: (message) => shown.push({ kind: 'warn', message }),
-    text: (options) => Promise.resolve(String(next(options.message, options.validate))),
+    text: (options) =>
+      Promise.resolve(String(next(options.message, options.validate, options.initial))),
     secret: (options) => Promise.resolve(String(next(options.message, options.validate))),
     confirm: (message) => Promise.resolve(next(message) === true),
-    select: <T extends string>(options: { message: string; choices: Choice<T>[] }) => {
-      const value = next(options.message);
+    select: <T extends string>(options: { message: string; choices: Choice<T>[]; initial?: T }) => {
+      const value = next(options.message, undefined, options.initial);
       const asked = shown.findLast((s) => s.kind === 'question');
       if (asked) asked.choices = options.choices;
       const choice = options.choices.find((c) => c.value === value);
