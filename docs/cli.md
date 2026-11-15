@@ -80,7 +80,7 @@ appears without being added there on purpose. Everything else goes under an area
 | `routine`                    | ○ `list`, `show`, `create`, `run`, `pause` (M5)                                   |
 | `pair`                       | ○ `run` (M5)                                                                      |
 | `workflow`                   | ○ `list`, `show`, `run` (M7)                                                      |
-| `eval`                       | ○ `run`, `report` (M7)                                                            |
+| `evaluation`                 | ○ `run`, `report` (M7)                                                            |
 | `blueprint`                  | ○ `list`, `add`, `create` (M8)                                                    |
 | `integration`                | ○ `list`, `connect <name>`, `grant <name> <workspace>` (M9)                       |
 | `action`                     | ○ `run <action>`, through the broker (M9)                                         |
