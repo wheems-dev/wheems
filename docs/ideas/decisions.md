@@ -122,3 +122,17 @@ The owner, looking at all the `wheems` commands: restructure them "to be a littl
 - **Archive and remove are different.** `ws archive` unbinds a workspace and moves it to an archive, keeping everything. `ws remove` deletes it: the workspace, its knowledge base, its state and its records.
 - **The agents' commands move too** (`chat reply`, `kb note`), in a second step, with the old names kept for a release.
 - **The top level stays small**, kept by a test: setup, doctor, list, review and the service shortcuts.
+
+## Folders: approved once, never per session (15 November)
+
+The owner: "the person approves a folder once (once per install, and once per project), and the chief manages every session beneath it without anyone answering a trust prompt. Users chat to chiefs; they should never have to trust a folder for a child session." It came up when the personal chief couldn't answer: Codex trusted the install folder, so the marketing chief's sessions started, but Claude Code trusted only the repository folder, not the install, and a trust question at the terminal is one nobody in chat can answer.
+
+What it decides (designed in [architecture.md](../architecture.md#a-projects-folder-approved-once-never-at-the-mac)):
+
+- **Sessions always start in their own folder inside the install**, which is trusted once, at setup, and holds the instructions Wheems wrote. No trust prompt ever. Setup offers to mark the install trusted itself, and `wheems doctor --fix` offers the same for installs made before.
+- **Trust is kept apart from access.** Trust is where an engine starts; access is what it may read and edit. A project's folder (`folder:` in `project.yaml`) is given to its sessions as an extra folder at launch (`--add-dir` for Claude Code and Codex), so it never needs the engine's trust.
+- **The person approves a folder once, when they link it to a project**, as a yes in chat (approvals). Never per session, never at the Mac.
+- **A chief can't add folders itself.** To work in a folder no project has linked, it asks the person in chat.
+- **Starting outside the project means its own hooks and settings don't run by themselves.** That's the safe default, since a folder's hooks run code; Wheems tells the agent to read the project's own `CLAUDE.md` or `AGENTS.md`. `start_in: folder` in `project.yaml` starts sessions inside the folder instead, with Wheems marking it trusted when it's linked.
+- **Code tasks work in git worktrees under `.wheems/`**, which the install's trust covers.
+- **Before a child session starts or resumes**, Wheems checks its engine trusts the session's folder, as it checks chiefs, and refuses with a plain reason the chief can pass on, rather than start a session that waits at a question nobody sees.
