@@ -7,8 +7,9 @@ import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
 import type { FinalMessage } from '../src/contracts/engine.js';
+import type { EngineSetup } from '../src/contracts/setup.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
-import { paths } from '../src/home.js';
+import { paths, tilde } from '../src/home.js';
 import { writeSecret } from '../src/secrets.js';
 import { conversationKey, uuidFor } from '../src/service/conversations.js';
 import { request } from '../src/service/control.js';
@@ -49,11 +50,35 @@ describe('wheems session', () => {
     }
   };
 
-  const start = async (engine: { ownIds?: boolean; reportsStatus?: boolean } = {}) => {
-    const stub = new StubEngine({ command: ['fake-agent'], answers, ...engine });
+  const start = async (
+    engine: { ownIds?: boolean; reportsStatus?: boolean } = {},
+    /** Given, the engine asks to trust folders, and trusts those this says. */
+    trusts?: (dir: string) => boolean,
+  ) => {
+    const { ownIds, reportsStatus } = engine;
+    const stub = new StubEngine({
+      command: ['fake-agent'],
+      answers,
+      ...(ownIds !== undefined && { ownIds }),
+      ...(reportsStatus !== undefined && { reportsStatus }),
+    });
+    const setup: EngineSetup | undefined = trusts && {
+      version: () => Promise.resolve('1.0.0'),
+      install: ['npm', 'install', '-g', 'claude'],
+      signIn: null,
+      signedIn: () => Promise.resolve(null),
+      trust: ['claude'],
+      trusted: (dir) => Promise.resolve(trusts(dir)),
+      defaultModel: 'claude-opus-5-5',
+      account: { name: 'claude-subscription', driver: 'claude' },
+    };
     const registry = new DriverRegistry()
       .register('runtime', 'herdr', () => runtime)
-      .register('engine', 'claude-code', () => stub)
+      .register('engine', 'claude-code', () => stub, {
+        label: 'Claude Code',
+        description: 'x',
+        ...(setup && { engine: setup }),
+      })
       .register('channel', 'slack', () => channel);
     service = await runService({
       home,
@@ -469,6 +494,22 @@ describe('wheems session', () => {
     expect(await stored((s) => s.workspace('personal').sessions({ kind: 'adhoc' }))).toEqual([]);
   });
 
+  it("refuses to start a session in a folder its engine doesn't trust, starting nothing", async () => {
+    await service?.stop();
+    // The engine trusts the workspace (the chief answers) but not where sessions start.
+    await start({}, (dir) => !dir.includes(join('.wheems', 'sessions')));
+    const result = await wheems(['session', 'create', '--title', 'late', '--purpose', 'research']);
+    expect(result.code).toBe(1);
+    const adhoc = join(home, '.wheems', 'sessions', 'personal', 'adhoc');
+    const at = tilde(home, env);
+    expect(result.err).toBe(
+      `Error: Claude Code doesn't trust the folder this session starts in (${tilde(adhoc, env)}), so it would wait at a "trust this folder?" question that nobody can see. Nothing was started. At the Mac, run \`wheems doctor --fix\` and say yes to marking ${at} trusted, or run \`cd ${at} && claude\` and answer yes. Claude Code then trusts every workspace and session in your install, including ones added later. Then try again.\n`,
+    );
+    expect(await runtime.list({ labels: { workspace: 'personal' } })).toEqual([]);
+    expect(await stored((s) => s.workspace('personal').sessions({ kind: 'adhoc' }))).toEqual([]);
+    expect(readdirSync(adhoc)).toEqual([]);
+  });
+
   describe('send', () => {
     /** Waits until a session has answered its purpose and is idle. */
     const settled = async (id: string) => {
@@ -528,6 +569,32 @@ describe('wheems session', () => {
       expect((await wheems(['session', 'show', session.id, '--json'])).out).toContain(
         '"state": "idle"',
       );
+    });
+
+    it('refuses to resume a session in a folder its engine no longer trusts', async () => {
+      let trusted = true;
+      await service?.stop();
+      await start({}, () => trusted);
+      const session = await newSession('packaging');
+      await settled(session.id);
+      const herdr = await runtime.get(session.herdrName!);
+      await runtime.stop(herdr!.id);
+      await runtime.remove(herdr!.id);
+      trusted = false;
+
+      const sent = await wheems(['session', 'send', session.id, 'Carry on.']);
+      expect(sent.code).toBe(1);
+      expect(sent.err).toContain("Claude Code doesn't trust the folder this session starts in");
+      expect(sent.err).toContain('Nothing was started.');
+      // Refused before it was taken: no message kept, nothing started.
+      expect(await stored((s) => s.workspace('personal').messages(session.id))).toHaveLength(1);
+      expect(await runtime.get(session.herdrName!)).toBeNull();
+
+      // Once it's trusted, the same send resumes it.
+      trusted = true;
+      const again = await wheems(['session', 'send', session.id, 'Carry on.', '--wait']);
+      expect(again.err).toBe('');
+      expect(again.out).toContain('Carry on.');
     });
 
     it('lets a session send only to its owner and the sessions it owns', async () => {

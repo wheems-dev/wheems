@@ -29,6 +29,8 @@ describe('wheems setup', () => {
   /** What the service says when asked to greet. */
   let greeting: { ok: boolean; message: string; skipped?: boolean };
   const trustedFolders = new Set<string>();
+  /** Engines whose markTrusted fails. */
+  const markFails = new Set<string>();
   /** The fake world: which engine CLIs exist and which are signed in. */
   let installed: Set<string>;
   let signedIn: Set<string>;
@@ -42,6 +44,7 @@ describe('wheems setup', () => {
     running = false;
     greeting = { ok: true, message: 'in direct messages on slack' };
     trustedFolders.clear();
+    markFails.clear();
   });
   afterEach(() => {
     rmSync(root, { recursive: true, force: true });
@@ -92,6 +95,13 @@ describe('wheems setup', () => {
     signedIn: () => Promise.resolve(signedIn.has(name)),
     trust,
     trusted: (dir) => Promise.resolve(trustedFolders.has(dir)),
+    markTrusted: (dir) => {
+      calls.push(`mark ${name} ${dir}`);
+      if (markFails.has(name)) return Promise.reject(new Error(`${name}'s record isn't valid`));
+      trustedFolders.add(dir);
+      return Promise.resolve('marked');
+    },
+    trustRecord: `~/.${name}`,
     defaultModel,
     account,
   });
@@ -146,7 +156,7 @@ describe('wheems setup', () => {
       'Personal',
       'direct',
       'claude-opus-5-5', // the model
-      true, // open Claude Code to trust the folder
+      true, // let Wheems mark the install folder trusted
       'service',
       'doctor',
       'done',
@@ -185,8 +195,8 @@ describe('wheems setup', () => {
     expect(calls).toEqual([
       'copy display_information:',
       'open https://api.slack.com/apps?new_app=1',
-      // Trusting the install folder covers every workspace in it.
-      `run claude in ${home}`,
+      // Wheems marks the install folder trusted, which covers every workspace and session in it.
+      `mark claude-code ${home}`,
       'install service',
       'doctor',
       // Setup ends with the chief saying hello in chat.
@@ -195,6 +205,58 @@ describe('wheems setup', () => {
     expect(
       ui.shown.find((x) => x.kind === 'success' && x.message.includes('said hello'))?.message,
     ).toBe('Your chief of staff said hello in direct messages on slack. Reply there to start.');
+  });
+
+  it('asks once to mark the install folder trusted for every installed engine', async () => {
+    installed.add('codex');
+    signedIn.add('codex');
+    markFails.add('codex');
+    const ui = scriptedUi([
+      'channels',
+      'slack',
+      false,
+      'xoxb-good',
+      'xapp-good',
+      'UMEMBER1',
+      'workspaces',
+      'personal',
+      'Personal',
+      'direct',
+      'claude-code', // which engine runs its chief of staff
+      'claude-opus-5-5',
+      true, // let Wheems mark the install folder trusted
+      'workspaces',
+      'work',
+      'Work',
+      'work-chat', // direct messages are taken: its channel
+      'codex',
+      'gpt-6.1-sol', // asked nothing more: Claude Code trusts it, and Codex was asked already
+      'done',
+      false, // don't start the service
+    ]);
+    await setup({ home, env, ui, registry: registry(), actions });
+    expect(ui.remaining()).toBe(0);
+    expect(
+      ui.shown
+        .filter((s) => s.kind === 'question' && s.message.includes('trust'))
+        .map((s) => s.message),
+    ).toEqual([
+      expect.stringMatching(/^Let Wheems mark .* as trusted for Claude Code and Codex\?$/),
+    ]);
+    const note = ui.shown.find((s) => s.kind === 'note' && s.message.includes('nobody can answer'));
+    expect(note?.message).toContain('in ~/.claude-code and ~/.codex, and changes nothing else');
+    expect(calls.filter((c) => c.startsWith('mark') || c.startsWith('run'))).toEqual([
+      `mark claude-code ${home}`,
+      `mark codex ${home}`,
+    ]);
+    expect(trustedFolders.has(home)).toBe(true);
+    expect(
+      ui.shown.find((s) => s.kind === 'success' && s.message.includes('trusts'))?.message,
+    ).toBe(`Claude Code trusts ${home} now.`);
+    // Codex's record couldn't be changed: it says why, and how to do it by hand.
+    expect(ui.shown.find((s) => s.kind === 'warn')?.message).toMatch(
+      /^Couldn't mark it for Codex: codex's record isn't valid At the Mac, run `wheems doctor --fix`/,
+    );
   });
 
   it("says why when the chief can't say hello, and says nothing when it has before", async () => {
@@ -332,7 +394,7 @@ describe('wheems setup', () => {
       'direct',
       'codex', // which engine runs its chief of staff
       'gpt-6.1-sol',
-      false, // open Codex to trust the folder
+      false, // don't mark the install folder trusted (for Claude Code and Codex)
       'done',
       true, // nothing answers in chat yet: start the service
     ]);

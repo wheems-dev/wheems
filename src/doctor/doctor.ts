@@ -172,6 +172,47 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
       const setup = catalog.find((e) => e.name === engine)?.engine;
       return setup?.trusted ? setup.trusted(dir) : Promise.resolve(null);
     });
+  const home = tilde(options.home, options.env);
+  /**
+   * The fix for a folder an engine doesn't trust: mark the install folder trusted, which covers
+   * every workspace and session, or (for an engine Wheems can't mark) open the engine there to
+   * answer its question. Offered once per engine.
+   */
+  const trustFix = (engine: string, dir: string): Fix | undefined => {
+    const fixes = options.fixes;
+    const entry = catalog.find((e) => e.name === engine);
+    const setup = entry?.engine;
+    const label = entry?.label ?? engine;
+    if (!fixes || !setup || setup.trust === null || trustFixed.has(engine)) return undefined;
+    trustFixed.add(engine);
+    const after = async () =>
+      (await trustOf(engine, dir)) === true
+        ? `${label} trusts the install folder now.`
+        : `${label} still doesn't trust it. Run wheems doctor --fix again, and say yes when it asks.`;
+    if (setup.markTrusted) {
+      return {
+        what: `Mark ${home} as trusted for ${label}${setup.trustRecord ? ` in ${setup.trustRecord}` : ''}, the entry ${label} writes when you say yes to its question, changing nothing else there. That covers every workspace and session`,
+        run: async () => {
+          await setup.markTrusted?.(options.home);
+          return after();
+        },
+      };
+    }
+    const command = setup.trust;
+    return {
+      what: `Open ${label} in ${home} so you can answer its question: say yes to trusting the folder, then press Ctrl+C twice to come back. That covers every workspace and session`,
+      run: async () => {
+        await fixes.run(command, options.home);
+        return after();
+      },
+    };
+  };
+  const advice = (engine: string, label: string): string => {
+    const command = catalog.find((e) => e.name === engine)?.engine?.trust ?? null;
+    return command !== null
+      ? trustAdvice(label, command, home)
+      : 'Open the engine in the install folder once and say yes, or run wheems setup.';
+  };
   for (const workspace of install.workspaces) {
     const chief = workspace.agents.find(
       (a) => a.definition.name === workspace.config?.chief_of_staff,
@@ -179,7 +220,6 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
     if (!chief) continue;
     const engine = chief.definition.engine;
     const label = catalog.find((e) => e.name === engine)?.label ?? engine;
-    const trustCommand = catalog.find((e) => e.name === engine)?.engine?.trust ?? null;
     const trusted = await trustOf(engine, workspace.dir);
     if (trusted === true) {
       checks.push({
@@ -188,28 +228,36 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
         message: `${label} trusts the workspace folder`,
       });
     } else if (trusted === false) {
-      const fixes = options.fixes;
-      const fix: Fix | undefined =
-        fixes && trustCommand !== null && !trustFixed.has(engine)
-          ? {
-              what: `Open ${label} in ${tilde(options.home, options.env)} so you can answer its question: say yes to trusting the folder, then press Ctrl+C twice to come back. That covers every workspace`,
-              run: async () => {
-                await fixes.run(trustCommand, options.home);
-                return (await trustOf(engine, workspace.dir)) === true
-                  ? `${label} trusts the install folder now.`
-                  : `${label} still doesn't trust it. Run wheems doctor --fix again, and say yes when it asks.`;
-              },
-            }
-          : undefined;
-      if (fix) trustFixed.add(engine);
+      const fix = trustFix(engine, workspace.dir);
       checks.push({
         name: `${workspace.id} folder`,
         status: 'warn',
         message: `${label} hasn't been told to trust the workspace folder, so it can't answer in chat`,
-        hint:
-          trustCommand !== null
-            ? trustAdvice(label, trustCommand, tilde(options.home, options.env))
-            : 'Open the engine in the install folder once and say yes, or run wheems setup.',
+        hint: advice(engine, label),
+        ...(fix && { fix }),
+      });
+    }
+  }
+  // Sessions a chief starts run in their own folders under .wheems/sessions/, on whichever
+  // engine their agent uses, so each engine any agent uses must trust that folder too.
+  const sessionsDir = join(paths(options.home, options.env).state, 'sessions');
+  for (const engine of [...engines].sort()) {
+    if (!options.registry.has('engine', engine)) continue;
+    const label = catalog.find((e) => e.name === engine)?.label ?? engine;
+    const trusted = await trustOf(engine, sessionsDir);
+    if (trusted === true) {
+      checks.push({
+        name: `${label} sessions`,
+        status: 'pass',
+        message: `${label} trusts the folder sessions start in`,
+      });
+    } else if (trusted === false) {
+      const fix = trustFix(engine, sessionsDir);
+      checks.push({
+        name: `${label} sessions`,
+        status: 'warn',
+        message: `${label} hasn't been told to trust ${tilde(sessionsDir, options.env)}, so sessions on it can't start`,
+        hint: advice(engine, label),
         ...(fix && { fix }),
       });
     }

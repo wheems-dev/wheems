@@ -194,6 +194,18 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     },
     ...(options.filingSeconds !== undefined && { timeoutSeconds: options.filingSeconds }),
   });
+  /** The engine's label and trust command when it plainly doesn't trust a folder; else null. */
+  const untrusted = async (
+    engine: string,
+    dir: string,
+  ): Promise<{ label: string; trust: string[] } | null> => {
+    const entry = options.registry.catalog('engine').find((e) => e.name === engine);
+    const setup = entry?.engine;
+    if (!entry || !setup?.trusted || setup.trust === null) return null;
+    // Only a plain no counts: an engine that can't tell is given the benefit of the doubt.
+    if ((await setup.trusted(dir)) !== false) return null;
+    return { label: entry.label, trust: setup.trust };
+  };
   const sessions: SessionService = new SessionService({
     install: config,
     workspaces: install.workspaces,
@@ -202,6 +214,11 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     engine: engineFor,
     stateDir: where.state,
     sessionEnv,
+    trustProblem: async (engine, dir) => {
+      const found = await untrusted(engine, dir);
+      if (!found) return null;
+      return `${found.label} doesn't trust the folder this session starts in (${tilde(dir, env)}), so it would wait at a "trust this folder?" question that nobody can see. Nothing was started. ${trustAdvice(found.label, found.trust, tilde(options.home, env))} Then try again.`;
+    },
     aboutYouFile: where.aboutYou,
     // A thread session hears from sessions through its conversation, like any message.
     tell: (sessionId: string, text: string): Promise<void> => {
@@ -240,11 +257,9 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     sessionsSection: (workspace, owner) => sessions.sessionsSection(workspace, owner),
     onNote: (workspace) => void filing.file(workspace),
     trustProblem: async (engine, dir) => {
-      const entry = options.registry.catalog('engine').find((e) => e.name === engine);
-      const setup = entry?.engine;
-      if (!entry || !setup?.trusted || setup.trust === null) return null;
-      if ((await setup.trusted(dir)) !== false) return null;
-      return `${entry.label} hasn't been told to trust this workspace's folder, so it can't start. ${trustAdvice(entry.label, setup.trust, tilde(options.home, env))} Then send your message again.`;
+      const found = await untrusted(engine, dir);
+      if (!found) return null;
+      return `${found.label} hasn't been told to trust this workspace's folder, so it can't start. ${trustAdvice(found.label, found.trust, tilde(options.home, env))} Then send your message again.`;
     },
     signInProblem: async (engine) => {
       const entry = options.registry.catalog('engine').find((e) => e.name === engine);

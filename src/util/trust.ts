@@ -1,16 +1,32 @@
 /**
  * Whether engines trust a folder. Each asks once ("trust this folder?") and records the
  * answer in its own config, for the folder or a folder around it (such as the git root).
- * Wheems only ever reads these records.
+ * These read those records; `trust-write.ts` writes them, only after the person says yes.
  */
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-/** Claude Code: `projects[<folder>].hasTrustDialogAccepted` in ~/.claude.json. */
+/**
+ * Claude Code's own record of the folders it trusts, and much else: `.claude.json` in
+ * `$CLAUDE_CONFIG_DIR` when that's set, as Claude Code itself does, else in the home folder.
+ */
+export function claudeConfigFile(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.CLAUDE_CONFIG_DIR ?? homedir(), '.claude.json');
+}
+
+/** Codex's config file, in `$CODEX_HOME` or `~/.codex`. */
+export function codexConfigFile(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml');
+}
+
+/**
+ * Claude Code: `projects[<folder>].hasTrustDialogAccepted` in ~/.claude.json. That's Claude
+ * Code's internal state, not a documented setting, which is why doctor checks it.
+ */
 export async function claudeTrusts(
   dir: string,
-  file = join(homedir(), '.claude.json'),
+  file = claudeConfigFile(),
 ): Promise<boolean | null> {
   let projects: Record<string, { hasTrustDialogAccepted?: boolean }>;
   try {
@@ -42,10 +58,7 @@ export function trustedIn(
  * an inline table, the answer is null (can't tell) rather than false, because a false stops
  * conversations from starting.
  */
-export async function codexTrusts(
-  dir: string,
-  file = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml'),
-): Promise<boolean | null> {
+export async function codexTrusts(dir: string, file = codexConfigFile()): Promise<boolean | null> {
   let text: string;
   try {
     text = await readFile(file, 'utf8');
@@ -135,11 +148,11 @@ export function tomlString(quoted: string): string | null {
 
 /**
  * How to trust the install folder, once, for an engine: a trusted folder covers every folder
- * in it, so this covers every workspace there is and every one added later. `command` is the
- * engine's own command (its setup's `trust`); `home` is the install folder.
+ * in it, so this covers every workspace and session there is and every one added later.
+ * `command` is the engine's own command (its setup's `trust`); `home` is the install folder.
  */
 export function trustAdvice(label: string, command: string[], home: string): string {
-  return `At the Mac, run \`cd ${shellPath(home)} && ${command.join(' ')}\` and answer yes. ${label} then trusts every workspace in your install, including ones you add later.`;
+  return `At the Mac, run \`wheems doctor --fix\` and say yes to marking ${home} trusted, or run \`cd ${shellPath(home)} && ${command.join(' ')}\` and answer yes. ${label} then trusts every workspace and session in your install, including ones added later.`;
 }
 
 /** A path as it can be typed into a shell, keeping a leading ~ outside the quotes. */

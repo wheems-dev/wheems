@@ -15,6 +15,7 @@ import {
 import type { EngineSetup } from '../../contracts/setup.js';
 import { runCommand } from '../../util/process.js';
 import { codexTrusts } from '../../util/trust.js';
+import { markCodexTrusted } from '../../util/trust-write.js';
 import { extractVersion } from '../../util/version.js';
 
 export interface CodexOptions {
@@ -288,6 +289,9 @@ export function codexSetup(binary = 'codex'): EngineSetup {
       (await runCommand(binary, ['login', 'status'], { timeoutMs: 15_000 })).code === 0,
     trust: [binary, '--no-daemon'],
     trusted: (dir) => codexTrusts(dir),
+    markTrusted: (dir) => markCodexTrusted(dir),
+    trustRecord:
+      process.env.CODEX_HOME !== undefined ? '$CODEX_HOME/config.toml' : '~/.codex/config.toml',
     defaultModel: 'gpt-6.1-sol',
     account: { name: 'chatgpt-subscription', driver: 'chatgpt' },
   };

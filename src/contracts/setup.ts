@@ -87,6 +87,14 @@ export interface EngineSetup {
   trust: string[] | null;
   /** Whether the engine trusts a folder (or one around it): true, false, or null when it can't tell. */
   trusted?(dir: string): Promise<boolean | null>;
+  /**
+   * Marks a folder trusted in the engine's own record, as answering its question does, so nobody
+   * has to answer it at the terminal. Run only after the person says yes. Resolves 'already' when
+   * it was trusted; throws, changing nothing, when the record can't be safely changed.
+   */
+  markTrusted?(dir: string): Promise<'marked' | 'already'>;
+  /** Where `markTrusted` writes, for telling the person: such as `~/.claude.json`. */
+  trustRecord?: string;
   /** The install account a new agent on this engine is paid through. */
   account: { name: string; driver: string };
 }

@@ -39,6 +39,12 @@ describe('wheems doctor --fix', () => {
     signedIn: () => Promise.resolve(true),
     trust: ['claude'],
     trusted: () => Promise.resolve(trusted),
+    markTrusted: (dir) => {
+      calls.push(`mark ${dir}`);
+      trusted = true;
+      return Promise.resolve('marked');
+    },
+    trustRecord: '~/.claude.json',
     defaultModel: 'claude-opus-5-5',
     account: { name: 'claude-subscription', driver: 'claude' },
   };
@@ -120,12 +126,12 @@ describe('wheems doctor --fix', () => {
     const report = await doctor(channel);
     const result = await fix(report, [true, true, false]);
     expect(result.asked).toEqual([
-      // Trusting the install folder covers both workspaces: asked once.
-      expect.stringMatching(/^Open Claude Code in .* say yes to trusting the folder.*Do it\?$/),
+      // Marking the install folder trusted covers both workspaces and their sessions: asked once.
+      `Mark ${home} as trusted for Claude Code in ~/.claude.json, the entry Claude Code writes when you say yes to its question, changing nothing else there. That covers every workspace and session. Do it?`,
       "Change team's chat channel in workspace.yaml from team-chta to #team-chat, a channel the app can see. Do it?",
       'Start the service, now and at every login, as wheems start does. Do it?',
     ]);
-    expect(calls).toEqual([`run claude in ${home}`]);
+    expect(calls).toEqual([`mark ${home}`]);
     expect(result.out).toContain('Claude Code trusts the install folder now.');
     expect(result.out).toContain('team now chats in #team-chat. Restart the service to use it');
     expect(result.out).toContain('Left as it is.');
