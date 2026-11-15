@@ -245,6 +245,9 @@ describe('marking a folder trusted', () => {
   });
 
   describe('Codex (config.toml)', () => {
+    /** No Codex runs: the tests never ask this Mac's processes. */
+    const closed = { codexRunning: () => Promise.resolve(false) };
+
     const config = [
       '# My Codex settings',
       'model = "gpt-6.1-sol"',
@@ -264,13 +267,13 @@ describe('marking a folder trusted', () => {
       writeFileSync(file, config, { mode: 0o644 });
       chmodSync(file, 0o644);
       expect(await codexTrusts(install, file)).toBe(false);
-      expect(await markCodexTrusted(install, file)).toBe('marked');
+      expect(await markCodexTrusted(install, file, closed)).toBe('marked');
       const text = readFileSync(file, 'utf8');
       expect(text).toBe(`${config}\n[projects."${install}"]\ntrust_level = "trusted"\n`);
       expect(statSync(file).mode & 0o777).toBe(0o644);
       expect(await codexTrusts(install, file)).toBe(true);
       expect(await codexTrusts(join(install, '.wheems', 'sessions', 'acme'), file)).toBe(true);
-      expect(await markCodexTrusted(install, file)).toBe('already');
+      expect(await markCodexTrusted(install, file, closed)).toBe('already');
       expect(readFileSync(file, 'utf8')).toBe(text);
       expect(files(root)).toEqual(['config.toml', 'wheems']);
     });
@@ -281,7 +284,7 @@ describe('marking a folder trusted', () => {
         file,
         `model = "o3"\n\n[projects."${install}"]\ntrust_level = "untrusted"  # said no once\nnote = "keep"\n`,
       );
-      await markCodexTrusted(install, file);
+      await markCodexTrusted(install, file, closed);
       expect(readFileSync(file, 'utf8')).toBe(
         `model = "o3"\n\n[projects."${install}"]\ntrust_level = "trusted"\nnote = "keep"\n`,
       );
@@ -290,7 +293,7 @@ describe('marking a folder trusted', () => {
     it('adds trust_level under the table’s header when it has none', async () => {
       const file = join(root, 'config.toml');
       writeFileSync(file, `[projects."${install}"]\nnote = "keep"\n\n[other]\nx = 1\n`);
-      await markCodexTrusted(install, file);
+      await markCodexTrusted(install, file, closed);
       expect(readFileSync(file, 'utf8')).toBe(
         `[projects."${install}"]\ntrust_level = "trusted"\nnote = "keep"\n\n[other]\nx = 1\n`,
       );
@@ -300,7 +303,7 @@ describe('marking a folder trusted', () => {
       const file = join(root, 'config.toml');
       const text = 'updated = 2026-11-15T08:00:00Z\nday = 2026-11-15\nbig = 9007199254740991\n';
       writeFileSync(file, text);
-      await markCodexTrusted(install, file);
+      await markCodexTrusted(install, file, closed);
       expect(readFileSync(file, 'utf8')).toBe(
         `${text}\n[projects."${install}"]\ntrust_level = "trusted"\n`,
       );
@@ -308,7 +311,7 @@ describe('marking a folder trusted', () => {
 
     it('makes the file when Codex has none yet', async () => {
       const file = join(root, 'config.toml');
-      await markCodexTrusted(install, file);
+      await markCodexTrusted(install, file, closed);
       expect(readFileSync(file, 'utf8')).toBe(`[projects."${install}"]\ntrust_level = "trusted"\n`);
       expect(statSync(file).mode & 0o777).toBe(0o600);
     });
@@ -318,7 +321,7 @@ describe('marking a folder trusted', () => {
       mkdirSync(odd);
       const file = join(root, 'config.toml');
       writeFileSync(file, 'model = "o3"\r\n');
-      await markCodexTrusted(odd, file);
+      await markCodexTrusted(odd, file, closed);
       const text = readFileSync(file, 'utf8');
       expect(text).toBe(
         `model = "o3"\r\n\r\n[projects."${odd.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"]\r\ntrust_level = "trusted"\r\n`,
@@ -327,6 +330,28 @@ describe('marking a folder trusted', () => {
         model: 'o3',
         projects: { [odd]: { trust_level: 'trusted' } },
       });
+    });
+
+    it('changes nothing while Codex runs, checking again just before it writes', async () => {
+      const file = join(root, 'config.toml');
+      writeFileSync(file, 'model = "o3"\n');
+      await expect(
+        markCodexTrusted(install, file, { codexRunning: () => Promise.resolve(true) }),
+      ).rejects.toThrow(/Codex is running, and it may save .* at any moment/);
+      // Codex starts after Wheems read the file: it stops before writing.
+      let checks = 0;
+      await expect(
+        markCodexTrusted(install, file, {
+          codexRunning: () => Promise.resolve(++checks > 1),
+        }),
+      ).rejects.toThrow(/Codex is running/);
+      expect(checks).toBe(2);
+      // Can't tell: it doesn't guess.
+      await expect(
+        markCodexTrusted(install, file, { codexRunning: () => Promise.resolve(null) }),
+      ).rejects.toThrow(/can't tell whether Codex is running/);
+      expect(readFileSync(file, 'utf8')).toBe('model = "o3"\n');
+      expect(files(root)).toEqual(['config.toml', 'wheems']);
     });
 
     it.each([
@@ -346,7 +371,7 @@ describe('marking a folder trusted', () => {
       const file = join(root, 'config.toml');
       const text = template.replace('/FOLDER', install);
       writeFileSync(file, text);
-      await expect(markCodexTrusted(install, file)).rejects.toThrow(new RegExp(why));
+      await expect(markCodexTrusted(install, file, closed)).rejects.toThrow(new RegExp(why));
       expect(readFileSync(file, 'utf8')).toBe(text);
       expect(files(root)).toEqual(['config.toml', 'wheems']);
     });

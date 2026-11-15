@@ -14,15 +14,17 @@
  *   starts over from the new contents (a few times, then gives up and says so);
  * - for Claude Code, it holds the lock Claude Code itself takes to save the file (a folder named
  *   `.claude.json.lock` beside it, made by proper-lockfile, checked in Claude Code 2.1.325), so
- *   Claude Code can't save in between. Codex has no such lock, so for Codex the re-read is all
- *   there is: a Codex save in the moment between that read and the rename would be lost. Codex
- *   only saves config.toml when you change a setting in it, and doctor checks the trust after.
+ *   Claude Code can't save in between;
+ * - Codex has no such lock and no command for it, so Wheems changes config.toml only while no
+ *   Codex is running (the CLI or the app), checked before it reads and again just before it
+ *   writes. While one runs, it says so, and the person can answer Codex's own question instead.
  */
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, realpath, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { parse as parseToml } from 'smol-toml';
+import { runCommand } from './process.js';
 import { claudeConfigFile, codexConfigFile, tomlString } from './trust.js';
 
 /** What marking did: wrote the entry, or found it already there. */
@@ -62,10 +64,40 @@ export async function markClaudeTrusted(
 export async function markCodexTrusted(
   dir: string,
   file = codexConfigFile(),
-  options: RewriteOptions = {},
+  options: RewriteOptions & {
+    /** Whether a Codex is running: true, false, or null when it can't tell. */
+    codexRunning?: () => Promise<boolean | null>;
+  } = {},
 ): Promise<MarkResult> {
   const folder = await realpath(dir).catch(() => dir);
-  return rewrite(file, options, (text) => codexWithTrust(text ?? '', folder, file));
+  const running = options.codexRunning ?? codexRunning;
+  const closed = async () => {
+    const answer = await running();
+    if (answer === false) return;
+    throw new Error(
+      answer === true
+        ? `Codex is running, and it may save ${file} at any moment, so Wheems changes that file only while no Codex runs. Close every Codex (the app, and Codex sessions in terminals), then try again; or answer Codex's own question instead.`
+        : `Wheems can't tell whether Codex is running, so it left ${file} alone. Answer Codex's own question instead.`,
+    );
+  };
+  await closed();
+  return rewrite(
+    file,
+    {
+      ...options,
+      beforeCheck: async () => {
+        await options.beforeCheck?.();
+        await closed();
+      },
+    },
+    (text) => codexWithTrust(text ?? '', folder, file),
+  );
+}
+
+/** Whether any Codex process runs, the CLI (`codex`) or the app (`Codex`), by its name. */
+export async function codexRunning(): Promise<boolean | null> {
+  const result = await runCommand('pgrep', ['-i', '-x', 'codex'], { timeoutMs: 5000 });
+  return result.code === 0 ? true : result.code === 1 ? false : null;
 }
 
 /** ~/.claude.json with the folder marked trusted, or null when it already is. */

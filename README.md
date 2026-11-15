@@ -196,9 +196,11 @@ It's careful with both files, which hold much more than trust:
 - if the engine changed the file meanwhile, it starts again from the new contents, and after a
   few tries gives up and says so;
 - for Claude Code, it holds the lock Claude Code itself takes to save the file
-  (`~/.claude.json.lock`), so Claude Code can't save in between. Codex has no such lock: a
-  Codex save at the very moment Wheems writes could be lost. Codex saves `config.toml` only when
-  you change one of its settings, and doctor checks the trust afterwards.
+  (`~/.claude.json.lock`), so Claude Code can't save in between;
+- Codex has no such lock, so Wheems changes `config.toml` only while no Codex is running (the
+  app or a CLI session), checked before it reads and again just before it writes. While one
+  runs, it leaves the file alone and says so: close Codex and try again, or answer Codex's own
+  question (`cd ~/wheems && codex`).
 
 The Claude Code flag is Claude Code's internal state, not a documented setting (though Claude
 Code's own messages tell you to set it), so a new version could move it. That's why `wheems doctor` checks the trust every time, rather than
