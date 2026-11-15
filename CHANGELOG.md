@@ -21,6 +21,15 @@ change anything, including commands and config formats, without a migration path
     instructions use the new names.
   - In a workspace's folder, `--workspace` defaults to that workspace.
   - The old names still work for a release, and say what they're called now.
+- Approve the install folder once, and no session beneath it ever stops at a trust question.
+  Setup asks once, "Let Wheems mark ~/wheems as trusted for Claude Code and Codex?", and on a
+  yes writes the engines' own trust entries (`~/.claude.json`, `~/.codex/config.toml`) with a
+  careful read-modify-write that changes nothing else. `wheems doctor --fix` and
+  `wheems engine trust` offer the same for existing installs, and doctor now also checks the
+  folder sessions start in, for every engine an agent uses.
+- A chief's `wheems session create`, and a `session send` that would resume a stopped session,
+  are refused with a plain reason when the engine doesn't trust the session's folder, instead of
+  starting a session that waits at a prompt nobody sees.
 - Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, how to talk to it, and that inviting it to any channel adds another chief. If it can't, setup says why.
 - `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before
   each fix: trusting the install folder, starting the service, rebuilding a stale search index,

@@ -437,29 +437,99 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
   });
   ui.success(`Created ${dir}, with its chief of staff on ${engine.label} (${engine.model})`);
   if (channel !== undefined) ui.info(`Invite the app to #${channel.replace(/^#/, '')} in Slack.`);
-  const trust = engine.setup.trust;
-  if (trust === null) return true;
-  // A trusted folder covers every folder in it, so trusting the install folder once covers
-  // this workspace and every one after it.
-  if ((await engine.setup.trusted?.(options.home)) === true) return true;
+  await offerTrust(options);
+  return true;
+}
+
+/**
+ * Asks once whether Wheems may mark the install folder trusted for every installed engine that
+ * asks about folders and doesn't trust it yet, and marks it on a yes. Nobody can answer an
+ * engine's "trust this folder?" from chat, and a trusted folder covers every workspace and every
+ * session Wheems starts in it. An engine that can't be marked is opened there instead, to answer
+ * its question; without a yes, it says how to do it later.
+ */
+export async function offerTrust(options: SetupOptions, only?: string): Promise<void> {
+  const { ui } = options;
   const home = tilde(options.home, options.env);
-  ui.note(
-    [
-      `${engine.label} asks once whether to trust a folder, and nobody can answer that from Slack.`,
-      `Trusting your install folder, ${home}, covers this workspace and every one you add later.`,
-      'Answer yes, then press Ctrl+C twice to come back here.',
-    ].join('\n'),
-    'Trust the install folder',
-  );
+  const needed: InstalledEngine[] = [];
+  for (const engine of await installedEngines(options)) {
+    if (only !== undefined && engine.name !== only) continue;
+    if (engine.setup.trust === null) continue;
+    if ((await engine.setup.trusted?.(options.home)) === true) continue;
+    needed.push(engine);
+  }
+  if (needed.length === 0) return;
+  const markable = needed.filter((e) => e.setup.markTrusted !== undefined);
+  const byHand = needed.filter((e) => e.setup.markTrusted === undefined);
   try {
-    if (await ui.confirm(`Open ${engine.label} in ${home} now?`, true))
-      await options.actions.run(trust, options.home);
+    if (markable.length > 0) {
+      const names = listed(markable.map((e) => e.label));
+      const records = markable.flatMap((e) => (e.setup.trustRecord ? [e.setup.trustRecord] : []));
+      ui.note(
+        [
+          `${names} ${markable.length === 1 ? 'asks' : 'ask'} once whether to trust a folder, and nobody can answer that from chat.`,
+          `Marking your install folder, ${home}, covers every workspace and every session Wheems starts in it, including ones added later.`,
+          ...(records.length > 0
+            ? [
+                `Wheems writes the entry the engine writes when you say yes, in ${listed(records)}, and changes nothing else there.`,
+              ]
+            : []),
+        ].join('\n'),
+        'Trust the install folder',
+      );
+      if (await ui.confirm(`Let Wheems mark ${home} as trusted for ${names}?`, true)) {
+        for (const engine of markable) await markOne(options, engine);
+      } else {
+        for (const engine of markable)
+          ui.info(`Left as it is. ${trustAdvice(engine.label, engine.setup.trust ?? [], home)}`);
+      }
+    }
+    for (const engine of byHand) {
+      const trust = engine.setup.trust ?? [];
+      ui.note(
+        [
+          `${engine.label} asks once whether to trust a folder, and nobody can answer that from chat.`,
+          `Trusting your install folder, ${home}, covers every workspace and session in it.`,
+          'Answer yes, then press Ctrl+C twice to come back here.',
+        ].join('\n'),
+        'Trust the install folder',
+      );
+      if (await ui.confirm(`Open ${engine.label} in ${home} now?`, true))
+        await options.actions.run(trust, options.home);
+    }
   } catch (error) {
     if (!(error instanceof SetupCancelled)) throw error;
-    // The workspace is made; only the trust step was skipped.
-    ui.info(`The workspace is saved. ${trustAdvice(engine.label, trust, home)}`);
+    // Whatever came before is saved; only the trust step was skipped.
+    for (const engine of needed) ui.info(trustAdvice(engine.label, engine.setup.trust ?? [], home));
   }
-  return true;
+}
+
+/** Marks the install folder trusted for one engine, and checks it took. */
+async function markOne(options: SetupOptions, engine: InstalledEngine): Promise<void> {
+  const { ui } = options;
+  const home = tilde(options.home, options.env);
+  try {
+    await engine.setup.markTrusted?.(options.home);
+  } catch (error) {
+    ui.warn(
+      `Couldn't mark it for ${engine.label}: ${error instanceof Error ? error.message : String(error)} ${trustAdvice(engine.label, engine.setup.trust ?? [], home)}`,
+    );
+    return;
+  }
+  if ((await engine.setup.trusted?.(options.home)) === false) {
+    ui.warn(
+      `${engine.label} still doesn't show ${home} as trusted. ${trustAdvice(engine.label, engine.setup.trust ?? [], home)}`,
+    );
+    return;
+  }
+  ui.success(`${engine.label} trusts ${home} now.`);
+}
+
+/** "A", "A and B", "A, B and C". */
+function listed(items: string[]): string {
+  return items.length <= 1
+    ? (items[0] ?? '')
+    : `${items.slice(0, -1).join(', ')} and ${items.at(-1) ?? ''}`;
 }
 
 interface InstalledEngine {

@@ -7,7 +7,7 @@ import { runInteractive } from '../../util/process.js';
 import { clackUi } from '../clack-ui.js';
 import type { Io } from '../program.js';
 import { setupActions } from '../setup-actions.js';
-import { engineNames, setUpEngine } from './setup.js';
+import { engineNames, offerTrust, setUpEngine } from './setup.js';
 
 const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 
@@ -98,7 +98,9 @@ export function registerEngine(program: Command, io: Io): void {
 
   engine
     .command('trust')
-    .description('Open an engine in the install folder to answer its one-time trust question')
+    .description(
+      'Trust the install folder for an engine: Wheems marks it, or opens the engine to answer its question',
+    )
     .argument('<engine>', 'claude-code or codex')
     .option('--home <dir>', homeHelp)
     .action(async (name: string, options: { home?: string }) => {
@@ -109,15 +111,18 @@ export function registerEngine(program: Command, io: Io): void {
         io.out(`${entry.label} doesn't ask to trust folders.\n`);
         return;
       }
-      io.out(
-        `${entry.label} opens in ${tilde(home, io.env)}. Say yes to trusting the folder, then press Ctrl+C twice to come back. That covers every workspace in the install.\n`,
-      );
-      await runInteractive(setup.trust[0] ?? '', setup.trust.slice(1), { cwd: home });
-      const trusted = setup.trusted ? await setup.trusted(home) : null;
-      io.out(
-        trusted === false
-          ? `${entry.label} still doesn't trust it. Run this again, and say yes when it asks.\n`
-          : `${entry.label} trusts the install folder.\n`,
+      if ((await setup.version()) === null) {
+        io.out(`${entry.label} isn't installed: wheems engine install ${entry.name}\n`);
+        return;
+      }
+      if ((await setup.trusted?.(home)) === true) {
+        io.out(`${entry.label} trusts ${tilde(home, io.env)} already.\n`);
+        return;
+      }
+      const registry = io.registry();
+      await offerTrust(
+        { home, env: io.env, ui: clackUi(), registry, actions: setupActions(io, home, registry) },
+        entry.name,
       );
     });
 }

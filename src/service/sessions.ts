@@ -113,6 +113,12 @@ export interface SessionServiceOptions {
   stateDir: string;
   /** Environment every agent session gets, such as PATH with the `wheems` command first. */
   sessionEnv: Record<string, string>;
+  /**
+   * Why an engine can't start in a folder, because it doesn't trust it and would wait at its
+   * "trust this folder?" question, which nobody sees; null when it can (or can't tell). Asked
+   * before a session starts or resumes.
+   */
+  trustProblem?: (engine: string, dir: string) => Promise<string | null>;
   aboutYouFile?: string;
   startupSeconds?: number;
   pollMs?: number;
@@ -176,6 +182,7 @@ export class SessionService {
       answerWaitSeconds: 3600,
       sendWaitSeconds: 600,
       log: () => undefined,
+      trustProblem: () => Promise.resolve(null),
       aboutYouFile: undefined,
       tell: undefined,
       ...options,
@@ -295,9 +302,13 @@ export class SessionService {
       );
     }
     await this.checkAccountLimit(agent.definition.account);
+    // Its folder will be in this one, so an engine that doesn't trust this won't trust that.
+    const adhoc = join(this.options.stateDir, 'sessions', workspace.id, 'adhoc');
+    await mkdir(adhoc, { recursive: true });
+    await this.checkTrust(agent.definition.engine, adhoc);
 
     const id = randomUUID();
-    const folder = join(this.options.stateDir, 'sessions', workspace.id, 'adhoc', id);
+    const folder = join(adhoc, id);
     await mkdir(folder, { recursive: true });
     const now = new Date();
     const record = sessions.create({
@@ -370,6 +381,7 @@ export class SessionService {
     const target = this.target(caller, request.id);
     const wait = request.wait === true;
     this.checkMaySend(caller, target, wait);
+    if (target.kind !== 'thread') await this.checkTrustToResume(caller.workspace, target);
     const from = caller.session;
     const workspace = caller.workspace;
     const sessions = this.sessions(caller);
@@ -958,6 +970,7 @@ export class SessionService {
     const herdrName = target.herdrName ?? '';
     const old = await this.options.runtime.get(herdrName);
     if (old?.state === 'live') throw new Error('it started again meanwhile; send again');
+    await this.checkTrust(agent.definition.engine, target.folder ?? workspace.dir);
     if (old) await this.options.runtime.remove(old.id).catch(() => undefined);
     await this.checkAccountLimit(agent.definition.account);
     try {
@@ -1112,6 +1125,34 @@ export class SessionService {
         this.passBack(d.workspace, d.to, d.notice.sender ?? '', d.text, d.notice),
       ),
     );
+  }
+
+  /** Refuses, with the reason, to start an engine in a folder it doesn't trust. */
+  private async checkTrust(engine: string, dir: string): Promise<void> {
+    const problem = await this.options.trustProblem(engine, dir);
+    if (problem !== null) throw new Error(problem);
+  }
+
+  /**
+   * Before a message is taken for a session that isn't running, and so would be resumed: refuses
+   * at once if its engine doesn't trust its folder, rather than fail it later. Resuming checks
+   * again; a session that is running needs no check.
+   */
+  private async checkTrustToResume(
+    workspace: LoadedWorkspace,
+    target: SessionRecord,
+  ): Promise<void> {
+    if (target.state === 'ended') return;
+    const name = target.agent?.split('/').at(-1);
+    const agent = workspace.agents.find((a) => a.definition.name === name);
+    if (!agent) return;
+    const live =
+      target.herdrName !== null
+        ? await this.options.runtime.get(target.herdrName).catch(() => undefined)
+        : null;
+    // Can't tell whether it's running: resuming checks, if it comes to that.
+    if (live === undefined || live?.state === 'live') return;
+    await this.checkTrust(agent.definition.engine, target.folder ?? workspace.dir);
   }
 
   private isStopping(): boolean {

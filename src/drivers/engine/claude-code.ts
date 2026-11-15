@@ -15,6 +15,7 @@ import {
 } from '../../contracts/engine.js';
 import { runCommand } from '../../util/process.js';
 import { claudeTrusts } from '../../util/trust.js';
+import { markClaudeTrusted } from '../../util/trust-write.js';
 import { extractVersion } from '../../util/version.js';
 
 export interface ClaudeCodeOptions {
@@ -256,6 +257,11 @@ export function claudeCodeSetup(binary = 'claude'): EngineSetup {
     },
     trust: [binary],
     trusted: (dir) => claudeTrusts(dir),
+    markTrusted: (dir) => markClaudeTrusted(dir),
+    trustRecord:
+      process.env.CLAUDE_CONFIG_DIR !== undefined
+        ? '$CLAUDE_CONFIG_DIR/.claude.json'
+        : '~/.claude.json',
     defaultModel: 'claude-opus-5-5',
     account: { name: 'claude-subscription', driver: 'claude' },
   };

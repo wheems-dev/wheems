@@ -1,12 +1,25 @@
 import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentDefinition, EngineContext } from '../src/contracts/engine.js';
 import { answersAfter } from '../src/contracts/engine.js';
 import { ClaudeCodeEngine, turnAnswers } from '../src/drivers/engine/claude-code.js';
 import { engineContract } from '../src/testing/index.js';
 import { realHcAvailable } from './helpers/hc.js';
+
+// The contract asks the real Claude Code whether it's signed in (claude auth status, which only
+// reads), so its config folder is the real one here; every other test points it into the
+// repository (test/setup/env.ts).
+const testConfigDir = process.env.CLAUDE_CONFIG_DIR;
+beforeAll(() => {
+  const real = process.env.WHEEMS_TEST_REAL_CLAUDE_CONFIG_DIR;
+  if (real === undefined || real === '') delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = real;
+});
+afterAll(() => {
+  process.env.CLAUDE_CONFIG_DIR = testConfigDir;
+});
 
 engineContract('claude-code', {
   create: () => new ClaudeCodeEngine(),

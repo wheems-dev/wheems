@@ -70,9 +70,24 @@ Part of using the terminal once, then everything else in chat (built):
   again, or the check that failed passes. Later messages only log it. It's channel-agnostic: a
   notice is a post through the `ChannelDriver`.
 
+- **The install folder is approved once.** Setup asks once whether Wheems may mark the install
+  folder trusted for the installed engines that ask about folders, and on a yes writes the
+  engine's own trust entry: `projects[<folder>].hasTrustDialogAccepted` in `~/.claude.json` for
+  Claude Code, `[projects."<folder>"] trust_level = "trusted"` in Codex's `config.toml`
+  (`src/util/trust-write.ts`). The write refuses a file it can't fully parse, checks that the
+  result differs by that entry alone, renames a new copy into place, and starts over if the
+  engine wrote the file meanwhile. For Claude Code it holds Claude Code's own save lock
+  (`.claude.json.lock`, a proper-lockfile folder) throughout. Codex has no lock, so Wheems
+  changes its `config.toml` only while no Codex process runs (`pgrep -i -x codex`), checked
+  before reading and again just before the rename, and otherwise leaves it to Codex's own
+  question. The Claude Code flag is internal state, not a documented
+  setting, so doctor checks it rather than assume it lasts. Every session starts in a folder
+  inside the install, so no session ever stops at a trust question; before a chief's ad-hoc
+  session starts or resumes, the session service asks the same `trustProblem` the chiefs' check
+  uses, and refuses with the reason when the engine doesn't trust the session's folder.
 - **`wheems doctor --fix`.** Doctor attaches a fix to each check it can fix safely, and `--fix`
-  asks before running each one. The fixes: trusting the install folder (it opens the engine
-  there), starting or restarting the service, rebuilding a stale search index, and correcting a
+  asks before running each one. The fixes: marking the install folder trusted (as setup does;
+  an engine Wheems can't mark is opened there instead), starting or restarting the service, rebuilding a stale search index, and correcting a
   near-miss channel name in `workspace.yaml` from the channels the app can see (the optional
   `listChannels`). It never changes the chat app's settings or tokens.
 

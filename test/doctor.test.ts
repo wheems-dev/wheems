@@ -206,7 +206,15 @@ describe('doctor', () => {
       service: () => Promise.resolve({ installed: false, answering: false }),
       trust: () => Promise.resolve(false),
     });
-    expect(statuses(before).Agents).toEqual(['pass claude-code engine', 'warn personal folder']);
+    expect(statuses(before).Agents).toEqual([
+      'pass claude-code engine',
+      'warn personal folder',
+      // Sessions a chief starts run under .wheems/sessions/, which the engine must trust too.
+      'warn claude-code sessions',
+    ]);
+    expect(before.sections.find((x) => x.title === 'Agents')?.checks[2]?.message).toBe(
+      `claude-code hasn't been told to trust ${join(home, '.wheems', 'sessions')}, so sessions on it can't start`,
+    );
     expect(statuses(before).Channels).toEqual(['warn slack allowed users', 'fail slack']);
     expect(before.sections.find((x) => x.title === 'Channels')?.checks[1]?.message).toBe(
       'Not connected yet: no credentials saved for it',
@@ -223,7 +231,11 @@ describe('doctor', () => {
       service: () => Promise.resolve({ installed: true, answering: true }),
       trust: () => Promise.resolve(true),
     });
-    expect(statuses(after).Agents).toEqual(['pass claude-code engine', 'pass personal folder']);
+    expect(statuses(after).Agents).toEqual([
+      'pass claude-code engine',
+      'pass personal folder',
+      'pass claude-code sessions',
+    ]);
     expect(statuses(after).Channels).toEqual([
       'warn slack allowed users',
       'pass slack: memory channel',
@@ -414,7 +426,7 @@ describe('doctor', () => {
 
   it('advises trusting the install folder once, quoting a path a shell would split', () => {
     expect(trustAdvice('Claude Code', ['claude'], '~/wheems')).toBe(
-      'At the Mac, run `cd ~/wheems && claude` and answer yes. Claude Code then trusts every workspace in your install, including ones you add later.',
+      'At the Mac, run `wheems doctor --fix` and say yes to marking ~/wheems trusted, or run `cd ~/wheems && claude` and answer yes. Claude Code then trusts every workspace and session in your install, including ones added later.',
     );
     expect(shellPath('~/My Wheems')).toBe("~/'My Wheems'");
     expect(shellPath("/tmp/it's")).toBe("'/tmp/it'\\''s'");

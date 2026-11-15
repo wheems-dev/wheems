@@ -174,16 +174,45 @@ it, and `wheems status` shows it while the service runs.
 
 ### Trusting the install folder
 
-Claude Code and Codex ask once whether to trust a folder, and nobody can answer that from Slack.
-A trusted folder covers every folder in it, so trust your install folder once and every
-workspace is covered, including ones you add later. When setup creates the first workspace for
-an engine, it offers to open the engine in the install folder: say yes, trust the folder, then
-press Ctrl+C twice to come back. To do it yourself, run `cd ~/wheems && claude` (or `codex`)
-and answer yes.
+Claude Code and Codex ask once whether to trust a folder, and nobody can answer that from chat.
+You approve the install folder once, and every session Wheems starts beneath it, chiefs' and the
+sessions they start, runs without a trust question. A trusted folder covers every folder in it,
+so this covers every workspace and session, including ones added later.
 
-`wheems doctor` checks the trust. If a message arrives for an engine that doesn't trust the
-folder, the service says so in the thread at once, with the command to run, rather than start a
-session that would wait at the Mac.
+When setup creates a workspace, it asks once: _Let Wheems mark ~/wheems as trusted for Claude
+Code and Codex?_ On a yes, Wheems writes the same entry the engine writes when you say yes to
+its question, and changes nothing else in the file:
+
+| Engine      | Where                                             | What                                                   |
+| ----------- | ------------------------------------------------- | ------------------------------------------------------ |
+| Claude Code | `~/.claude.json` (in `$CLAUDE_CONFIG_DIR` if set) | `projects["<folder>"].hasTrustDialogAccepted = true`   |
+| Codex       | `~/.codex/config.toml` (or `$CODEX_HOME`)         | `[projects."<folder>"]` with `trust_level = "trusted"` |
+
+It's careful with both files, which hold much more than trust:
+
+- it refuses to write a file it can't fully parse, and checks the result differs by that one
+  entry only;
+- it writes a new copy beside the file and renames it into place, keeping its permissions;
+- if the engine changed the file meanwhile, it starts again from the new contents, and after a
+  few tries gives up and says so;
+- for Claude Code, it holds the lock Claude Code itself takes to save the file
+  (`~/.claude.json.lock`), so Claude Code can't save in between;
+- Codex has no such lock, so Wheems changes `config.toml` only while no Codex is running (the
+  app or a CLI session), checked before it reads and again just before it writes. While one
+  runs, it leaves the file alone and says so: close Codex and try again, or answer Codex's own
+  question (`cd ~/wheems && codex`).
+
+The Claude Code flag is Claude Code's internal state, not a documented setting (though Claude
+Code's own messages tell you to set it), so a new version could move it. That's why `wheems doctor` checks the trust every time, rather than
+assume it lasts. `wheems doctor --fix` and `wheems engine trust <engine>` offer the same for an
+install made before this. To do it by hand instead, run `cd ~/wheems && claude` (or `codex`) and
+answer yes.
+
+If a message arrives for an engine that doesn't trust the folder, the service says so in the
+thread at once, with the step to take, rather than start a session that would wait at the Mac.
+A chief's `wheems session create`, and a `session send` that would resume a stopped session,
+are refused the same way, with a reason the chief passes on, rather than start a session that
+waits at a question nobody sees.
 
 ### Without the menu
 
@@ -623,7 +652,7 @@ file, or remove it to start its threads afresh, then run `wheems restart`.
 | System     | Node.js version and platform                                                                                                 |
 | Herdr core | `hc` is installed, new enough and answering. It also starts a tiny test session and removes it again (`--quick` skips that). |
 | Config     | Every config file, and the links between them                                                                                |
-| Agents     | Each engine is installed and signed in, and trusts each workspace folder                                                     |
+| Agents     | Each engine is installed and signed in, and trusts each workspace folder and the folder sessions start in                    |
 | Channels   | Each Slack connection's tokens work                                                                                          |
 | Knowledge  | The embeddings driver and model, the vector store, and each workspace's search index                                         |
 | Review     | What waits for `wheems review`                                                                                               |
@@ -635,7 +664,8 @@ It exits with 1 when anything fails. `--json` prints the report as JSON.
 what the fix will do, and asks first (no unless you say yes); then it checks again. It never
 fixes anything silently, and never changes the chat app's settings or tokens. It can:
 
-- open the engine in the install folder so you can answer its trust question;
+- mark the install folder trusted for an engine, as setup does (see
+  [Trusting the install folder](#trusting-the-install-folder));
 - start or restart the service, which also imports `conversations.json` and brings the session
   store up to date;
 - rebuild a search index that can't be read or was built for another model;
@@ -714,7 +744,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems engine list`                                        | Each engine: installed, signed in, and whether it trusts the install folder          |
 | `wheems engine install <engine>`                            | Installs an engine, asking first, then offers to sign it in                          |
 | `wheems engine login <engine>`                              | Runs the engine's own sign-in on this terminal                                       |
-| `wheems engine trust <engine>`                              | Opens the engine in the install folder to answer its one-time trust question         |
+| `wheems engine trust <engine>`                              | Asks to mark the install folder trusted for the engine, as setup does                |
 | `wheems service start`, `stop`, `restart`, `status`, `logs` | The background service (the top-level shortcuts do the same)                         |
 | `wheems service run`, `uninstall`                           | Runs the service in this terminal, or removes it from launchd                        |
 | `wheems config validate [paths...]`                         | Validates config files or install folders                                            |
