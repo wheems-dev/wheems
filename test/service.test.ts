@@ -37,14 +37,19 @@ describe('the service', () => {
       startupSeconds: 2,
     });
 
-  /** Runs `wheems reply` (or another command) as an agent would, inside a conversation. */
-  const cliReply = async (conversation: string, args: string[], stdin = '', command = 'reply') => {
+  /** Runs `wheems chat reply` (or another command) as an agent would, inside a conversation. */
+  const cliReply = async (
+    conversation: string,
+    args: string[],
+    stdin = '',
+    command = 'chat reply',
+  ) => {
     let out = '';
     let err = '';
     const previous = process.exitCode;
     process.exitCode = undefined;
     try {
-      const code = await run([command, ...args], {
+      const code = await run([...command.split(' '), ...args], {
         ...defaultIo(),
         out: (t) => (out += t),
         err: (t) => (err += t),
@@ -74,7 +79,7 @@ describe('the service', () => {
     channel = new MemoryChannel();
     runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
-        // The agent replies with the real `wheems reply` command, over the control socket.
+        // The agent replies with the real `wheems chat reply` command, over the control socket.
         reply: async (conversation, text) => {
           const result = await cliReply(conversation, [text]);
           if (result.code !== 0) throw new Error(result.err);
@@ -267,7 +272,7 @@ describe('the service', () => {
     ]);
   });
 
-  it('lets wheems reply read a long reply from standard input', async () => {
+  it('lets wheems chat reply read a long reply from standard input', async () => {
     const first = await channel.receive({
       channel: 'D1',
       text: 'hello',
@@ -280,7 +285,7 @@ describe('the service', () => {
     expect(channel.sent.at(-1)?.text).toBe('# Report\n\nAll done.');
   });
 
-  it("saves a note with wheems note to the conversation's workspace inbox", async () => {
+  it("saves a note with wheems kb note to the conversation's workspace inbox", async () => {
     const first = await channel.receive({
       channel: 'D1',
       text: 'hello',
@@ -292,7 +297,7 @@ describe('the service', () => {
       `personal:slack:D1:${first}`,
       ['-'],
       '# Said hello\n\nNothing more.\n',
-      'note',
+      'kb note',
     );
     expect(result.code).toBe(0);
     const saved = /^Saved to (workspaces\/personal\/knowledge\/inbox\/.+-said-hello\.md)\.\n$/.exec(
@@ -389,8 +394,8 @@ describe('the service', () => {
     expect(await kb(['search', 'x', '--workspace', 'nope'])).toMatchObject({ code: 1 });
   });
 
-  it('refuses wheems reply outside a conversation, or for one it does not know', async () => {
-    const outside = await run(['reply', 'hi'], {
+  it('refuses wheems chat reply outside a conversation, or for one it does not know', async () => {
+    const outside = await run(['chat', 'reply', 'hi'], {
       ...defaultIo(),
       out: () => undefined,
       err: () => undefined,

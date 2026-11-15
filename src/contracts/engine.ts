@@ -27,7 +27,7 @@ export interface EngineDriver extends Driver<'engine'> {
    * the turn has finished. Returns the answers after the one with id \`after\`: all of them
    * when \`after\` is null, and only the latest when no answer has that id, so history is
    * never posted again. Use \`answersAfter\` for this. With it, the service posts each answer
-   * for the agent; without it, agents answer only through \`wheems reply\`.
+   * for the agent; without it, agents answer only through \`wheems chat reply\`.
    */
   answers?(session: { id: string; dir: string }, after: string | null): Promise<FinalMessage[]>;
 

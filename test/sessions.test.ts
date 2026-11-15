@@ -85,7 +85,7 @@ describe('wheems session', () => {
     extra: string[] = [],
   ): Promise<SessionRecord> => {
     const result = await wheems(
-      ['session', 'new', ...extra, '--title', title, '--purpose', `research ${title}`, '--json'],
+      ['session', 'create', ...extra, '--title', title, '--purpose', `research ${title}`, '--json'],
       as,
     );
     expect(result.err).toBe('');
@@ -126,7 +126,9 @@ describe('wheems session', () => {
       'fake-agent': fakeAgent({
         behaviour: (line) => behave(line),
         reply: async (conversation, text) => {
-          const result = await wheems(['reply', text], { WHEEMS_CONVERSATION: conversation });
+          const result = await wheems(['chat', 'reply', text], {
+            WHEEMS_CONVERSATION: conversation,
+          });
           if (result.code !== 0) throw new Error(result.err);
         },
         received,
@@ -145,7 +147,7 @@ describe('wheems session', () => {
   it('starts an ad-hoc session in a folder of its own, working on its purpose', async () => {
     const result = await wheems([
       'session',
-      'new',
+      'create',
       '--title',
       'Packaging suppliers',
       '--purpose',
@@ -239,7 +241,7 @@ describe('wheems session', () => {
     const first = await newSession('one', chief);
     await newSession('two', chief);
     const third = await wheems(
-      ['session', 'new', '--title', 'three', '--purpose', 'research three'],
+      ['session', 'create', '--title', 'three', '--purpose', 'research three'],
       chief,
     );
     expect(third.err).toContain('chief-of-staff already has 2 open sessions');
@@ -251,7 +253,7 @@ describe('wheems session', () => {
     const childInstructions = readFileSync(join(child.folder!, 'AGENTS.md'), 'utf8');
     expect(childInstructions).not.toContain('## Sessions (built into Wheems)');
     const grandchild = await wheems(
-      ['session', 'new', '--title', 'grandchild', '--purpose', 'research'],
+      ['session', 'create', '--title', 'grandchild', '--purpose', 'research'],
       { WHEEMS_SESSION: child.id },
     );
     expect(grandchild.err).toContain('2 levels deep');
@@ -264,7 +266,7 @@ describe('wheems session', () => {
     await start();
     const results = await Promise.all(
       ['one', 'two'].map((title) =>
-        wheems(['session', 'new', '--title', title, '--purpose', `research ${title}`]),
+        wheems(['session', 'create', '--title', title, '--purpose', `research ${title}`]),
       ),
     );
     expect(results.filter((r) => r.code === 0)).toHaveLength(1);
@@ -286,7 +288,7 @@ describe('wheems session', () => {
       command: ['fake-agent'],
       labels: { wheems: 'filer', workspace: 'personal' },
     });
-    const refused = await wheems(['session', 'new', '--title', 'one', '--purpose', 'research']);
+    const refused = await wheems(['session', 'create', '--title', 'one', '--purpose', 'research']);
     expect(refused.err).toContain('already runs 1 sessions');
   });
 
@@ -327,7 +329,7 @@ describe('wheems session', () => {
     await start();
     await chiefThread();
     await newSession('one');
-    const refused = await wheems(['session', 'new', '--title', 'two', '--purpose', 'research']);
+    const refused = await wheems(['session', 'create', '--title', 'two', '--purpose', 'research']);
     expect(refused.err).toContain('already runs 2 sessions');
   });
 
@@ -354,7 +356,7 @@ describe('wheems session', () => {
     expect((await wheems(['session', 'end', session.id], chief)).err).toContain('already ended');
     expect(
       (
-        await wheems(['session', 'new', '--title', 'x', '--purpose', 'y'], {
+        await wheems(['session', 'create', '--title', 'x', '--purpose', 'y'], {
           WHEEMS_SESSION: session.id,
         })
       ).err,
@@ -364,7 +366,7 @@ describe('wheems session', () => {
   it("takes a session's notes, whose title becomes its summary, and has no thread to reply in yet", async () => {
     const session = await newSession('packaging');
     const as = { WHEEMS_SESSION: session.id };
-    const note = await wheems(['note', '-'], as, '# Shortlisted three suppliers\n\nDetails.');
+    const note = await wheems(['kb', 'note', '-'], as, '# Shortlisted three suppliers\n\nDetails.');
     expect(note.err).toBe('');
     const inbox = join(home, 'workspaces', 'personal', 'knowledge', 'inbox');
     const [file] = readdirSync(inbox);
@@ -373,7 +375,7 @@ describe('wheems session', () => {
       'Shortlisted three suppliers',
     );
     expect((await wheems(['session', 'search', 'shortlisted'])).out).toContain(session.id);
-    const reply = await wheems(['reply', 'hi'], as);
+    const reply = await wheems(['chat', 'reply', 'hi'], as);
     expect(reply.err).toContain('Answer your owner instead');
   });
 
@@ -414,7 +416,7 @@ describe('wheems session', () => {
   it('refuses secrets in titles and purposes', async () => {
     const result = await wheems([
       'session',
-      'new',
+      'create',
       '--title',
       'keys',
       '--purpose',
@@ -450,7 +452,7 @@ describe('wheems session', () => {
       await held;
       return start(options);
     };
-    const creating = wheems(['session', 'new', '--title', 'late', '--purpose', 'research late']);
+    const creating = wheems(['session', 'create', '--title', 'late', '--purpose', 'research late']);
     await new Promise((r) => setTimeout(r, 50));
     const retiring = request(paths(home, env).socket, {
       op: 'workspace-retire',

@@ -172,7 +172,7 @@ describe('conversations', () => {
     expect([...(channel.reactions.get(`D1/${first}`) ?? [])]).toEqual([]);
     // The engine wrote its instructions file, with the built-in chat instructions.
     const claudeMd = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
-    expect(claudeMd).toContain('wheems reply');
+    expect(claudeMd).toContain('wheems chat reply');
     expect(Object.fromEntries(state.conversations())).toMatchObject({
       [key]: { workspace: 'personal', channel: 'D1', thread: first, sessionId: uuidFor(key) },
     });

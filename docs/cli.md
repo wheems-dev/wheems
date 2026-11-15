@@ -47,7 +47,6 @@ Only install-wide commands, and the ones used every day:
 - **Start here:** `setup`, `doctor`, `list`.
 - **Every day:** `review`, and `status`, `start`, `stop`, `restart`, `logs` as shortcuts for
   `wheems service …`.
-- **Agents run these:** `reply` and `note`, until they move under their areas (below).
 
 `COMMAND_GROUPS` in `src/cli/program.ts` lists them, and a test fails when a new top-level command
 appears without being added there on purpose. Everything else goes under an area.
@@ -59,9 +58,9 @@ appears without being added there on purpose. Everything else goes under an area
 | Area               | Actions                                                                           |
 | ------------------ | --------------------------------------------------------------------------------- |
 | `workspace` (`ws`) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
-| `session`          | ✓ `list`, `search`, `show`, `new` (to become `create`), `send`, `end`             |
-| `kb`               | ✓ `search`, `reindex`; next `note` (now `wheems note`)                            |
-| `chat`             | next `reply` (now `wheems reply`); ○ `post <channel>`, `ask <channel>` (M3)       |
+| `session`          | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
+| `kb`               | ✓ `search`, `note`, `reindex`                                                     |
+| `chat`             | ✓ `reply`; ○ `post <channel>`, `ask <channel>` (M3)                               |
 | `skill`            | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
 | `channel`          | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
 | `engine`           | ✓ `list`, `install`, `login`, `trust`                                             |
@@ -127,11 +126,17 @@ standard error:
 | `wheems validate`        | `wheems config validate`        |
 | `wheems slack manifest`  | `wheems channel manifest slack` |
 | `wheems service install` | `wheems service start`          |
+| `wheems reply`           | `wheems chat reply`             |
+| `wheems note`            | `wheems kb note`                |
+| `wheems session new`     | `wheems session create`         |
 
-## Next
+The agents' built-in instructions use the new names; a session started before them keeps working
+through the old ones until the release after.
 
-The second step moves the agents' commands under their areas: `wheems reply` becomes
-`wheems chat reply`, `wheems note` becomes `wheems kb note` and `wheems session new` becomes
-`wheems session create`. Agents' built-in instructions change at once; sessions already running
-keep working through the old names until the release after. It also defaults `--workspace` to the
-workspace whose folder you're in, the way Artisan finds the project it's run in.
+## The workspace from the folder you're in
+
+In a workspace's folder (`~/wheems/workspaces/acme/` or anywhere below it), commands that take
+`--workspace` default to that workspace, the way Artisan finds the project it's run in:
+`wheems kb search …` and the `wheems session …` commands. Inside a session started by Wheems they
+always act in the session's own workspace, so this never applies there. `--workspace` still wins
+when it's given.

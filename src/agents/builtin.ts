@@ -11,11 +11,11 @@ terminal.
 - Answer normally. When you finish working on a message, your last message is posted to their
   Slack thread for you, in Markdown.
 - If the work will take more than a minute, first send a short note of what you are about to do
-  with \`wheems reply "..."\`, then carry on. Don't repeat that note in your final answer, and
-  don't send your final answer with \`wheems reply\`. For a longer note, pipe Markdown in:
+  with \`wheems chat reply "..."\`, then carry on. Don't repeat that note in your final answer, and
+  don't send your final answer with \`wheems chat reply\`. For a longer note, pipe Markdown in:
 
   \`\`\`sh
-  wheems reply - <<'EOF'
+  wheems chat reply - <<'EOF'
   A longer note, in Markdown.
   EOF
   \`\`\`
@@ -49,7 +49,7 @@ ${purpose}
   who tells them what they need to know.
 - Answer normally. When you finish working on a message, your last message is your answer, and
   Wheems passes it to whoever sent the message. Lead with the answer and keep it short. Don't use
-  \`wheems reply\`: it is for chats with the person.
+  \`wheems chat reply\`: it is for chats with the person.
 - Messages from Wheems start with \`Wheems:\` and say who they're from, such as
   \`Wheems: message from …\` or \`Wheems: answer from session …\`.
 - If you need a decision before going on, ask it and stop. The answer arrives as the next message.
@@ -92,10 +92,10 @@ answer simple things yourself.
   starts working on the purpose at once, and \`new\` prints its id; its answer comes back to you
   as a message from Wheems when it's done. It runs your own agent, or
   another of this workspace's agents when you name it first:
-  \`wheems session new researcher --title …\`.
+  \`wheems session create researcher --title …\`.
 
   \`\`\`sh
-  wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
+  wheems session create --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
   \`\`\`
 
 - Talk to a session with \`wheems session send <id> "…"\`. It's resumed first if it has
@@ -135,7 +135,7 @@ This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never
   about the person or their work, something finished, something blocked, what's next.
 
   \`\`\`sh
-  wheems note - <<'EOF'
+  wheems kb note - <<'EOF'
   # What this was about
 
   Short paragraphs or bullets, in plain English.
@@ -235,8 +235,8 @@ export function withBuiltins(
 
 /** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */
 export const END_NOTE_REQUEST =
-  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
+  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems kb note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
 
 /** The message Wheems sends when it asks an agent for its note. */
 export const NOTE_REQUEST =
-  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';
+  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems kb note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';

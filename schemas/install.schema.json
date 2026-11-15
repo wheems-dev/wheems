@@ -87,7 +87,7 @@
             "type": "string"
           },
           "max_sessions": {
-            "description": "Most sessions running at once on this account, of every kind, across workspaces. Beyond it, `wheems session new` is refused. No limit when left out.",
+            "description": "Most sessions running at once on this account, of every kind, across workspaces. Beyond it, `wheems session create` is refused. No limit when left out.",
             "type": "integer",
             "exclusiveMinimum": 0,
             "maximum": 9007199254740991

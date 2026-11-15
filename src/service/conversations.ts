@@ -116,7 +116,7 @@ interface Watch {
  * Routes chat messages to agent sessions: one conversation, and one engine
  * session, per chat thread. A thread's later messages go to the same session;
  * if that session has ended, the engine resumes the conversation in a new one.
- * Agents answer with `wheems reply`, which arrives here through `reply()`.
+ * Agents answer with `wheems chat reply`, which arrives here through `reply()`.
  */
 export class ConversationManager {
   private readonly options: Required<
@@ -141,7 +141,7 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
-  /** The latest `wheems reply` in each conversation. */
+  /** The latest `wheems chat reply` in each conversation. */
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
   private stopped = false;
@@ -249,7 +249,7 @@ export class ConversationManager {
   }
 
   /**
-   * Saves a note an agent wrote (`wheems note`) to its workspace's inbox, and counts the
+   * Saves a note an agent wrote (`wheems kb note`) to its workspace's inbox, and counts the
    * conversation's work so far as noted. Returns the note's file.
    */
   async note(key: string, text: string): Promise<string> {
@@ -315,7 +315,7 @@ export class ConversationManager {
     }
   }
 
-  /** Posts an agent's reply (`wheems reply`) into its conversation's thread. */
+  /** Posts an agent's reply (`wheems chat reply`) into its conversation's thread. */
   async reply(key: string, text: string): Promise<void> {
     await this.post(key, text);
     const workspace = (await this.options.store.get(key))?.workspace;
@@ -852,7 +852,7 @@ export class ConversationManager {
   /**
    * Posts the agent's answers since the last one posted, when its engine can read them:
    * usually one, more when turns followed each other quickly. An answer the agent already
-   * sent word for word with `wheems reply` during this turn is not posted again. Returns
+   * sent word for word with `wheems chat reply` during this turn is not posted again. Returns
    * how many answers there were (0 for none yet).
    */
   private async postAnswers(key: string, watch: Watch, attempts = 5): Promise<number> {
