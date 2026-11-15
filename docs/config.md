@@ -118,7 +118,7 @@ rules:
 
 `sessions` limits [ad-hoc sessions](architecture.md#sessions), so they can't multiply or loop.
 `max_sessions` on an account counts every running session on it, of every kind and in every
-workspace; beyond it, `wheems session new` is refused (from milestone 5, tasks queue instead).
+workspace; beyond it, `wheems session create` is refused (from milestone 5, tasks queue instead).
 
 `direct: true` means the app's direct messages. Only one workspace per connection can have them;
 every other workspace chats in a channel, by name or id, that the app has been invited to.
@@ -164,7 +164,7 @@ Until approvals arrive, a prompt means someone has to answer it at the machine, 
 staff you talk to from your phone usually runs on `auto`.
 
 Every agent also gets Wheems's built-in instructions: its last message of each turn is posted to
-the chat thread for it, and `wheems reply "..."` sends a progress note during long work.
+the chat thread for it, and `wheems chat reply "..."` sends a progress note during long work.
 
 ## workspaces/&lt;id&gt;/skills.yaml
 

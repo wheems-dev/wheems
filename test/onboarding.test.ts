@@ -78,7 +78,9 @@ describe('setting Wheems up by inviting it to a channel', () => {
     runtime = new MemoryRuntime({
       'fake-agent': fakeAgent({
         reply: async (conversation, text) => {
-          const result = await wheems(['reply', text], { WHEEMS_CONVERSATION: conversation });
+          const result = await wheems(['chat', 'reply', text], {
+            WHEEMS_CONVERSATION: conversation,
+          });
           if (result.code !== 0) throw new Error(result.err);
         },
       }),

@@ -57,7 +57,7 @@ export const accountSchema = z.strictObject({
     .positive()
     .optional()
     .describe(
-      'Most sessions running at once on this account, of every kind, across workspaces. Beyond it, `wheems session new` is refused. No limit when left out.',
+      'Most sessions running at once on this account, of every kind, across workspaces. Beyond it, `wheems session create` is refused. No limit when left out.',
     ),
 });
 

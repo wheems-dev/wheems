@@ -5,6 +5,8 @@ import { defaultHome, paths } from '../../home.js';
 import { KnowledgeSearch, type IndexStatus, type SearchAnswer } from '../../knowledge/search.js';
 import { request } from '../../service/control.js';
 import type { Io } from '../program.js';
+import { workspaceHere } from '../caller.js';
+import { addNote } from './note.js';
 
 const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 
@@ -13,10 +15,15 @@ export function registerKb(program: Command, io: Io): void {
     .command('kb')
     .description("Search and rebuild the workspaces' knowledge bases");
 
+  addNote(kb.command('note'), io, 'wheems kb note');
+
   kb.command('search')
     .description('Search the knowledge base by keyword and by meaning (agents run this)')
     .argument('<query...>', 'what to look for, in plain words')
-    .option('--workspace <id>', 'the workspace (default: $WHEEMS_WORKSPACE, or the only one)')
+    .option(
+      '--workspace <id>',
+      "the workspace (default: $WHEEMS_WORKSPACE, the one whose folder you're in, or the only one)",
+    )
     .option('--limit <n>', 'how many results', '5')
     .option('--json', 'print the results as JSON')
     .option('--home <dir>', homeHelp)
@@ -29,7 +36,10 @@ export function registerKb(program: Command, io: Io): void {
         if (!Number.isInteger(limit) || limit < 1) throw new Error('--limit takes a whole number');
         const home = resolve(options.home ?? defaultHome(io.env));
         const install = await loadConfigured(home);
-        const workspace = pickWorkspace(install, options.workspace ?? io.env.WHEEMS_WORKSPACE);
+        const workspace = pickWorkspace(
+          install,
+          options.workspace ?? io.env.WHEEMS_WORKSPACE ?? workspaceHere(io, home),
+        );
         const search = new KnowledgeSearch({
           install: install.config,
           workspaces: install.workspaces,

@@ -12,7 +12,7 @@ import { registerKb } from './commands/kb.js';
 import { registerReview } from './commands/review.js';
 import { registerSkill } from './commands/skill.js';
 import { registerNote } from './commands/note.js';
-import { registerReply } from './commands/reply.js';
+import { registerChat, registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { registerSession } from './commands/session.js';
 import { setup } from './commands/setup.js';
@@ -50,6 +50,8 @@ export interface Io {
   err: (text: string) => void;
   env: NodeJS.ProcessEnv;
   color: boolean;
+  /** The folder the command runs in; process.cwd() unless a test says otherwise. */
+  cwd?: () => string;
   /** The terminal's width, or undefined when the output isn't a terminal. */
   columns?: number | undefined;
   registry: () => DriverRegistry;
@@ -199,6 +201,7 @@ export function createProgram(io: Io): Command {
   registerReply(program, io);
   registerNote(program, io);
   registerWorkspace(program, io);
+  registerChat(program, io);
   registerSession(program, io);
   registerKb(program, io);
   registerSkill(program, io);
@@ -237,6 +240,7 @@ export const COMMAND_GROUPS: Record<string, string> = {
   logs: 'Every day (shortcuts for wheems service …):',
   review: 'Every day (shortcuts for wheems service …):',
   workspace: 'Areas: wheems <area> <action>',
+  chat: 'Areas: wheems <area> <action>',
   session: 'Areas: wheems <area> <action>',
   kb: 'Areas: wheems <area> <action>',
   skill: 'Areas: wheems <area> <action>',
@@ -244,8 +248,6 @@ export const COMMAND_GROUPS: Record<string, string> = {
   engine: 'Areas: wheems <area> <action>',
   service: 'Areas: wheems <area> <action>',
   config: 'Areas: wheems <area> <action>',
-  reply: 'Agents run these:',
-  note: 'Agents run these:',
 };
 
 /** `wheems list`: every visible command, top-level ones by group, then each area's actions. */

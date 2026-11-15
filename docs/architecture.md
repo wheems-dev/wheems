@@ -31,7 +31,7 @@ TypeScript first.
   small SQLite store of every session it runs (built) and what's waiting (planned), see
   [Sessions](#sessions).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems chat post updates "…"`,
-  `wheems chat ask approvals "Deploy?"` and `wheems note`. Commands are grouped by area, like
+  `wheems chat ask approvals "Deploy?"` and `wheems kb note`. Commands are grouped by area, like
   `php artisan` ([cli.md](cli.md)). It replaces hand-written scripts and
   hard-coded channel IDs.
 - **Config**: YAML and Markdown in a git folder. Adding an agent, channel or workflow means
@@ -150,7 +150,7 @@ stopped.
             ├── brief.md      short, capped; every agent here loads it at launch
             ├── activity.md   planned (4): one line per filed project note, newest first
             ├── cards/        planned (4): one generated card per project
-            ├── inbox/        notes land here, from wheems note
+            ├── inbox/        notes land here, from wheems kb note
             ├── notes/        filed notes, kept as the sources
             ├── pages/        the knowledge base, one topic per page
             └── reports/      nightly: contradictions and stale pages
@@ -163,7 +163,7 @@ Running state, never committed, lives in `.wheems/`: the control socket, logs, t
 
 Agents are told never to write into `knowledge/` or `about-you.md` themselves; that's an
 instruction, not a lock, until permission rules arrive (milestone 6). They write notes with
-`wheems note`, and the service saves each note to its workspace's inbox with where it came from:
+`wheems kb note`, and the service saves each note to its workspace's inbox with where it came from:
 workspace, agent, engine, conversation and time. When a conversation has been quiet for
 `knowledge.note_after_idle` minutes after new work, and before the service stops an idle session
 to make room, the service asks the agent for its note as a turn of its own. The answer to that
@@ -190,7 +190,7 @@ worked, such as an edit by hand, nothing is applied and the note is filed again 
 version, so an edit is never overwritten. A note the filer can't file stays in the inbox and is
 tried again; after three failed tries, it waits until the service restarts.
 
-Nothing that looks like a password, token or key is kept: `wheems note` refuses such a note, a
+Nothing that looks like a password, token or key is kept: `wheems kb note` refuses such a note, a
 note that reaches the inbox anyway is moved to `.wheems/quarantine/<workspace>/` and never filed or
 committed, and pages and the brief that hold one are not kept.
 
@@ -400,7 +400,7 @@ app may, and otherwise tells you to create it and invite the app; doctor checks 
 
 ## Sessions
 
-Milestone 3, built first in it. The session store and `wheems session new`, `list`, `search`,
+Milestone 3, built first in it. The session store and `wheems session create`, `list`, `search`,
 `send`, `show` and `end` are built. Wheems keeps a record of every agent session it
 runs: which workspace, project and agent it belongs to, who started it, what it's for and what
 state it's in. That lets the service pick up after a restart, and lets a chief find the right
@@ -437,7 +437,7 @@ beneath it, used every day.
 - **Each chief is a workspace's chief**, in that workspace's own channel (in Slack, for now). The
   service already runs every workspace in `install.yaml` side by side. Keeping them apart arrives
   in milestone 6, so until then, use workspaces that don't need to be secret from each other.
-- **You ask a chief to start a session.** It runs `wheems session new`, which starts the agent in
+- **You ask a chief to start a session.** It runs `wheems session create`, which starts the agent in
   Herdr and records the session with the chief as its owner. The session starts on its purpose at
   once.
 - **The chief talks to it** with `wheems session send`, finds it again later, from any of its
@@ -467,7 +467,7 @@ the engines already trust, and reaches the knowledge base through `wheems kb` as
 does. Chiefs' thread sessions stay in the workspace folder until milestone 5's session folders.
 
 **The summary is written by code, not by the agent**, the same rule as project cards: the purpose
-given to `session new` at first, then the first line of the session's latest note (or, from
+given to `session create` at first, then the first line of the session's latest note (or, from
 milestone 5, its latest task result). An agent can't describe itself into someone else's search
 results.
 
@@ -530,7 +530,7 @@ context.
   ad-hoc sessions: one a chief's thread or you start is at level 1, one it starts at level 2, and
   none may start past `max_depth`. `max_sessions` per account (in `install.yaml`) counts every
   running session of every kind, in every workspace, as Herdr reports them; until tasks queue in
-  milestone 5, `session new` beyond it, or resuming a stopped session beyond it, is refused.
+  milestone 5, `session create` beyond it, or resuming a stopped session beyond it, is refused.
   **No two sessions wait on each other:** a `--wait` send to a session that's waiting on the
   sender, directly or through others waiting in a chain, is refused, since neither could answer.
 - **Who's calling.** The control socket knows the caller by the session id Wheems put in its
@@ -562,17 +562,17 @@ ended session stays in the store and in search as a record, but can't be sent me
 
 An ad-hoc session's answers are never posted anywhere. The agent's last message of each turn is
 its answer: its engine keeps it, `wheems session show` displays the latest, and it goes back to
-whoever sent the message. `wheems reply`, which posts into a chat, is refused
+whoever sent the message. `wheems chat reply`, which posts into a chat, is refused
 inside an ad-hoc session and tells it to answer its owner instead.
 
-| Command                                                              | What it does                                                                        |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `wheems session new [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, prints its id                         |
-| `wheems session list [--mine] [--agent] [--project] [--state]`       | Sessions in the caller's workspace                                                  |
-| `wheems session search "<words>"`                                    | Finds sessions by title, purpose, summary, agent or project                         |
-| `wheems session send <id> "<message>" [--wait] [--timeout]`          | Sends a message into a session; its answer comes back, or with `--wait` is returned |
-| `wheems session show <id>`                                           | Its details, latest answer, recent messages and the `hc attach` line                |
-| `wheems session end <id>`                                            | Asks for its note, then ends it                                                     |
+| Command                                                                 | What it does                                                                        |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `wheems session create [<agent>] --title "…" --purpose "…" [--project]` | Starts an ad-hoc session owned by the caller, prints its id                         |
+| `wheems session list [--mine] [--agent] [--project] [--state]`          | Sessions in the caller's workspace                                                  |
+| `wheems session search "<words>"`                                       | Finds sessions by title, purpose, summary, agent or project                         |
+| `wheems session send <id> "<message>" [--wait] [--timeout]`             | Sends a message into a session; its answer comes back, or with `--wait` is returned |
+| `wheems session show <id>`                                              | Its details, latest answer, recent messages and the `hc attach` line                |
+| `wheems session end <id>`                                               | Asks for its note, then ends it                                                     |
 
 The agent is any agent in the workspace's `agents/` (or, from milestone 4, the project's team); with
 none named, the session runs the owner's own agent file.

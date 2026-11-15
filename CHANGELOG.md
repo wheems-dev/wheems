@@ -16,6 +16,10 @@ change anything, including commands and config formats, without a migration path
     `wheems slack manifest`) and `wheems engine` (`list`, `install`, `login`, `trust`), which run
     setup's own steps.
   - `wheems config validate` replaces `wheems validate`.
+  - The agents' commands moved too: `wheems chat reply` (was `wheems reply`), `wheems kb note`
+    (was `wheems note`) and `wheems session create` (was `session new`). Agents' built-in
+    instructions use the new names.
+  - In a workspace's folder, `--workspace` defaults to that workspace.
   - The old names still work for a release, and say what they're called now.
 - Setup ends with your first chief of staff saying hello in chat, once per install: it's set up, how to talk to it, and that inviting it to any channel adds another chief. If it can't, setup says why.
 - `wheems doctor --fix` offers to fix what it safely can, saying what it will do and asking before

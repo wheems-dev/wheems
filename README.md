@@ -60,7 +60,7 @@ Wheems was formerly called Opinr.
 ```text
  Slack ──► the Wheems service ──► Herdr core (hc) ──► Claude Code / Codex / opencode
    ▲              │                                         │
-   └── answers ◄──┘◄────── wheems reply, note, kb search, skill propose ◄──┘
+   └── answers ◄──┘◄────── wheems chat reply, kb note, kb search, skill propose ◄──┘
 ```
 
 - **The install** is a git folder, `~/wheems`, holding your config: install-wide settings, the
@@ -273,7 +273,7 @@ Message the Slack app (or the workspace's channel). Each message you send starts
 - A 👀 reaction means your message has reached the agent. It goes when the agent answers.
 - The agent's last message of each turn is posted to the thread as its answer. The answer is
   read from the engine's own record of the conversation, never from the screen.
-- For long work, the agent sends a short progress note first with `wheems reply "…"`.
+- For long work, the agent sends a short progress note first with `wheems chat reply "…"`.
 - Messages sent while the agent is working are passed on when it finishes its turn.
 - Each workspace keeps at most four sessions running. The least recently used idle one is
   stopped to make room, and its conversation resumes where it left off when you next reply.
@@ -297,12 +297,12 @@ work behind the chief, and it tells you what you need to know.
 Ask your chief "open a session to research packaging suppliers and keep it going", and it runs:
 
 ```bash
-wheems session new --title "Packaging suppliers" --purpose "Find five UK packaging suppliers, with prices and minimum orders."
+wheems session create --title "Packaging suppliers" --purpose "Find five UK packaging suppliers, with prices and minimum orders."
 ```
 
 - The session starts working on its purpose at once, in Herdr, and stays open until it's ended.
   It runs the chief's own agent file, or another of the workspace's agents
-  (`wheems session new researcher …`).
+  (`wheems session create researcher …`).
 - A session the chief starts is owned by the chief, whichever thread started it, so it's the
   chief's from any of its threads. Each new thread's session is told the chief's open sessions
   when it starts.
@@ -336,7 +336,7 @@ A session's answers are never posted to a channel. Its last message of each turn
 it goes back to whoever sent the message, and `wheems session show` shows the latest; you can
 also watch it with `hc attach`. Messages and answers are kept as files under
 `.wheems/messages/<workspace>/`.
-Inside an ad-hoc session, `wheems reply` is refused, since there's no chat to reply in: it
+Inside an ad-hoc session, `wheems chat reply` is refused, since there's no chat to reply in: it
 answers its owner instead.
 
 Sessions don't depend on Slack: they live in Wheems's core, and only a chief's conversation
@@ -359,10 +359,10 @@ every page is kept.
 
 ### Notes
 
-Agents write notes with `wheems note`, which reads Markdown on standard input:
+Agents write notes with `wheems kb note`, which reads Markdown on standard input:
 
 ```bash
-wheems note - <<'EOF'
+wheems kb note - <<'EOF'
 # Picked the boat name
 
 Halcyon, over Kestrel, because it's calmer.
@@ -696,7 +696,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 
 | Command                                                             | What it does                                                                                         |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `wheems session new [agent] --title --purpose [--workspace]`        | Starts an ad-hoc session, owned by you, and prints its id                                            |
+| `wheems session create [agent] --title --purpose [--workspace]`     | Starts an ad-hoc session, owned by you, and prints its id                                            |
 | `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                        |
 | `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`              |
 | `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note |
@@ -721,19 +721,22 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 
 **For agents** (these work only inside a session Wheems started)
 
-| Command                                | What it does                                                  |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `wheems reply "…"` or `wheems reply -` | Posts a progress note to the conversation's thread            |
-| `wheems note "…"` or `wheems note -`   | Saves a note to the workspace's inbox                         |
-| `wheems kb search "…"`                 | Searches the agent's own workspace                            |
-| `wheems skill propose <name> [-]`      | Proposes a skill, read from standard input, for you to review |
-| `wheems session …`                     | The session commands above, in the agent's own workspace      |
+| Command                                          | What it does                                                  |
+| ------------------------------------------------ | ------------------------------------------------------------- |
+| `wheems chat reply "…"` or `wheems chat reply -` | Posts a progress note to the conversation's thread            |
+| `wheems kb note "…"` or `wheems kb note -`       | Saves a note to the workspace's inbox                         |
+| `wheems kb search "…"`                           | Searches the agent's own workspace                            |
+| `wheems skill propose <name> [-]`                | Proposes a skill, read from standard input, for you to review |
+| `wheems session …`                               | The session commands above, in the agent's own workspace      |
 
-The agents' commands move under their areas next (`wheems chat reply`, `wheems kb note`), with
-the old names kept for a release. Older names still work for a release and say what they're
-called now: `wheems init` (now `ws create`), `wheems validate` (now `config validate`),
-`wheems slack manifest` (now `channel manifest slack`) and `wheems service install` (now
-`service start`).
+In a workspace's folder (`~/wheems/workspaces/acme/…`), commands that take `--workspace` default
+to that workspace, the way Artisan finds the project it's run in. Inside an agent's session they
+always use its own.
+
+Older names still work for a release and say what they're called now: `wheems init` (now
+`ws create`), `wheems validate` (now `config validate`), `wheems slack manifest` (now
+`channel manifest slack`), `wheems service install` (now `service start`), `wheems reply` (now
+`chat reply`), `wheems note` (now `kb note`) and `wheems session new` (now `session create`).
 
 ## Configuration reference
 

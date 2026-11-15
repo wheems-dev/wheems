@@ -4,13 +4,13 @@ import { defaultHome, paths } from '../../home.js';
 import { request, type ControlRequest, type ControlResponse } from '../../service/control.js';
 import type { SessionDetails } from '../../service/sessions.js';
 import type { SessionRecord } from '../../state/store.js';
-import { callerFrom } from '../caller.js';
+import { callerFrom, workspaceHere } from '../caller.js';
 import type { Io } from '../program.js';
 import { since } from './service.js';
 
 const homeHelp = 'the install folder (default: $WHEEMS_HOME or ~/wheems)';
 const workspaceHelp =
-  "the workspace, when you run it yourself; inside a session it's always the session's own";
+  "the workspace, when you run it yourself (default: the one whose folder you're in); inside a session it's always the session's own";
 const STATES = ['starting', 'working', 'idle', 'stopped', 'ended'] as const;
 const KINDS = ['thread', 'adhoc', 'task'] as const;
 
@@ -20,6 +20,13 @@ export function registerSession(program: Command, io: Io): void {
     .command('session')
     .description(
       'Start, find and end sessions: agent sessions that stay open for one piece of work',
+    );
+
+  /** Who's calling: the session, or the person, in the workspace named or whose folder it is. */
+  const caller = (options: { workspace?: string; home?: string }) =>
+    callerFrom(
+      io.env,
+      options.workspace ?? workspaceHere(io, resolve(options.home ?? defaultHome(io.env))),
     );
 
   const ask = async (
@@ -33,52 +40,59 @@ export function registerSession(program: Command, io: Io): void {
     return answer;
   };
 
-  session
-    .command('new')
-    .description('Start an ad-hoc session, owned by you, working on its purpose at once')
-    .argument('[agent]', "the agent in the workspace's agents/ (default: your own)")
-    .requiredOption('--title <title>', 'a short title, one line')
-    .requiredOption('--purpose <text>', 'what it is for: what to do and what to hand back')
-    .option('--project <name>', 'the project it works on (milestone 4)')
-    .option('--workspace <id>', workspaceHelp)
-    .option('--json', 'print the session as JSON')
-    .option('--home <dir>', homeHelp)
-    .action(
-      async (
-        agent: string | undefined,
-        options: {
-          title: string;
-          purpose: string;
-          project?: string;
-          workspace?: string;
-          json?: boolean;
-          home?: string;
-        },
-      ) => {
-        const answer = await ask(
-          options,
-          {
-            op: 'session-new',
-            caller: callerFrom(io.env, options.workspace),
-            title: options.title,
-            purpose: options.purpose,
-            ...(agent !== undefined && { agent }),
-            ...(options.project !== undefined && { project: options.project }),
+  const create = (command: Command, notice?: () => void) =>
+    command
+      .description('Start an ad-hoc session, owned by you, working on its purpose at once')
+      .argument('[agent]', "the agent in the workspace's agents/ (default: your own)")
+      .requiredOption('--title <title>', 'a short title, one line')
+      .requiredOption('--purpose <text>', 'what it is for: what to do and what to hand back')
+      .option('--project <name>', 'the project it works on (milestone 4)')
+      .option('--workspace <id>', workspaceHelp)
+      .option('--json', 'print the session as JSON')
+      .option('--home <dir>', homeHelp)
+      .action(
+        async (
+          agent: string | undefined,
+          options: {
+            title: string;
+            purpose: string;
+            project?: string;
+            workspace?: string;
+            json?: boolean;
+            home?: string;
           },
-          // Starting an agent can take a while: up to its start-up time before it reports in.
-          180_000,
-        );
-        const created = answer.session;
-        if (!created) throw new Error('The service started no session');
-        if (options.json === true) {
-          io.out(`${JSON.stringify(created, null, 2)}\n`);
-          return;
-        }
-        io.out(
-          `Started ${created.id} (${agentName(created)}): ${created.title ?? ''}\nIt's working on its purpose. See it with: wheems session show ${created.id}\n`,
-        );
-      },
-    );
+        ) => {
+          notice?.();
+          const answer = await ask(
+            options,
+            {
+              op: 'session-new',
+              caller: caller(options),
+              title: options.title,
+              purpose: options.purpose,
+              ...(agent !== undefined && { agent }),
+              ...(options.project !== undefined && { project: options.project }),
+            },
+            // Starting an agent can take a while: up to its start-up time before it reports in.
+            180_000,
+          );
+          const created = answer.session;
+          if (!created) throw new Error('The service started no session');
+          if (options.json === true) {
+            io.out(`${JSON.stringify(created, null, 2)}\n`);
+            return;
+          }
+          io.out(
+            `Started ${created.id} (${agentName(created)}): ${created.title ?? ''}\nIt's working on its purpose. See it with: wheems session show ${created.id}\n`,
+          );
+        },
+      );
+
+  create(session.command('create'));
+  // The old name, kept for a release: it says what it's called now.
+  create(session.command('new', { hidden: true }), () => {
+    io.err('wheems session new is now wheems session create.\n');
+  });
 
   session
     .command('list')
@@ -108,7 +122,7 @@ export function registerSession(program: Command, io: Io): void {
         const kind = oneOf('kind', options.kind, KINDS);
         const answer = await ask(options, {
           op: 'session-list',
-          caller: callerFrom(io.env, options.workspace),
+          caller: caller(options),
           ...(options.mine === true && { mine: true }),
           ...(options.agent !== undefined && { agent: options.agent }),
           ...(options.project !== undefined && { project: options.project }),
@@ -131,7 +145,7 @@ export function registerSession(program: Command, io: Io): void {
       async (words: string[], options: { workspace?: string; json?: boolean; home?: string }) => {
         const answer = await ask(options, {
           op: 'session-search',
-          caller: callerFrom(io.env, options.workspace),
+          caller: caller(options),
           words: words.join(' '),
         });
         io.out(formatSessions(answer.sessions ?? [], options.json === true, 'No session matches.'));
@@ -148,7 +162,7 @@ export function registerSession(program: Command, io: Io): void {
     .action(async (id: string, options: { workspace?: string; json?: boolean; home?: string }) => {
       const answer = await ask(options, {
         op: 'session-show',
-        caller: callerFrom(io.env, options.workspace),
+        caller: caller(options),
         id,
       });
       const details = answer.details;
@@ -203,7 +217,7 @@ export function registerSession(program: Command, io: Io): void {
           options,
           {
             op: 'session-send',
-            caller: callerFrom(io.env, options.workspace),
+            caller: caller(options),
             id,
             text,
             ...(wait && { wait: true, wait_seconds: seconds }),
@@ -233,7 +247,7 @@ export function registerSession(program: Command, io: Io): void {
     .action(async (id: string, options: { workspace?: string; home?: string }) => {
       const answer = await ask(
         options,
-        { op: 'session-end', caller: callerFrom(io.env, options.workspace), id },
+        { op: 'session-end', caller: caller(options), id },
         // It gets up to ten minutes to write its note.
         12 * 60_000,
       );

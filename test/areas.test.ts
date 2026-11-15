@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { workspaceHere } from '../src/cli/caller.js';
 import { COMMAND_GROUPS, createProgram, defaultIo, run, type Io } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
@@ -247,6 +248,56 @@ describe('wheems areas', () => {
       await wheems('ws', 'archive', 'team', '--yes');
       expect((await wheems('ws', 'remove', 'team', '--yes')).code).toBe(0);
       expect(existsSync(join(home, 'archive', 'team'))).toBe(false);
+    });
+  });
+
+  describe('the agents’ commands', () => {
+    it('are under their areas, and the old names still work, saying what they’re called now', async () => {
+      const program = createProgram(io({ out: '', err: '' }));
+      const help = program.createHelp();
+      const chat = program.commands.find((c) => c.name() === 'chat');
+      expect(help.visibleCommands(chat!).map((c) => c.name())).toContain('reply');
+      const kb = program.commands.find((c) => c.name() === 'kb');
+      expect(help.visibleCommands(kb!).map((c) => c.name())).toContain('note');
+      const session = program.commands.find((c) => c.name() === 'session');
+      const actions = help.visibleCommands(session!).map((c) => c.name());
+      expect(actions).toContain('create');
+      expect(actions).not.toContain('new');
+      // Outside a session they refuse, after saying what they're called now.
+      const reply = await wheems('reply', 'hi');
+      expect(reply.err).toContain('wheems reply is now wheems chat reply.\n');
+      expect(reply.err).toContain('wheems reply works inside a session started by Wheems');
+      expect((await wheems('note', 'x')).err).toContain('wheems note is now wheems kb note.\n');
+      expect((await wheems('kb', 'note', 'x')).err).toContain(
+        'wheems kb note works inside a session started by Wheems',
+      );
+      expect((await wheems('session', 'new', '--title', 't', '--purpose', 'p')).err).toContain(
+        'wheems session new is now wheems session create.\n',
+      );
+    });
+  });
+
+  describe('the workspace from the folder you’re in', () => {
+    it('is the default for --workspace, but never inside a session', async () => {
+      await wheems('ws', 'create', 'personal');
+      await wheems('ws', 'create', 'team', '--channel', 'team-chat');
+      const here = (cwd: string, extra: NodeJS.ProcessEnv = {}) =>
+        workspaceHere({ env: { ...env, ...extra }, cwd: () => cwd }, home);
+      expect(here(join(home, 'workspaces', 'team'))).toBe('team');
+      expect(here(join(home, 'workspaces', 'team', 'knowledge', 'pages'))).toBe('team');
+      expect(here(join(home, 'workspaces'))).toBeUndefined();
+      expect(here(home)).toBeUndefined();
+      expect(here(join(home, '..'))).toBeUndefined();
+      expect(here(join(home, 'workspaces', 'team'), { WHEEMS_SESSION: 's1' })).toBeUndefined();
+      // kb search takes it: no --workspace needed in a workspace's folder, though there are two.
+      const capture = { out: '', err: '' };
+      await run(['kb', 'search', 'anything'], {
+        ...io(capture),
+        cwd: () => join(home, 'workspaces', 'team'),
+      });
+      expect(capture.err).not.toContain('Say which workspace');
+      const elsewhere = await wheems('kb', 'search', 'anything');
+      expect(elsewhere.err).toContain('Say which workspace');
     });
   });
 
