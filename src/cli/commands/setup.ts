@@ -165,23 +165,46 @@ export async function ensureInstall(where: Paths): Promise<boolean> {
 }
 
 async function channels(options: SetupOptions, where: Paths): Promise<boolean> {
+  return connectChannel(options, where);
+}
+
+/**
+ * Connects a chat app: its own connect flow, then its tokens saved privately and its connection
+ * in install.yaml. Asks which one unless `driver` says. Setup's Channels step and
+ * `wheems channel connect` both run it.
+ */
+export async function connectChannel(
+  options: SetupOptions,
+  where: Paths,
+  chosen?: string,
+): Promise<boolean> {
   const { ui, registry } = options;
   const catalog = registry.catalog('channel');
   const secrets = await readSecrets(where.secrets);
-  const driver = await ui.select({
-    message: 'Which channel?',
-    choices: catalog.map((entry): Choice<string> => ({
-      value: entry.name,
-      label: entry.label,
-      hint: entry.available
-        ? secrets[entry.name] !== undefined
-          ? 'connected'
-          : entry.description
-        : 'coming in a later version',
-      ...(!entry.available && { disabled: true }),
-    })),
-  });
+  const driver =
+    chosen ??
+    (await ui.select({
+      message: 'Which channel?',
+      choices: catalog.map((entry): Choice<string> => ({
+        value: entry.name,
+        label: entry.label,
+        hint: entry.available
+          ? secrets[entry.name] !== undefined
+            ? 'connected'
+            : entry.description
+          : 'coming in a later version',
+        ...(!entry.available && { disabled: true }),
+      })),
+    }));
   const entry = catalog.find((e) => e.name === driver);
+  if (chosen !== undefined && !entry?.available) {
+    throw new Error(
+      `No channel driver "${chosen}". Choose one of: ${catalog
+        .filter((e) => e.available)
+        .map((e) => e.name)
+        .join(', ')}`,
+    );
+  }
   if (!entry?.connect) {
     ui.warn(`${entry?.label ?? driver} has nothing to set up yet.`);
     return false;
@@ -459,8 +482,21 @@ async function installedEngines(options: SetupOptions): Promise<InstalledEngine[
 
 /** Installs an engine's CLI and signs in, asking before each. */
 async function engines(options: SetupOptions): Promise<boolean> {
+  return setUpEngine(options);
+}
+
+/**
+ * Installs an engine CLI and signs it in, asking before each step. Asks which one unless
+ * `chosen` says. Setup's Engines step and `wheems engine install` both run it.
+ */
+export async function setUpEngine(options: SetupOptions, chosen?: string): Promise<boolean> {
   const { ui, actions } = options;
-  const catalog = options.registry.catalog('engine').filter((e) => e.engine !== undefined);
+  const catalog = options.registry
+    .catalog('engine')
+    .filter((e) => e.engine !== undefined && (chosen === undefined || e.name === chosen));
+  if (chosen !== undefined && catalog.length === 0) {
+    throw new Error(`No engine "${chosen}". Choose one of: ${engineNames(options)}`);
+  }
   const status = await ui.task(
     'Looking for Claude Code, Codex and opencode',
     () =>
@@ -475,21 +511,26 @@ async function engines(options: SetupOptions): Promise<boolean> {
     (found) =>
       `${String(found.filter((f) => f.version !== null).length)} of ${String(found.length)} installed`,
   );
-  const choice = await ui.select({
-    message: 'Which engine?',
-    choices: status.map(({ entry, version, signedIn }): Choice<string> => ({
-      value: entry.name,
-      label: entry.label,
-      hint: !entry.available
-        ? 'coming in a later version'
-        : version === null
-          ? `not installed · ${entry.description}`
-          : [version, signedIn === true ? 'signed in' : signedIn === false ? 'not signed in' : null]
-              .filter((part) => part !== null)
-              .join(' · '),
-      ...(!entry.available && { disabled: true }),
-    })),
-  });
+  const choice =
+    chosen ??
+    (await ui.select({
+      message: 'Which engine?',
+      choices: status.map(({ entry, version, signedIn }): Choice<string> => ({
+        value: entry.name,
+        label: entry.label,
+        hint: !entry.available
+          ? 'coming in a later version'
+          : version === null
+            ? `not installed · ${entry.description}`
+            : [
+                version,
+                signedIn === true ? 'signed in' : signedIn === false ? 'not signed in' : null,
+              ]
+                .filter((part) => part !== null)
+                .join(' · '),
+        ...(!entry.available && { disabled: true }),
+      })),
+    }));
   const picked = status.find((s) => s.entry.name === choice);
   if (!picked) return false;
   const { entry, setup } = picked;
@@ -520,6 +561,15 @@ async function engines(options: SetupOptions): Promise<boolean> {
   }
   ui.success(`${entry.label} is ready`);
   return true;
+}
+
+/** The engines that can be set up, by name, for error messages. */
+export function engineNames(options: Pick<SetupOptions, 'registry'>): string {
+  return options.registry
+    .catalog('engine')
+    .filter((e) => e.engine !== undefined && e.available)
+    .map((e) => e.name)
+    .join(', ');
 }
 
 /**

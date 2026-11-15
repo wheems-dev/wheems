@@ -30,8 +30,9 @@ TypeScript first.
   nightly tidy (built). It will also run tasks, approvals, routines and workflows, and keep a
   small SQLite store of every session it runs (built) and what's waiting (planned), see
   [Sessions](#sessions).
-- **The CLI**, `wheems`: what users and agents run, for example `wheems post updates "…"`,
-  `wheems ask approvals "Deploy?"` and `wheems note`. It replaces hand-written scripts and
+- **The CLI**, `wheems`: what users and agents run, for example `wheems chat post updates "…"`,
+  `wheems chat ask approvals "Deploy?"` and `wheems note`. Commands are grouped by area, like
+  `php artisan` ([cli.md](cli.md)). It replaces hand-written scripts and
   hard-coded channel IDs.
 - **Config**: YAML and Markdown in a git folder. Adding an agent, channel or workflow means
   editing config, not code. See [config.md](config.md).
@@ -81,7 +82,7 @@ Part of using the terminal once, then everything else in chat (built):
 npm install -g wheems   # the same way Claude Code is installed; the command is wheems
 wheems setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
-wheems init acme        # creates a workspace
+wheems ws create acme   # creates a workspace
 wheems doctor           # health check, any time
 ```
 
@@ -344,7 +345,7 @@ from its knowledge base:
 A project shares its workspace's accounts, secrets, integrations, rules and skills, and may
 narrow them. **Only workspaces are confidentiality walls.** Projects keep context clean, not
 secrets: an agent in one project of a workspace is not stopped from reading another's files.
-Doctor, the README and `wheems project new` all say so. The rule: if one chief should be able to
+Doctor, the README and `wheems project create` all say so. The rule: if one chief should be able to
 answer about all of it, make projects in one workspace; if it needs secrecy or other people, make
 a workspace. There is no chief above workspaces; looking across them stays with the read-only
 overseer (later).
@@ -373,16 +374,16 @@ happened without anything being posted.
 **Cards are generated, never written by an agent.** `knowledge/cards/<project>.md` holds the
 project's name, description, lead, channel, status, a "can answer about" list taken from its
 brief's headings, and the latest lines of activity. Code writes it at `project new`, after each
-project note is filed, and at the nightly tidy, so it can't drift; `wheems validate` reports a
+project note is filed, and at the nightly tidy, so it can't drift; `wheems config validate` reports a
 card without a project or a project without a card. The chief's built-in instructions get a
 generated Projects section at each launch, from the `project.yaml` files.
 
-| Command (planned)                                                                  | What it does                                                                                                                                        |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wheems project new <name> [--workspace] [--lead template] [--channel] [--folder]` | Creates the folder, `project.yaml`, a lead from a template, an empty knowledge base and the card; creates or checks the channel; validates; commits |
-| `wheems project list`                                                              | Projects, leads, channels, routing and note counts                                                                                                  |
-| `wheems project rename <old> <new>`                                                | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                                                  |
-| `wheems project archive <name>`                                                    | Moves it to `projects/_archive/`, marks the card archived and stops its channel. Knowledge is never deleted                                         |
+| Command (planned)                                                                     | What it does                                                                                                                                        |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wheems project create <name> [--workspace] [--lead template] [--channel] [--folder]` | Creates the folder, `project.yaml`, a lead from a template, an empty knowledge base and the card; creates or checks the channel; validates; commits |
+| `wheems project list`                                                                 | Projects, leads, channels, routing and note counts                                                                                                  |
+| `wheems project rename <old> <new>`                                                   | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                                                  |
+| `wheems project archive <name>`                                                       | Moves it to `projects/_archive/`, marks the card archived and stops its channel. Knowledge is never deleted                                         |
 
 **Routing: search first, ask for jobs.** The workspace chief's `wheems kb search` covers its own
 pages, the cards, and every project with `routing: search` (the default), with each result
@@ -394,7 +395,7 @@ without hiding disagreements; a timeout gives a partial answer, not an invented 
 
 **Slack.** One app, as now. Each project with a lead gets a channel, `<workspace>-<project>` by
 default, where its lead posts under its own name and icon. `approvals` and `updates` stay one per
-workspace, each post tagged with its project. `wheems project new` creates the channel when the
+workspace, each post tagged with its project. `wheems project create` creates the channel when the
 app may, and otherwise tells you to create it and invite the app; doctor checks it.
 
 ## Sessions
@@ -684,7 +685,7 @@ CRM row, a draft). The result is filed as the session's note, so a task needs no
 
 ### How a task runs
 
-1. `wheems task new` (or a routine, a workflow or a pair) writes `task.md` and records the task in
+1. `wheems task create` (or a routine, a workflow or a pair) writes `task.md` and records the task in
    the [session store](#the-session-store).
 2. The runner prepares the agent in the task's own folder and starts it through the runtime
    driver, on the agent's machine, labelled with the task's id.
@@ -785,7 +786,7 @@ accept:
 ```
 
 When the skill lists steps (a skill procedure), each step has a name in the skill's front matter,
-the agent marks it with `wheems step <name>` as it goes, and the broker records every tool and
+the agent marks it with `wheems task step <name>` as it goes, and the broker records every tool and
 integration call. After the run, Wheems compares the steps expected with the steps marked and the
 calls made, and reports drift: a step skipped, done twice or out of order. That detects drift; it
 can't prevent it, which is what workflows are for.
@@ -946,9 +947,9 @@ An integration can provide an MCP server (local or remote), a CLI such as `gh`, 
 teach agents to use it well, and a connect flow (OAuth in the browser, or a token the user
 types in).
 
-- `wheems connect github` runs the connect flow, and the credential goes into Wheems's secret
+- `wheems integration connect github` runs the connect flow, and the credential goes into Wheems's secret
   store, never into an agent's config.
-- `wheems grant github acme` lets a workspace use it, read-only or full where the integration
+- `wheems integration grant github acme` lets a workspace use it, read-only or full where the integration
   supports it.
 - The agent's engine driver writes the MCP config each engine expects.
 - `wheems doctor` checks that each granted integration still answers and its credential hasn't
@@ -975,7 +976,7 @@ itself: hooks written for Claude Code are ignored by Codex and opencode.
 | 6. Instructions      | The agent is told the rule                                                                                                                | Guidance only                          |
 
 **The broker is the key piece.** Agents never get deploy keys, mail access or channel tokens.
-They ask Wheems, for example `wheems do deploy storefront --to staging`. The broker looks up the
+They ask Wheems, for example `wheems action run deploy storefront --to staging`. The broker looks up the
 workspace's rules, and either acts, asks in `approvals` and waits, or refuses with a reason.
 
 **Rules are written once, in one format.** Wheems turns each rule into every layer that can
@@ -1016,7 +1017,7 @@ broker logs every use (which secret, agent, task and call, never the value). Tod
 
 1. Through an integration's own billing API where there is one (a domain registrar, a cloud
    provider): the purchase is a broker action against the card already on that account.
-2. Otherwise `wheems buy` posts the merchant, items, amount, currency, card and reason with the
+2. Otherwise `wheems purchase request` posts the merchant, items, amount, currency, card and reason with the
    checkout link; you pay on your phone and tap Paid.
 
 Limits per purchase, per day, per month and per agent, and a merchant allowlist, are checked in
@@ -1040,7 +1041,7 @@ payments:
 **Other machines** (planned, milestone 10). An agent can name its `machine:`, falling back to its
 project's and then its workspace's. Herdr already runs terminals on other machines, but that
 alone isn't enough: the launch files, the `wheems` command's link to the service, and the results
-all live on the hub. A small worker, `wheems node`, runs on each machine: it receives an agent's
+all live on the hub. A small worker, `wheems machine run`, runs on each machine: it receives an agent's
 launch files, relays its `wheems` commands to the service, and returns results. Secrets stay on
 the hub, behind the broker. Whether Herdr's SSH link can carry this is the main thing to test.
 

@@ -2,16 +2,12 @@ import { resolve } from 'node:path';
 import { text as readStream } from 'node:stream/consumers';
 import { styleText } from 'node:util';
 import { Command, CommanderError } from 'commander';
-import { crossCheck } from '../config/check.js';
-import { loadInstall, validateFile, type Problem } from '../config/load.js';
+import type { Problem } from '../config/load.js';
 import type { HealthCheck } from '../contracts/driver.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { createDriverRegistry } from '../drivers/index.js';
-import { slackManifest } from '../drivers/channel/slack/setup.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
 import { offerFixes } from '../doctor/fix.js';
-import { stat } from 'node:fs/promises';
-import { initWorkspace } from './commands/init.js';
 import { registerKb } from './commands/kb.js';
 import { registerReview } from './commands/review.js';
 import { registerSkill } from './commands/skill.js';
@@ -19,8 +15,18 @@ import { registerNote } from './commands/note.js';
 import { registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { registerSession } from './commands/session.js';
-import { ensureInstall, setup } from './commands/setup.js';
+import { setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
+import { setupActions } from './setup-actions.js';
+import { channelManifest, registerChannel } from './commands/channel.js';
+import { registerConfig, validate } from './commands/config.js';
+import { registerEngine } from './commands/engine.js';
+import {
+  createWorkspace,
+  registerWorkspace,
+  withCreateOptions,
+  type CreateOptions,
+} from './commands/workspace.js';
 import {
   canWink,
   renderWelcomeHead,
@@ -30,12 +36,11 @@ import {
   welcomeStatus,
   wink,
 } from './welcome.js';
-import { installAndWait, serviceAnswers } from './commands/service.js';
-import { runCommand, runInteractive } from '../util/process.js';
+import { installAndWait } from './commands/service.js';
+import { runInteractive } from '../util/process.js';
 import { request } from '../service/control.js';
 import { SetupCancelled } from '../contracts/setup.js';
-import { paths, tilde } from '../home.js';
-import { shellPath } from '../util/trust.js';
+import { paths } from '../home.js';
 import { packageVersion } from './version.js';
 
 export { packageVersion };
@@ -130,36 +135,6 @@ export function createProgram(io: Io): Command {
     });
 
   program
-    .command('validate')
-    .description(
-      'Validate config files, or a whole install folder with the links between its files',
-    )
-    .argument('[paths...]', 'files or install folders (default: the install folder)')
-    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
-    .action(async (paths: string[], options: { home?: string }) => {
-      const targets = paths.length > 0 ? paths : [options.home ?? defaultHome(io.env)];
-      const problems: Problem[] = [];
-      for (const target of targets) {
-        const path = resolve(target);
-        if ((await stat(path)).isDirectory()) {
-          const install = await loadInstall(path);
-          problems.push(...install.problems, ...crossCheck(install));
-        } else {
-          problems.push(...(await validateFile(path)).problems);
-        }
-      }
-      for (const problem of problems) io.out(`${formatProblem(problem, io.color)}\n`);
-      const errors = problems.filter((p) => p.level === 'error').length;
-      const warnings = problems.length - errors;
-      io.out(
-        errors > 0
-          ? `${paint('red', `${errors} ${errors === 1 ? 'error' : 'errors'}`, io.color)}${warnings > 0 ? `, ${warnings} ${warnings === 1 ? 'warning' : 'warnings'}` : ''}\n`
-          : `${paint('green', 'Valid', io.color)}${warnings > 0 ? `, with ${warnings} ${warnings === 1 ? 'warning' : 'warnings'}` : ''}\n`,
-      );
-      if (errors > 0) process.exitCode = 1;
-    });
-
-  program
     .command('setup')
     .description('Set up Wheems: engines, chat channels, workspaces, search and the service')
     .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
@@ -168,7 +143,6 @@ export function createProgram(io: Io): Command {
         throw new Error('wheems setup asks questions, so it needs a terminal.');
       }
       const home = resolve(options.home ?? defaultHome(io.env));
-      const where = paths(home, io.env);
       const registry = io.registry();
       const ui = clackUi();
       io.out(
@@ -186,41 +160,7 @@ export function createProgram(io: Io): Command {
           env: io.env,
           ui,
           registry,
-          actions: {
-            run: (command, cwd) =>
-              runInteractive(command[0] ?? '', command.slice(1), {
-                ...(cwd !== undefined && { cwd }),
-              }),
-            installService: () => installAndWait(where),
-            serviceRunning: () => serviceAnswers(where),
-            greet: async () => {
-              try {
-                const answer = await request(where.socket, { op: 'greet', once: true });
-                return answer.ok
-                  ? {
-                      ok: true,
-                      message: answer.message ?? '',
-                      ...(answer.skipped === true && { skipped: true }),
-                    }
-                  : { ok: false, message: answer.error };
-              } catch (error) {
-                return {
-                  ok: false,
-                  message: error instanceof Error ? error.message : String(error),
-                };
-              }
-            },
-            copy: async (text) =>
-              process.platform === 'darwin' &&
-              (await runCommand('pbcopy', [], { input: text })).code === 0,
-            openUrl: async (url) =>
-              (await runCommand(process.platform === 'darwin' ? 'open' : 'xdg-open', [url]))
-                .code === 0,
-            doctor: async () => {
-              const report = await runDoctor({ home, registry, env: io.env, quick: true });
-              return { ok: report.ok, report: formatReport(report, true) };
-            },
-          },
+          actions: setupActions(io, home, registry),
         });
         ui.outro('All set. Run wheems setup again any time to change things.');
       } catch (error) {
@@ -232,98 +172,113 @@ export function createProgram(io: Io): Command {
       }
     });
 
+  // Old names, kept for a release: each says what it's called now (see docs/cli.md).
   program
-    .command('init')
-    .description('Create a workspace with its chief of staff (and the install, if there is none)')
-    .argument('<workspace>', 'the workspace id, such as personal')
-    .option('--name <name>', 'its display name (default: from the id)')
-    .option('--channel <channel>', "chat in this channel instead of the bot's direct messages")
-    .option(
-      '--engine <engine>',
-      'what the chief of staff runs in: claude-code, codex or opencode',
-      'claude-code',
-    )
-    .option('--model <model>', "the engine's model (default: the engine's usual one)")
-    .option('--home <dir>', 'the install folder (default: $WHEEMS_HOME or ~/wheems)')
-    .action(
-      async (
-        id: string,
-        options: { name?: string; channel?: string; engine: string; model?: string; home?: string },
-      ) => {
-        const entry = io
-          .registry()
-          .catalog('engine')
-          .find((e) => e.name === options.engine && e.engine);
-        if (!entry?.engine) {
-          const known = io
-            .registry()
-            .catalog('engine')
-            .map((e) => e.name)
-            .join(', ');
-          throw new Error(`No engine "${options.engine}". Choose one of: ${known}`);
-        }
-        const setup = entry.engine;
-        const home = resolve(options.home ?? defaultHome(io.env));
-        // On a fresh machine, init makes the install too, so setup can be scripted.
-        const createdInstall = await ensureInstall(paths(home, io.env));
-        if (createdInstall) io.out(`Created the install at ${home} (a git folder)\n`);
-        const dir = await initWorkspace({
-          home,
-          id,
-          env: io.env,
-          engine: {
-            name: entry.name,
-            model: options.model ?? setup.defaultModel,
-            account: setup.account.name,
-          },
-          accountDriver: setup.account.driver,
-          ...(options.name !== undefined && { name: options.name }),
-          ...(options.channel !== undefined && { channel: options.channel }),
-        });
-        // A trusted install folder covers every workspace in it; ask only when it isn't.
-        const trust =
-          setup.trust !== null && (await setup.trusted?.(home)) !== true ? setup.trust : null;
-        io.out(
-          [
-            `Created ${dir}, with its chief of staff on ${entry.label}`,
-            '',
-            ...(trust !== null
-              ? [
-                  `${entry.label} asks once whether to trust a folder, and nobody can answer it from Slack.`,
-                  'Answer it now for your install folder, which covers every workspace in it: run the two lines below, say yes, then quit it.',
-                  '',
-                  `  cd ${shellPath(tilde(home, io.env))}`,
-                  `  ${trust.join(' ')}`,
-                  '',
-                ]
-              : []),
-            options.channel !== undefined
-              ? `Then invite the bot to #${options.channel.replace(/^#/, '')} and restart the service: wheems restart`
-              : 'Then message the bot in Slack. If the service is already running, restart it first: wheems restart',
-            '',
-          ].join('\n'),
-        );
-      },
-    );
-
-  program
-    .command('slack')
-    .description('Slack helpers')
-    .command('manifest')
-    .description('Print the Slack app manifest to create the app from')
-    .action(() => {
-      io.out(slackManifest());
+    .command('validate', { hidden: true })
+    .argument('[paths...]')
+    .option('--home <dir>')
+    .action(async (targets: string[], options: { home?: string }) => {
+      io.err('wheems validate is now wheems config validate.\n');
+      await validate(io, targets, options);
     });
+  program
+    .command('slack', { hidden: true })
+    .command('manifest')
+    .action(() => {
+      io.err('wheems slack manifest is now wheems channel manifest slack.\n');
+      io.out(channelManifest(io, 'slack'));
+    });
+  withCreateOptions(
+    program.command('init', { hidden: true }).argument('<workspace>', 'the workspace id'),
+  ).action(async (id: string, options: CreateOptions) => {
+    io.err('wheems init is now wheems ws create.\n');
+    await createWorkspace(io, id, options);
+  });
 
   registerService(program, io);
   registerReply(program, io);
   registerNote(program, io);
+  registerWorkspace(program, io);
   registerSession(program, io);
   registerKb(program, io);
   registerSkill(program, io);
+  registerChannel(program, io);
+  registerEngine(program, io);
+  registerConfig(program, io);
   registerReview(program, io);
 
+  program
+    .command('list')
+    .description('Every command, grouped by area, as php artisan list does')
+    .action(() => {
+      io.out(listCommands(program, io.color));
+    });
+
+  for (const command of program.commands) {
+    const group = COMMAND_GROUPS[command.name()];
+    if (group !== undefined) command.helpGroup(group);
+  }
   return program;
+}
+
+/**
+ * The top-level commands and where `--help` and `wheems list` show them. Everything else is an
+ * area: `wheems <area> <action>` (docs/cli.md). A test keeps new top-level commands out of here
+ * unless they're added on purpose.
+ */
+export const COMMAND_GROUPS: Record<string, string> = {
+  setup: 'Start here:',
+  doctor: 'Start here:',
+  list: 'Start here:',
+  status: 'Every day (shortcuts for wheems service …):',
+  start: 'Every day (shortcuts for wheems service …):',
+  stop: 'Every day (shortcuts for wheems service …):',
+  restart: 'Every day (shortcuts for wheems service …):',
+  logs: 'Every day (shortcuts for wheems service …):',
+  review: 'Every day (shortcuts for wheems service …):',
+  workspace: 'Areas: wheems <area> <action>',
+  session: 'Areas: wheems <area> <action>',
+  kb: 'Areas: wheems <area> <action>',
+  skill: 'Areas: wheems <area> <action>',
+  channel: 'Areas: wheems <area> <action>',
+  engine: 'Areas: wheems <area> <action>',
+  service: 'Areas: wheems <area> <action>',
+  config: 'Areas: wheems <area> <action>',
+  reply: 'Agents run these:',
+  note: 'Agents run these:',
+};
+
+/** `wheems list`: every visible command, top-level ones by group, then each area's actions. */
+export function listCommands(program: Command, color: boolean): string {
+  const help = program.createHelp();
+  const lines: string[] = [];
+  const top = help.visibleCommands(program).filter((c) => c.name() !== 'help');
+  const width = 24;
+  for (const group of [...new Set(Object.values(COMMAND_GROUPS))]) {
+    const order = Object.keys(COMMAND_GROUPS);
+    const members = top
+      .filter((c) => COMMAND_GROUPS[c.name()] === group)
+      .sort((a, b) => order.indexOf(a.name()) - order.indexOf(b.name()));
+    if (members.length === 0) continue;
+    lines.push(paint('yellow', group.replace(/:$/, ''), color));
+    for (const command of members) {
+      const actions = help.visibleCommands(command).filter((c) => c.name() !== 'help');
+      const alias = command.aliases()[0];
+      const name = alias !== undefined ? `${command.name()} (${alias})` : command.name();
+      if (actions.length === 0) {
+        lines.push(`  ${paint('green', name.padEnd(width), color)}${command.description()}`);
+        continue;
+      }
+      lines.push(`  ${paint('green', name, color)}`);
+      for (const action of actions) {
+        lines.push(
+          `    ${paint('green', `${alias ?? command.name()} ${action.name()}`.padEnd(width - 2), color)}${action.description()}`,
+        );
+      }
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 /**
@@ -414,13 +369,17 @@ export function formatReport(report: DoctorReport, color: boolean): string {
   return `${lines.join('\n')}\n`;
 }
 
-function formatProblem(problem: Problem, color: boolean): string {
+export function formatProblem(problem: Problem, color: boolean): string {
   const where = problem.line !== undefined ? `${problem.file}:${problem.line}` : problem.file;
   const level =
     problem.level === 'error' ? paint('red', 'error', color) : paint('yellow', 'warning', color);
   return `${where}: ${level} ${problem.message}`;
 }
 
-function paint(format: Parameters<typeof styleText>[0], text: string, color: boolean): string {
+export function paint(
+  format: Parameters<typeof styleText>[0],
+  text: string,
+  color: boolean,
+): string {
   return color ? styleText(format, text) : text;
 }

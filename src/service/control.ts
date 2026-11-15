@@ -68,6 +68,11 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('session-search'), caller: callerSchema, words: z.string() }),
   z.object({ op: z.literal('session-show'), caller: callerSchema, id: z.string().min(1) }),
   z.object({ op: z.literal('session-end'), caller: callerSchema, id: z.string().min(1) }),
+  /**
+   * Stops serving a workspace: unbinds it and stops its sessions; with `forget`, also forgets
+   * its records in the session store. `wheems ws archive` and `ws remove` ask it first.
+   */
+  z.object({ op: z.literal('workspace-retire'), id: z.string().min(1), forget: z.boolean() }),
   /** The first chief greets the person in chat; with `once`, only if it never has. */
   z.object({ op: z.literal('greet'), once: z.boolean().optional() }),
   z.object({

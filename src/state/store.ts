@@ -286,6 +286,18 @@ export class StateStore {
   }
 
   /**
+   * Forgets everything the store holds for a workspace: its standing agents, sessions, threads
+   * and messages. For `wheems ws remove`, which deletes the workspace itself.
+   */
+  forgetWorkspace(workspace: string): void {
+    this.transaction(() => {
+      for (const table of ['messages', 'threads', 'sessions', 'agents']) {
+        this.db.prepare(`DELETE FROM ${table} WHERE workspace = ?`).run(workspace);
+      }
+    });
+  }
+
+  /**
    * Matches the store against the runtime's live sessions, at service start: a session whose
    * runtime session has gone becomes stopped, still resumable.
    */
