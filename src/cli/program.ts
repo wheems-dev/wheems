@@ -193,7 +193,7 @@ export function createProgram(io: Io): Command {
   withCreateOptions(
     program.command('init', { hidden: true }).argument('<workspace>', 'the workspace id'),
   ).action(async (id: string, options: CreateOptions) => {
-    io.err('wheems init is now wheems ws create.\n');
+    io.err('wheems init is now wheems workspace create.\n');
     await createWorkspace(io, id, options);
   });
 
@@ -274,7 +274,7 @@ export function listCommands(program: Command, color: boolean): string {
       lines.push(`  ${paint('green', name, color)}`);
       for (const action of actions) {
         lines.push(
-          `    ${paint('green', `${alias ?? command.name()} ${action.name()}`.padEnd(width - 2), color)}${action.description()}`,
+          `    ${paint('green', `${command.name()} ${action.name()}`.padEnd(width - 2), color)}${action.description()}`,
         );
       }
     }

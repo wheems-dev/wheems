@@ -7,6 +7,8 @@ change anything, including commands and config formats, without a migration path
 
 **Changed**
 
+- Help, messages and docs call the workspace area `wheems workspace` instead of `wheems ws`.
+  `ws` still works, for short.
 - Setup suggests `default` for the first workspace, the one that gets the Slack app's direct
   messages, instead of `personal`.
 

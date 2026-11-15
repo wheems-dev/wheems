@@ -267,7 +267,7 @@ describe('setting Wheems up by inviting it to a channel', () => {
     expect(
       await request(socket, { op: 'workspace-retire', id: 'personal', forget: true }),
     ).toMatchObject({ ok: true });
-    // As wheems ws remove does, once the service has let it go.
+    // As wheems workspace remove does, once the service has let it go.
     rmSync(join(home, 'workspaces', 'personal'), { recursive: true, force: true });
     await channel.join({ id: 'C0PERSON01', name: 'personal-chat' }, 'UME');
     const [offer] = posts('C0PERSON01');

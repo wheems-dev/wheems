@@ -216,13 +216,13 @@ waits at a question nobody sees.
 
 ### Without the menu
 
-Each part has a command of its own, for scripts. `wheems ws create` creates the install too when
-there isn't one, so a fresh machine can start there. `wheems channel connect slack` and
+Each part has a command of its own, for scripts. `wheems workspace create` creates the install
+too when there isn't one, so a fresh machine can start there. `wheems channel connect slack` and
 `wheems engine install` run setup's own steps, because you type tokens and sign in yourself:
 
 ```bash
-wheems ws create default                                    # a workspace on Claude Code
-wheems ws create acme --channel acme-chat --engine codex    # chat in a channel, on Codex
+wheems workspace create default                                   # a workspace on Claude Code
+wheems workspace create acme --channel acme-chat --engine codex   # chat in a channel, on Codex
 wheems start
 wheems doctor
 ```
@@ -236,8 +236,8 @@ workspace has its own folder, agents, chat channel, knowledge base and search in
 isolation, where an agent in one workspace can't read another's files, arrives in milestone 6.
 Projects inside a workspace (milestone 4) keep context clean but are never walls.
 
-`wheems ws create <id>` creates `workspaces/<id>/` (`wheems ws list`, `show`, `rename`,
-`archive`, `restore` and `remove` look after them; see the command reference):
+`wheems workspace create <id>` creates `workspaces/<id>/` (`wheems workspace list`, `show`,
+`rename`, `archive`, `restore` and `remove` look after them; see the command reference):
 
 ```text
 workspaces/default/
@@ -710,17 +710,17 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems status`, `start`, `stop`, `restart` | Shortcuts for `wheems service …`                                                                      |
 | `wheems logs [-n] [-f]`                     | Shortcut for `wheems service logs`                                                                    |
 
-**workspace (`ws`)**
+**workspace** (`ws` for short)
 
-| Command                                                           | What it does                                                                                                                                  |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wheems ws list [--archived]`                                     | The workspaces, where each chats and what its chief runs on; with `--archived`, the archived ones                                             |
-| `wheems ws show <id>`                                             | A workspace's folder, chat, agents and knowledge base                                                                                         |
-| `wheems ws create <id> [--name] [--channel] [--engine] [--model]` | Creates a workspace with its chief of staff (and the install, if there is none). `--engine` is `claude-code` (default), `codex` or `opencode` |
-| `wheems ws rename <id> <name>`                                    | Changes its display name (and its chief's, if that followed the old one); the id and folder stay                                              |
-| `wheems ws archive <id> [--yes]`                                  | Stops serving it (its sessions stop) and moves it to `archive/<id>/`, keeping everything                                                      |
-| `wheems ws restore <id>`                                          | Brings an archived workspace back                                                                                                             |
-| `wheems ws remove <id> [--yes]`                                   | Deletes it for good: its folder and knowledge base, its sessions, messages and search index, and its records. You type its id to confirm      |
+| Command                                                                  | What it does                                                                                                                                  |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `wheems workspace list [--archived]`                                     | The workspaces, where each chats and what its chief runs on; with `--archived`, the archived ones                                             |
+| `wheems workspace show <id>`                                             | A workspace's folder, chat, agents and knowledge base                                                                                         |
+| `wheems workspace create <id> [--name] [--channel] [--engine] [--model]` | Creates a workspace with its chief of staff (and the install, if there is none). `--engine` is `claude-code` (default), `codex` or `opencode` |
+| `wheems workspace rename <id> <name>`                                    | Changes its display name (and its chief's, if that followed the old one); the id and folder stay                                              |
+| `wheems workspace archive <id> [--yes]`                                  | Stops serving it (its sessions stop) and moves it to `archive/<id>/`, keeping everything                                                      |
+| `wheems workspace restore <id>`                                          | Brings an archived workspace back                                                                                                             |
+| `wheems workspace remove <id> [--yes]`                                   | Deletes it for good: its folder and knowledge base, its sessions, messages and search index, and its records. You type its id to confirm      |
 
 **session, kb, skill**
 
@@ -764,7 +764,7 @@ to that workspace, the way Artisan finds the project it's run in. Inside an agen
 always use its own.
 
 Older names still work for a release and say what they're called now: `wheems init` (now
-`ws create`), `wheems validate` (now `config validate`), `wheems slack manifest` (now
+`workspace create`), `wheems validate` (now `config validate`), `wheems slack manifest` (now
 `channel manifest slack`), `wheems service install` (now `service start`), `wheems reply` (now
 `chat reply`), `wheems note` (now `kb note`) and `wheems session new` (now `session create`).
 

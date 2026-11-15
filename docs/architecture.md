@@ -97,7 +97,7 @@ Part of using the terminal once, then everything else in chat (built):
 npm install -g wheems   # the same way Claude Code is installed; the command is wheems
 wheems setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
-wheems ws create acme   # creates a workspace
+wheems workspace create acme   # creates a workspace
 wheems doctor           # health check, any time
 ```
 

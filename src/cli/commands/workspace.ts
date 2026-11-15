@@ -26,7 +26,7 @@ export interface CreateOptions {
   home?: string;
 }
 
-/** The options `wheems ws create` (and the old `wheems init`) take. */
+/** The options `wheems workspace create` (and the old `wheems init`) take. */
 export function withCreateOptions(command: Command): Command {
   return command
     .option('--name <name>', 'its display name (default: from the id)')
@@ -136,7 +136,7 @@ export function registerWorkspace(program: Command, io: Io): void {
         return;
       }
       if (rows.length === 0) {
-        io.out('No workspaces yet. Create one with: wheems ws create <id>\n');
+        io.out('No workspaces yet. Create one with: wheems workspace create <id>\n');
         return;
       }
       io.out(
@@ -233,7 +233,7 @@ export function registerWorkspace(program: Command, io: Io): void {
       const workspace = await findWorkspace(where, id);
       if (options.yes !== true) {
         await confirm(
-          `Archive ${id}? Its chief stops answering and the workspace moves to the archive, with its knowledge base. wheems ws restore brings it back.`,
+          `Archive ${id}? Its chief stops answering and the workspace moves to the archive, with its knowledge base. wheems workspace restore brings it back.`,
         );
       }
       inside(where.workspaces, workspace.dir);
@@ -248,7 +248,7 @@ export function registerWorkspace(program: Command, io: Io): void {
       // The search index is rebuilt from the files when it's restored.
       await rm(join(where.index, id), { recursive: true, force: true });
       io.out(
-        `Archived ${id} to ${tilde(dest, io.env)}${stopped}. Bring it back with: wheems ws restore ${id}\n`,
+        `Archived ${id} to ${tilde(dest, io.env)}${stopped}. Bring it back with: wheems workspace restore ${id}\n`,
       );
     });
 
@@ -261,7 +261,9 @@ export function registerWorkspace(program: Command, io: Io): void {
       const where = paths(home(io, options), io.env);
       const archived = (await archivedWorkspaces(where)).filter((a) => a.id === id).at(-1);
       if (!archived)
-        throw new Error(`No archived workspace ${id}. See them with: wheems ws list --archived`);
+        throw new Error(
+          `No archived workspace ${id}. See them with: wheems workspace list --archived`,
+        );
       const dir = join(where.workspaces, id);
       if (existsSync(dir))
         throw new Error(`There's already a workspace ${id} at ${tilde(dir, io.env)}`);
@@ -284,7 +286,9 @@ export function registerWorkspace(program: Command, io: Io): void {
         ? active
         : (await archivedWorkspaces(where)).filter((a) => a.id === id).at(-1)?.dir;
       if (target === undefined) {
-        throw new Error(`No workspace ${id}, active or archived. See them with: wheems ws list`);
+        throw new Error(
+          `No workspace ${id}, active or archived. See them with: wheems workspace list`,
+        );
       }
       if (options.yes !== true) {
         await confirmTyped(

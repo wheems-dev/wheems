@@ -3,7 +3,7 @@ import type { RuntimeDriver } from '../contracts/runtime.js';
 
 /**
  * Stops and removes every runtime session labelled with a workspace: its chief's threads, its
- * ad-hoc sessions and its filer. For `wheems ws archive` and `ws remove`. Throws if one can't be
+ * ad-hoc sessions and its filer. For `wheems workspace archive` and `workspace remove`. Throws if one can't be
  * stopped, or Herdr can't be asked, so nothing moves or is deleted while an agent may still run.
  * Returns how many it stopped.
  */
