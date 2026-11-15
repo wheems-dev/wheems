@@ -3,6 +3,13 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- Setup suggests `default` for the first workspace, the one that gets the Slack app's direct
+  messages, instead of `personal`.
+
 ## 0.1.0
 
 Released 15 November 2026. Chiefs of staff can now start sessions of their own and talk to

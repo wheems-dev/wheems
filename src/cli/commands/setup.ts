@@ -363,8 +363,8 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
   const taken = new Set(install.workspaces.map((w) => w.id));
   const id = await ui.text({
     message: 'Workspace id',
-    placeholder: taken.has('personal') ? 'acme' : 'personal',
-    initial: taken.has('personal') ? '' : 'personal',
+    placeholder: taken.has('default') ? 'acme' : 'default',
+    initial: taken.has('default') ? '' : 'default',
     validate: (value) =>
       !nameSchema.safeParse(value).success
         ? 'Use lowercase letters, digits and dashes'
@@ -385,6 +385,7 @@ async function workspaces(options: SetupOptions, install: LoadedInstall): Promis
     ? 'channel'
     : await ui.select({
         message: 'Where will you chat with it?',
+        initial: 'direct',
         choices: [
           {
             value: 'direct',

@@ -61,12 +61,13 @@ app serves every workspace, so you do this once:
 5. Give your Slack member ID (your profile, **⋯**, **Copy member ID**). Only people on this list
    can talk to your agents; everyone else is ignored.
 
-**Workspaces** creates a workspace with its chief of staff, such as `personal`, on the engine and
+**Workspaces** creates a workspace with its chief of staff, such as `default`, on the engine and
 model you choose.
 The first chats in the Slack app's direct messages; others chat in a channel you invite the app
 to. Claude Code and Codex ask once whether to trust a folder, and nobody can answer that from
-Slack, so setup offers to open the engine in your install folder: say yes, then press Ctrl+C
-twice to come back. That covers every workspace in the install, so it's asked only once.
+Slack, so setup asks once whether Wheems may mark your install folder trusted for them: say yes.
+That covers every workspace in the install, so it's asked only once (see
+[Trusting the install folder](../README.md#trusting-the-install-folder)).
 
 **Service** runs Wheems in the background under launchd, now and at every login, with the Node.js
 you ran setup with. Nothing answers in chat until it runs, so setup asks again if you leave

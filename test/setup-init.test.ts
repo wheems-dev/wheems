@@ -152,8 +152,8 @@ describe('wheems setup', () => {
       'UNOBODY1',
       'UMEMBER1',
       'workspaces',
-      'personal',
-      'Personal',
+      'default',
+      'Default',
       'direct',
       'claude-opus-5-5', // the model
       true, // let Wheems mark the install folder trusted
@@ -187,7 +187,12 @@ describe('wheems setup', () => {
     const install = await loadInstall(home);
     expect(install.problems).toEqual([]);
     expect(install.config?.connections.slack?.allowed_users).toEqual(['UMEMBER1']);
-    expect(install.workspaces.map((w) => w.id)).toEqual(['personal']);
+    expect(install.workspaces.map((w) => w.id)).toEqual(['default']);
+    // The first workspace is suggested as "default", with the app's direct messages.
+    const suggested = (message: string) => ui.shown.find((s) => s.message === message)?.initial;
+    expect(suggested('Workspace id')).toBe('default');
+    expect(suggested('Its name')).toBe('Default');
+    expect(suggested('Where will you chat with it?')).toBe('direct');
     // New tokens only reach a running service after a restart; setup says so, and how to add people.
     const after = ui.shown.find((x) => x.kind === 'info' && x.message.includes('reads tokens'));
     expect(after?.message).toMatch(/restart it \(Service\)/);
@@ -219,8 +224,8 @@ describe('wheems setup', () => {
       'xapp-good',
       'UMEMBER1',
       'workspaces',
-      'personal',
-      'Personal',
+      'default',
+      'Default',
       'direct',
       'claude-code', // which engine runs its chief of staff
       'claude-opus-5-5',
@@ -236,6 +241,11 @@ describe('wheems setup', () => {
     ]);
     await setup({ home, env, ui, registry: registry(), actions });
     expect(ui.remaining()).toBe(0);
+    // "default" is only suggested while there's no workspace by that name.
+    expect(ui.shown.filter((s) => s.message === 'Workspace id').map((s) => s.initial)).toEqual([
+      'default',
+      '',
+    ]);
     expect(
       ui.shown
         .filter((s) => s.kind === 'question' && s.message.includes('trust'))
@@ -271,8 +281,8 @@ describe('wheems setup', () => {
         'xapp-good',
         'UMEMBER1',
         'workspaces',
-        'personal',
-        'Personal',
+        'default',
+        'Default',
         'direct',
         'claude-opus-5-5',
         false,
@@ -434,8 +444,8 @@ describe('wheems setup', () => {
       'xapp-good',
       'UMEMBER1',
       'workspaces',
-      'personal',
-      'Personal',
+      'default',
+      'Default',
       'direct',
       'claude-opus-5-5', // no trust question follows
       'done',
@@ -461,8 +471,8 @@ describe('wheems setup', () => {
         'xapp-good',
         'UMEMBER1',
         'workspaces',
-        'personal',
-        'Personal',
+        'default',
+        'Default',
         'direct',
         'claude-opus-5-5',
         CANCEL,
@@ -472,7 +482,7 @@ describe('wheems setup', () => {
       registry: registry(),
       actions,
     });
-    expect((await loadInstall(home)).workspaces.map((w) => w.id)).toEqual(['personal']);
+    expect((await loadInstall(home)).workspaces.map((w) => w.id)).toEqual(['default']);
     expect(calls).not.toContain('install service');
   });
 
@@ -575,8 +585,8 @@ describe('wheems setup', () => {
         'xapp-good',
         'UMEMBER1',
         'workspaces',
-        'personal',
-        'Personal',
+        'default',
+        'Default',
         'direct',
         'claude-opus-5-5',
         false,
@@ -611,14 +621,14 @@ describe('wheems init', () => {
   });
 
   it('creates a workspace that validates, chatting in direct messages by default', async () => {
-    const dir = await initWorkspace({ home, id: 'personal' });
-    expect(dir).toBe(join(home, 'workspaces', 'personal'));
+    const dir = await initWorkspace({ home, id: 'default' });
+    expect(dir).toBe(join(home, 'workspaces', 'default'));
     const install = await loadInstall(home);
     expect(install.problems).toEqual([]);
     expect(crossCheck(install).filter((p) => p.level === 'error')).toEqual([]);
     const workspace = install.workspaces[0]!;
     expect(workspace.config).toMatchObject({
-      name: 'Personal',
+      name: 'Default',
       channels: { chat: { connection: 'slack', direct: true } },
     });
     expect(workspace.agents[0]?.definition).toMatchObject({
@@ -629,7 +639,7 @@ describe('wheems init', () => {
   });
 
   it('gives a second workspace a channel, because only one can have direct messages', async () => {
-    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'default' });
     await expect(initWorkspace({ home, id: 'work' })).rejects.toThrow(
       /already chats in the bot's direct messages/,
     );
@@ -643,7 +653,7 @@ describe('wheems init', () => {
   });
 
   it('writes valid config for names and channels with YAML characters in them', async () => {
-    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'default' });
     await initWorkspace({ home, id: 'acme', name: 'Acme: UK # ltd', channel: '#work-chat' });
     const install = await loadInstall(home);
     expect(install.problems).toEqual([]);
@@ -660,21 +670,21 @@ describe('wheems init', () => {
 
   it('refuses bad names, existing workspaces and a missing install', async () => {
     await expect(initWorkspace({ home, id: 'Bad Name' })).rejects.toThrow(/not a workspace name/);
-    await initWorkspace({ home, id: 'personal' });
-    await expect(initWorkspace({ home, id: 'personal' })).rejects.toThrow(/already exists/);
+    await initWorkspace({ home, id: 'default' });
+    await expect(initWorkspace({ home, id: 'default' })).rejects.toThrow(/already exists/);
     await expect(initWorkspace({ home: join(home, 'nowhere'), id: 'x' })).rejects.toThrow(
       /Run wheems setup first/,
     );
   });
 
   it('flags two workspaces claiming the same direct messages', async () => {
-    await initWorkspace({ home, id: 'personal' });
+    await initWorkspace({ home, id: 'default' });
     await initWorkspace({ home, id: 'work', channel: 'work-chat' });
     const file = join(home, 'workspaces', 'work', 'workspace.yaml');
     writeFileSync(file, readFileSync(file, 'utf8').replace('channel: "work-chat"', 'direct: true'));
     const errors = crossCheck(await loadInstall(home)).filter((p) => p.level === 'error');
     expect(errors.map((e) => e.message)).toEqual([
-      'Channel "chat" uses direct messages on "slack", which workspace "personal" already has',
+      'Channel "chat" uses direct messages on "slack", which workspace "default" already has',
     ]);
   });
 });

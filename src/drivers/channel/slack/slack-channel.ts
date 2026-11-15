@@ -129,7 +129,7 @@ export class SlackChannel implements ChannelDriver {
   }
 
   /**
-   * The id of a channel given by name (`personal-chat` or `#personal-chat`) or id.
+   * The id of a channel given by name (`acme-chat` or `#acme-chat`) or id.
    * Returns null when the bot cannot see a channel by that name.
    */
   async resolveChannel(nameOrId: string): Promise<string | null> {
