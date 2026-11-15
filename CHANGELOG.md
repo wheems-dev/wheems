@@ -9,6 +9,11 @@ change anything, including commands and config formats, without a migration path
 
 - Help, messages and docs call the workspace area `wheems workspace` instead of `wheems ws`.
   `ws` still works, for short.
+- Commands use full words. The `kb` area is now `wheems knowledgebase` (`note`, `search`,
+  `reindex`), and `config` is now `wheems configuration` (`validate`). The agents' built-in
+  instructions, messages and docs use the new names. `kb` and `config` still work, hidden, and
+  say what they're called now, so agents' prompts and skills that use `kb` don't break. Config
+  files, folders and YAML keys are unchanged.
 - Setup suggests `default` for the first workspace, the one that gets the Slack app's direct
   messages, instead of `personal`.
 

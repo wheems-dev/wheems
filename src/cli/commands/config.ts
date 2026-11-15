@@ -6,9 +6,21 @@ import { loadInstall, validateFile, type Problem } from '../../config/load.js';
 import { defaultHome } from '../../home.js';
 import { formatProblem, paint, type Io } from '../program.js';
 
-/** `wheems config`: the install's YAML and Markdown config. */
-export function registerConfig(program: Command, io: Io): void {
-  const config = program.command('config').description("Check the install's config files");
+/**
+ * `wheems configuration`: the install's YAML and Markdown config. `config`, its old name, still
+ * works hidden, and says what it's called now.
+ */
+export function registerConfiguration(program: Command, io: Io): void {
+  addActions(program.command('configuration').description("Check the install's config files"), io);
+  addActions(
+    program.command('config', { hidden: true }).hook('preAction', () => {
+      io.err('wheems config is now wheems configuration.\n');
+    }),
+    io,
+  );
+}
+
+function addActions(config: Command, io: Io): void {
   config
     .command('validate')
     .description(

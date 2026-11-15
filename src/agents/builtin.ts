@@ -135,7 +135,7 @@ This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never
   about the person or their work, something finished, something blocked, what's next.
 
   \`\`\`sh
-  wheems kb note - <<'EOF'
+  wheems knowledgebase note - <<'EOF'
   # What this was about
 
   Short paragraphs or bullets, in plain English.
@@ -162,7 +162,7 @@ every note it was built from.
   conversation, search it. Search before saying you don't know.
 
   \`\`\`sh
-  wheems kb search "what did we decide about the boat name"
+  wheems knowledgebase search "what did we decide about the boat name"
   \`\`\`
 
 - Ask in plain words: it searches by meaning as well as by keyword. Try other words if the first
@@ -235,8 +235,8 @@ export function withBuiltins(
 
 /** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */
 export const END_NOTE_REQUEST =
-  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems kb note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
+  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
 
 /** The message Wheems sends when it asks an agent for its note. */
 export const NOTE_REQUEST =
-  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems kb note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';
+  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';

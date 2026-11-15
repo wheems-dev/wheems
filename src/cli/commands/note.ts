@@ -8,11 +8,11 @@ import { speakerFrom } from '../caller.js';
 /** The old `wheems note`, kept for a release: it says what it's called now. */
 export function registerNote(program: Command, io: Io): void {
   addNote(program.command('note', { hidden: true }), io, 'wheems note', () => {
-    io.err('wheems note is now wheems kb note.\n');
+    io.err('wheems note is now wheems knowledgebase note.\n');
   });
 }
 
-/** `wheems kb note`: saves a note to the workspace's knowledge inbox. Agents run it. */
+/** `wheems knowledgebase note`: saves a note to the workspace's knowledge inbox. Agents run it. */
 export function addNote(command: Command, io: Io, name: string, notice?: () => void): void {
   command
     .description("Save a note to the workspace's knowledge inbox (agents run this)")

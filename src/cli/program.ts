@@ -8,7 +8,7 @@ import type { DriverRegistry } from '../contracts/registry.js';
 import { createDriverRegistry } from '../drivers/index.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
 import { offerFixes } from '../doctor/fix.js';
-import { registerKb } from './commands/kb.js';
+import { registerKnowledgebase } from './commands/knowledgebase.js';
 import { registerReview } from './commands/review.js';
 import { registerSkill } from './commands/skill.js';
 import { registerNote } from './commands/note.js';
@@ -19,7 +19,7 @@ import { setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
 import { setupActions } from './setup-actions.js';
 import { channelManifest, registerChannel } from './commands/channel.js';
-import { registerConfig, validate } from './commands/config.js';
+import { registerConfiguration, validate } from './commands/config.js';
 import { registerEngine } from './commands/engine.js';
 import {
   createWorkspace,
@@ -180,7 +180,7 @@ export function createProgram(io: Io): Command {
     .argument('[paths...]')
     .option('--home <dir>')
     .action(async (targets: string[], options: { home?: string }) => {
-      io.err('wheems validate is now wheems config validate.\n');
+      io.err('wheems validate is now wheems configuration validate.\n');
       await validate(io, targets, options);
     });
   program
@@ -203,11 +203,11 @@ export function createProgram(io: Io): Command {
   registerWorkspace(program, io);
   registerChat(program, io);
   registerSession(program, io);
-  registerKb(program, io);
+  registerKnowledgebase(program, io);
   registerSkill(program, io);
   registerChannel(program, io);
   registerEngine(program, io);
-  registerConfig(program, io);
+  registerConfiguration(program, io);
   registerReview(program, io);
 
   program
@@ -242,12 +242,12 @@ export const COMMAND_GROUPS: Record<string, string> = {
   workspace: 'Areas: wheems <area> <action>',
   chat: 'Areas: wheems <area> <action>',
   session: 'Areas: wheems <area> <action>',
-  kb: 'Areas: wheems <area> <action>',
+  knowledgebase: 'Areas: wheems <area> <action>',
   skill: 'Areas: wheems <area> <action>',
   channel: 'Areas: wheems <area> <action>',
   engine: 'Areas: wheems <area> <action>',
   service: 'Areas: wheems <area> <action>',
-  config: 'Areas: wheems <area> <action>',
+  configuration: 'Areas: wheems <area> <action>',
 };
 
 /** `wheems list`: every visible command, top-level ones by group, then each area's actions. */
@@ -255,7 +255,7 @@ export function listCommands(program: Command, color: boolean): string {
   const help = program.createHelp();
   const lines: string[] = [];
   const top = help.visibleCommands(program).filter((c) => c.name() !== 'help');
-  const width = 24;
+  const width = 26;
   for (const group of [...new Set(Object.values(COMMAND_GROUPS))]) {
     const order = Object.keys(COMMAND_GROUPS);
     const members = top

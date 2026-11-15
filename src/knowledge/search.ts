@@ -171,7 +171,7 @@ export class SearchIndex {
       const current = await this.readCurrent();
       if (current === null) {
         throw new Error(
-          `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: wheems kb reindex`,
+          `The ${this.workspace} workspace has no search index yet. The service builds it when it starts, or run: wheems knowledgebase reindex`,
         );
       }
       try {
@@ -429,7 +429,7 @@ export class SearchIndex {
     // Never create a generation here: only a build does.
     if (!(await exists(this.dbFile(current.generation)))) {
       throw new Error(
-        `The ${this.workspace} workspace's search index is missing. The service rebuilds it, or run: wheems kb reindex`,
+        `The ${this.workspace} workspace's search index is missing. The service rebuilds it, or run: wheems knowledgebase reindex`,
       );
     }
     await (this.options.requireFullTextSearch ?? requireFullTextSearch)();

@@ -8,8 +8,16 @@ How the commands are organised, and the rules for adding one. Decided on 14 Nove
 Commands are grouped by area, the way Laravel's `php artisan` groups them by namespace, but with
 spaces rather than colons: `wheems workspace create acme`, not `wheems workspace:create acme`.
 An area is one of the things Wheems is made of: workspaces, sessions, the knowledge base, skills,
-channels, engines, the service, config, and later projects, tasks, routines and workflows.
+channels, engines, the service, configuration, and later projects, tasks, routines and workflows.
 `wheems list` prints every command by area, and `wheems <area> --help` one area's.
+
+### Full words
+
+Areas, actions and options are full words, never abbreviations: `wheems knowledgebase search`,
+not `wheems kb search`; `wheems configuration validate`, not `wheems config validate`. People
+read them in help and docs, and agents read them in their instructions, so a name says what it
+is. A short form may exist only as an alias of the full word. `ws` is the one alias shown, as
+`workspace` (`ws` for short); `kb` and `config`, the old names, stay working but hidden.
 
 ### Actions
 
@@ -59,13 +67,13 @@ appears without being added there on purpose. Everything else goes under an area
 | ---------------------------- | --------------------------------------------------------------------------------- |
 | `workspace` (`ws` for short) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
 | `session`                    | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
-| `kb`                         | ✓ `search`, `note`, `reindex`                                                     |
+| `knowledgebase`              | ✓ `search`, `note`, `reindex`                                                     |
 | `chat`                       | ✓ `reply`; ○ `post <channel>`, `ask <channel>` (M3)                               |
 | `skill`                      | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
 | `channel`                    | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
 | `engine`                     | ✓ `list`, `install`, `login`, `trust`                                             |
 | `service`                    | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
-| `config`                     | ✓ `validate`; ○ `show`                                                            |
+| `configuration`              | ✓ `validate`; ○ `show`                                                            |
 | `agent`                      | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
 | `project`                    | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
 | `task`                       | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |
@@ -123,20 +131,23 @@ standard error:
 | Old                      | Now                             |
 | ------------------------ | ------------------------------- |
 | `wheems init`            | `wheems workspace create`       |
-| `wheems validate`        | `wheems config validate`        |
+| `wheems validate`        | `wheems configuration validate` |
 | `wheems slack manifest`  | `wheems channel manifest slack` |
 | `wheems service install` | `wheems service start`          |
 | `wheems reply`           | `wheems chat reply`             |
-| `wheems note`            | `wheems kb note`                |
+| `wheems note`            | `wheems knowledgebase note`     |
 | `wheems session new`     | `wheems session create`         |
+| `wheems kb …`            | `wheems knowledgebase …`        |
+| `wheems config …`        | `wheems configuration …`        |
 
 The agents' built-in instructions use the new names; a session started before them keeps working
-through the old ones until the release after.
+through the old ones until the release after. `kb` and `config` are areas rather than single
+commands, and stay working, hidden, so agents' prompts and skills that use `kb` don't break.
 
 ## The workspace from the folder you're in
 
 In a workspace's folder (`~/wheems/workspaces/acme/` or anywhere below it), commands that take
 `--workspace` default to that workspace, the way Artisan finds the project it's run in:
-`wheems kb search …` and the `wheems session …` commands. Inside a session started by Wheems they
-always act in the session's own workspace, so this never applies there. `--workspace` still wins
-when it's given.
+`wheems knowledgebase search …` and the `wheems session …` commands. Inside a session started by
+Wheems they always act in the session's own workspace, so this never applies there. `--workspace`
+still wins when it's given.

@@ -101,6 +101,10 @@ describe('wheems areas', () => {
     expect(out).toMatch(/Areas: wheems <area> <action>\n {2}workspace \(ws\)\n {4}workspace list/);
     expect(out).toMatch(/ {4}workspace archive +Stop serving a workspace/);
     expect(out).toMatch(/ {4}channel manifest/);
+    // Full words, with the longest action still clear of its description.
+    expect(out).toMatch(/ {4}knowledgebase search +Search/);
+    expect(out).toMatch(/ {4}configuration validate +Validate/);
+    expect(out).not.toMatch(/^ {2}(kb|config)\b/m);
     expect(out).not.toMatch(/^ {2}(init|validate|slack) /m);
   });
 
@@ -268,8 +272,10 @@ describe('wheems areas', () => {
       const help = program.createHelp();
       const chat = program.commands.find((c) => c.name() === 'chat');
       expect(help.visibleCommands(chat!).map((c) => c.name())).toContain('reply');
-      const kb = program.commands.find((c) => c.name() === 'kb');
-      expect(help.visibleCommands(kb!).map((c) => c.name())).toContain('note');
+      const knowledgebase = program.commands.find((c) => c.name() === 'knowledgebase');
+      expect(help.visibleCommands(knowledgebase!).map((c) => c.name())).toContain('note');
+      // kb, its old name, still works for agents' prompts and skills, but isn't listed.
+      expect(help.visibleCommands(program).map((c) => c.name())).not.toContain('kb');
       const session = program.commands.find((c) => c.name() === 'session');
       const actions = help.visibleCommands(session!).map((c) => c.name());
       expect(actions).toContain('create');
@@ -278,10 +284,15 @@ describe('wheems areas', () => {
       const reply = await wheems('reply', 'hi');
       expect(reply.err).toContain('wheems reply is now wheems chat reply.\n');
       expect(reply.err).toContain('wheems reply works inside a session started by Wheems');
-      expect((await wheems('note', 'x')).err).toContain('wheems note is now wheems kb note.\n');
-      expect((await wheems('kb', 'note', 'x')).err).toContain(
-        'wheems kb note works inside a session started by Wheems',
+      expect((await wheems('note', 'x')).err).toContain(
+        'wheems note is now wheems knowledgebase note.\n',
       );
+      expect((await wheems('knowledgebase', 'note', 'x')).err).toContain(
+        'wheems knowledgebase note works inside a session started by Wheems',
+      );
+      const kb = await wheems('kb', 'note', 'x');
+      expect(kb.err).toContain('wheems kb is now wheems knowledgebase.\n');
+      expect(kb.err).toContain('wheems kb note works inside a session started by Wheems');
       expect((await wheems('session', 'new', '--title', 't', '--purpose', 'p')).err).toContain(
         'wheems session new is now wheems session create.\n',
       );
@@ -300,14 +311,14 @@ describe('wheems areas', () => {
       expect(here(home)).toBeUndefined();
       expect(here(join(home, '..'))).toBeUndefined();
       expect(here(join(home, 'workspaces', 'team'), { WHEEMS_SESSION: 's1' })).toBeUndefined();
-      // kb search takes it: no --workspace needed in a workspace's folder, though there are two.
+      // knowledgebase search takes it: no --workspace needed in a workspace's folder, though there are two.
       const capture = { out: '', err: '' };
-      await run(['kb', 'search', 'anything'], {
+      await run(['knowledgebase', 'search', 'anything'], {
         ...io(capture),
         cwd: () => join(home, 'workspaces', 'team'),
       });
       expect(capture.err).not.toContain('Say which workspace');
-      const elsewhere = await wheems('kb', 'search', 'anything');
+      const elsewhere = await wheems('knowledgebase', 'search', 'anything');
       expect(elsewhere.err).toContain('Say which workspace');
     });
   });

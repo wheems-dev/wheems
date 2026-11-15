@@ -285,7 +285,7 @@ describe('the service', () => {
     expect(channel.sent.at(-1)?.text).toBe('# Report\n\nAll done.');
   });
 
-  it("saves a note with wheems kb note to the conversation's workspace inbox", async () => {
+  it("saves a note with wheems knowledgebase note to the conversation's workspace inbox", async () => {
     const first = await channel.receive({
       channel: 'D1',
       text: 'hello',
@@ -297,7 +297,7 @@ describe('the service', () => {
       `personal:slack:D1:${first}`,
       ['-'],
       '# Said hello\n\nNothing more.\n',
-      'kb note',
+      'knowledgebase note',
     );
     expect(result.code).toBe(0);
     const saved = /^Saved to (workspaces\/personal\/knowledge\/inbox\/.+-said-hello\.md)\.\n$/.exec(
@@ -357,7 +357,7 @@ describe('the service', () => {
       const previous = process.exitCode;
       process.exitCode = undefined;
       try {
-        const code = await run(['kb', ...args], {
+        const code = await run(['knowledgebase', ...args], {
           ...defaultIo(),
           out: (t) => (out += t),
           err: (t) => (err += t),

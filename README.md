@@ -45,7 +45,7 @@ Wheems was formerly called Opinr.
 - [Search](#search)
 - [Skills and review](#skills-and-review)
 - [The service](#the-service)
-- [Doctor and config validate](#doctor-and-config-validate)
+- [Doctor and configuration validate](#doctor-and-configuration-validate)
 - [Command reference](#command-reference)
 - [Configuration reference](#configuration-reference)
 - [Engines](#engines)
@@ -60,7 +60,7 @@ Wheems was formerly called Opinr.
 ```text
  Slack ──► the Wheems service ──► Herdr core (hc) ──► Claude Code / Codex / opencode
    ▲              │                                         │
-   └── answers ◄──┘◄────── wheems chat reply, kb note, kb search, skill propose ◄──┘
+   └── answers ◄──┘◄── wheems chat, knowledgebase, skill ◄──┘
 ```
 
 - **The install** is a git folder, `~/wheems`, holding your config: install-wide settings, the
@@ -388,10 +388,10 @@ every page is kept.
 
 ### Notes
 
-Agents write notes with `wheems kb note`, which reads Markdown on standard input:
+Agents write notes with `wheems knowledgebase note`, which reads Markdown on standard input:
 
 ```bash
-wheems kb note - <<'EOF'
+wheems knowledgebase note - <<'EOF'
 # Picked the boat name
 
 Halcyon, over Kestrel, because it's calmer.
@@ -464,7 +464,7 @@ anything it read changed while it worked, nothing is applied that night.
 Agents search before answering about past work:
 
 ```bash
-wheems kb search "what did we decide about the boat name"
+wheems knowledgebase search "what did we decide about the boat name"
 ```
 
 It searches the agent's own workspace: pages, filed notes and the inbox.
@@ -490,8 +490,8 @@ The index is running state in `.wheems/index/`, never committed and rebuildable 
 service brings it up to date when it starts, after each note is filed, and every ten minutes for
 edits by hand. Only files that changed are read and embedded again.
 
-- `wheems kb reindex` builds a fresh index and swaps it in when it's done, so search keeps working
-  meanwhile. When the service is running, it does the rebuild.
+- `wheems knowledgebase reindex` builds a fresh index and swaps it in when it's done, so search
+  keeps working meanwhile. When the service is running, it does the rebuild.
 - Changing the embedding model rebuilds the index, because vectors from different models can't
   be compared. Until the rebuild finishes, search uses keywords only.
 - If Ollama isn't running, search falls back to keywords and says so. New passages are found by
@@ -643,7 +643,7 @@ date when the service starts. The first time a Wheems with the store starts, it 
 file, it leaves it where it is and won't start, and the log and `wheems doctor` say why: fix the
 file, or remove it to start its threads afresh, then run `wheems restart`.
 
-## Doctor and config validate
+## Doctor and configuration validate
 
 `wheems doctor` checks everything, in sections:
 
@@ -679,12 +679,12 @@ that the store has no record of. Wheems never adopts or removes one; stop it wit
 nothing needs it. It also warns when `.wheems/conversations.json` from an older Wheems is still
 waiting to be imported, and fails when it can't be read.
 
-`wheems config validate` checks config files or a whole install folder, with line numbers:
+`wheems configuration validate` checks config files or a whole install folder, with line numbers:
 
 ```bash
-wheems config validate                       # the install folder
-wheems config validate examples/install      # another one
-wheems config validate workspaces/acme/workspace.yaml
+wheems configuration validate                       # the install folder
+wheems configuration validate examples/install      # another one
+wheems configuration validate workspaces/acme/workspace.yaml
 ```
 
 For a folder it also checks the links between files. Names must point at things that exist, and
@@ -722,7 +722,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems workspace restore <id>`                                          | Brings an archived workspace back                                                                                                             |
 | `wheems workspace remove <id> [--yes]`                                   | Deletes it for good: its folder and knowledge base, its sessions, messages and search index, and its records. You type its id to confirm      |
 
-**session, kb, skill**
+**session, knowledgebase, skill**
 
 | Command                                                             | What it does                                                                                         |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -730,11 +730,11 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                        |
 | `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`              |
 | `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note |
-| `wheems kb search <query...> [--workspace] [--limit]`               | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)              |
-| `wheems kb reindex [--workspace]`                                   | Rebuilds search indexes, every workspace's by default                                                |
+| `wheems knowledgebase search <query...> [--workspace] [--limit]`    | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)              |
+| `wheems knowledgebase reindex [--workspace]`                        | Rebuilds search indexes, every workspace's by default                                                |
 | `wheems skill list`, `show <name> [version]`                        | Lists the library and waiting proposals, or prints a skill's `SKILL.md`                              |
 
-**channel, engine, service, config**
+**channel, engine, service, configuration**
 
 | Command                                                     | What it does                                                                         |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------ |
@@ -747,26 +747,28 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems engine trust <engine>`                              | Asks to mark the install folder trusted for the engine, as setup does                |
 | `wheems service start`, `stop`, `restart`, `status`, `logs` | The background service (the top-level shortcuts do the same)                         |
 | `wheems service run`, `uninstall`                           | Runs the service in this terminal, or removes it from launchd                        |
-| `wheems config validate [paths...]`                         | Validates config files or install folders                                            |
+| `wheems configuration validate [paths...]`                  | Validates config files or install folders                                            |
 
 **For agents** (these work only inside a session Wheems started)
 
-| Command                                          | What it does                                                  |
-| ------------------------------------------------ | ------------------------------------------------------------- |
-| `wheems chat reply "…"` or `wheems chat reply -` | Posts a progress note to the conversation's thread            |
-| `wheems kb note "…"` or `wheems kb note -`       | Saves a note to the workspace's inbox                         |
-| `wheems kb search "…"`                           | Searches the agent's own workspace                            |
-| `wheems skill propose <name> [-]`                | Proposes a skill, read from standard input, for you to review |
-| `wheems session …`                               | The session commands above, in the agent's own workspace      |
+| Command                                                          | What it does                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| `wheems chat reply "…"` or `wheems chat reply -`                 | Posts a progress note to the conversation's thread            |
+| `wheems knowledgebase note "…"` or `wheems knowledgebase note -` | Saves a note to the workspace's inbox                         |
+| `wheems knowledgebase search "…"`                                | Searches the agent's own workspace                            |
+| `wheems skill propose <name> [-]`                                | Proposes a skill, read from standard input, for you to review |
+| `wheems session …`                                               | The session commands above, in the agent's own workspace      |
 
 In a workspace's folder (`~/wheems/workspaces/acme/…`), commands that take `--workspace` default
 to that workspace, the way Artisan finds the project it's run in. Inside an agent's session they
 always use its own.
 
 Older names still work for a release and say what they're called now: `wheems init` (now
-`workspace create`), `wheems validate` (now `config validate`), `wheems slack manifest` (now
-`channel manifest slack`), `wheems service install` (now `service start`), `wheems reply` (now
-`chat reply`), `wheems note` (now `kb note`) and `wheems session new` (now `session create`).
+`workspace create`), `wheems validate` (now `configuration validate`), `wheems slack manifest`
+(now `channel manifest slack`), `wheems service install` (now `service start`), `wheems reply`
+(now `chat reply`), `wheems note` (now `knowledgebase note`) and `wheems session new` (now
+`session create`). The `kb` and `config` areas are now `knowledgebase` and `configuration`; the
+short names stay working, hidden, so agents' prompts and skills that use `kb` don't break.
 
 ## Configuration reference
 
@@ -880,14 +882,14 @@ skills:
 
 ### Environment variables
 
-| Variable              | Meaning                                                                                 |
-| --------------------- | --------------------------------------------------------------------------------------- |
-| `WHEEMS_HOME`         | The install folder (default `~/wheems`)                                                 |
-| `WHEEMS_SECRETS`      | The secrets file (default `~/.config/wheems/secrets.json`, or under `$XDG_CONFIG_HOME`) |
-| `WHEEMS_WORKSPACE`    | The workspace `wheems kb search` searches. Wheems sets it in every agent session        |
-| `WHEEMS_CONVERSATION` | The chat thread a thread session's commands belong to. Wheems sets it in those sessions |
-| `WHEEMS_SESSION`      | The session an agent's commands come from. Wheems sets it in every agent session        |
-| `WHEEMS_NO_ANIMATION` | Set to anything to stop the cloud winking on the welcome screen and in `wheems setup`   |
+| Variable              | Meaning                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------- |
+| `WHEEMS_HOME`         | The install folder (default `~/wheems`)                                                     |
+| `WHEEMS_SECRETS`      | The secrets file (default `~/.config/wheems/secrets.json`, or under `$XDG_CONFIG_HOME`)     |
+| `WHEEMS_WORKSPACE`    | The workspace `wheems knowledgebase search` searches. Wheems sets it in every agent session |
+| `WHEEMS_CONVERSATION` | The chat thread a thread session's commands belong to. Wheems sets it in those sessions     |
+| `WHEEMS_SESSION`      | The session an agent's commands come from. Wheems sets it in every agent session            |
+| `WHEEMS_NO_ANIMATION` | Set to anything to stop the cloud winking on the welcome screen and in `wheems setup`       |
 
 ### Config the schemas accept but nothing uses yet
 
