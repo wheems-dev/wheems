@@ -9,6 +9,7 @@ import { createDriverRegistry } from '../drivers/index.js';
 import { defaultHome, runDoctor, type DoctorReport } from '../doctor/doctor.js';
 import { offerFixes } from '../doctor/fix.js';
 import { registerKnowledgebase } from './commands/knowledgebase.js';
+import { registerWeb } from './commands/web.js';
 import { registerReview } from './commands/review.js';
 import { registerSkill } from './commands/skill.js';
 import { registerNote } from './commands/note.js';
@@ -208,6 +209,7 @@ export function createProgram(io: Io): Command {
   registerChannel(program, io);
   registerEngine(program, io);
   registerConfiguration(program, io);
+  registerWeb(program, io);
   registerReview(program, io);
 
   program
@@ -248,6 +250,7 @@ export const COMMAND_GROUPS: Record<string, string> = {
   engine: 'Areas: wheems <area> <action>',
   service: 'Areas: wheems <area> <action>',
   configuration: 'Areas: wheems <area> <action>',
+  web: 'Areas: wheems <area> <action>',
 };
 
 /** `wheems list`: every visible command, top-level ones by group, then each area's actions. */

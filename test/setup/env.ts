@@ -14,3 +14,5 @@ mkdirSync(engines, { recursive: true });
 process.env.WHEEMS_TEST_REAL_CLAUDE_CONFIG_DIR ??= process.env.CLAUDE_CONFIG_DIR ?? '';
 process.env.CLAUDE_CONFIG_DIR = engines;
 process.env.CODEX_HOME = engines;
+// Services started by tests serve the web app on a free port, never the real one.
+process.env.WHEEMS_WEB_PORT = '0';

@@ -197,7 +197,7 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
   );
   if (await installAndWait(where)) {
     io.out(
-      `${restart ? 'Restarted' : 'Started'}. It runs in the background, and starts again at every login.\n`,
+      `${restart ? 'Restarted' : 'Started'}. It runs in the background, and starts again at every login. It serves the web app too: open it with wheems web open\n`,
     );
     await printStatus(where, io);
     return;

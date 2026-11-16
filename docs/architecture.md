@@ -34,7 +34,7 @@ TypeScript first.
   `wheems chat ask approvals "Deploy?"` and `wheems knowledgebase note`. Commands are grouped by
   area, like `php artisan` ([cli.md](cli.md)), and named in full words (`knowledgebase`, not `kb`);
   short forms are only aliases. It replaces hand-written scripts and hard-coded channel IDs.
-- **The web app** (planned): a local page the service serves, for setting up, watching sessions,
+- **The web app** (first pages built, read-only): a local page the service serves, for setting up, watching sessions,
   reviewing proposals and managing connections, organised by workspace. See [web-app.md](web-app.md).
 - **Config**: YAML and Markdown in a git folder. Adding an agent, channel or workflow means
   editing config, not code. See [config.md](config.md).

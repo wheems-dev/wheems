@@ -45,6 +45,7 @@ Wheems was formerly called Opinr.
 - [Search](#search)
 - [Skills and review](#skills-and-review)
 - [The service](#the-service)
+- [The web app](#the-web-app)
 - [Doctor and configuration validate](#doctor-and-configuration-validate)
 - [Command reference](#command-reference)
 - [Configuration reference](#configuration-reference)
@@ -645,6 +646,25 @@ date when the service starts. The first time a Wheems with the store starts, it 
 file, it leaves it where it is and won't start, and the log and `wheems doctor` say why: fix the
 file, or remove it to start its threads afresh, then run `wheems restart`.
 
+## The web app
+
+A page in your browser for seeing what Wheems is doing: pick a workspace at the top of the
+sidebar, then its **Overview** (its chief of staff with the sessions working for it as a tree,
+the knowledge base and skills), its **Sessions** (each one's state, what you originally asked,
+its purpose and latest messages), and **Setup and health** (doctor's checks). It follows your
+computer's light or dark setting, or the switch at the bottom of the sidebar.
+
+```bash
+wheems web open           # open it in your browser
+wheems web run            # serve it on its own in this terminal, until Ctrl+C
+```
+
+The service serves it whenever it runs, so `wheems start` starts it too, on `127.0.0.1` port 4317
+(`$WHEEMS_WEB_PORT` or `--port` to change it). It only reads for now: to change things, use the
+commands it names. Only this computer can reach it, and only with the link `wheems web open`
+gives, which carries a token kept in `.wheems/web-token`. What comes next is in
+[docs/web-app.md](docs/web-app.md).
+
 ## Doctor and configuration validate
 
 `wheems doctor` checks everything, in sections:
@@ -750,6 +770,8 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems service start`, `stop`, `restart`, `status`, `logs` | The background service (the top-level shortcuts do the same)                         |
 | `wheems service run`, `uninstall`                           | Runs the service in this terminal, or removes it from launchd                        |
 | `wheems configuration validate [paths...]`                  | Validates config files or install folders                                            |
+| `wheems web open [--port]`                                  | Opens the web app in your browser (the service serves it)                            |
+| `wheems web run [--port]`                                   | Serves the web app on its own in this terminal, until Ctrl+C                         |
 
 **For agents** (these work only inside a session Wheems started)
 
@@ -987,9 +1009,9 @@ Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 | 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                    |
 | 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                  |
 
-Alongside them comes **the web app**: a local page from the service, organised by workspace, for
-setup and health, sessions, review, settings and connections, in light and dark. Its first version
-needs only what's built now; see [docs/web-app.md](docs/web-app.md).
+Alongside them comes **the web app**: a local page from the service, organised by workspace. Its
+first pages are built (Overview, Sessions, Setup and health, read-only); review, settings,
+connections and actions come next. See [docs/web-app.md](docs/web-app.md).
 
 Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
 awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's

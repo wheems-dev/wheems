@@ -74,6 +74,7 @@ appears without being added there on purpose. Everything else goes under an area
 | `engine`                     | ✓ `list`, `install`, `login`, `trust`                                             |
 | `service`                    | ✓ `start`, `stop`, `restart`, `status`, `logs`, `run`, `uninstall`                |
 | `configuration`              | ✓ `validate`; ○ `show`                                                            |
+| `web`                        | ✓ `open`, `run`                                                                   |
 | `agent`                      | ○ `list`, `show`, `create [--from <template>]`, `remove` (M5)                     |
 | `project`                    | ○ `list`, `show`, `create`, `rename`, `archive` (M4)                              |
 | `task`                       | ○ `list`, `show`, `create`, `done`, `step` (M5)                                   |

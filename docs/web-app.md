@@ -1,18 +1,30 @@
 # The web app
 
 A page in your browser for setting Wheems up, seeing what your agents are doing and deciding what
-they propose. Designed on 16 November 2026 from a clickable mockup; not built yet. Chat stays the
-way you talk to your chiefs: the web app is for looking things over and changing settings, the
-way `wheems setup`, `wheems status` and `wheems review` are today.
+they propose. Designed on 16 November 2026 from a clickable mockup. Chat stays the way you talk to
+your chiefs: the web app is for looking things over and changing settings, the way `wheems setup`,
+`wheems status` and `wheems review` are today.
+
+**Built so far (stage 1, first part):** the workspace switcher, Overview, Sessions, and Setup and
+health, read-only, in light and dark. Review, Settings, Connections and every action come next;
+until then the pages say which command does it.
 
 ## How it runs
 
-- **Served by the Wheems service**, on `127.0.0.1` only, so it needs nothing else running.
-  `wheems open` opens it in your browser.
+- **Served by the Wheems service**, on `127.0.0.1` port 4317 (or `$WHEEMS_WEB_PORT`), so
+  `wheems start` starts it with everything else. If the port is taken, Wheems runs without it and
+  logs why. `wheems web open` opens it in your browser.
+- **Or on its own:** `wheems web run` serves it in a terminal until Ctrl+C, beside a service that
+  doesn't serve it, such as an older one.
+- **It only reads, for now.** Config from the install folder, the session store opened read-only
+  (a store from an older Wheems is read as if current, without changing it), the service's status
+  over its control socket, and doctor's quick checks.
 - **Only you can use it.** It's local only, and every request needs a token that Wheems keeps in
-  `.wheems/` (readable only by you). `wheems open` passes it once in the address, and the page
-  keeps it in a cookie. The server also checks the `Host` and `Origin` headers, so another site
-  open in your browser can't reach it.
+  `.wheems/web-token` (readable only by you). `wheems web open` passes it once in the address, and
+  the page keeps it in a cookie (HttpOnly, SameSite=Strict). The server also checks the `Host`
+  header and answers only GET, so another site open in your browser can't reach it, and a strict
+  Content-Security-Policy keeps the page to its own script and styles. It loads nothing from the
+  internet.
 - **One set of code paths.** Every change goes through the code the CLI uses: config edits through
   the same loaders and validators, service actions through the same requests the control socket
   takes (`session-send`, `session-end`, `reindex`, `workspace-retire` and the rest). The web app
