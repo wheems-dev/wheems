@@ -985,6 +985,10 @@ Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 | 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                    |
 | 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                  |
 
+Alongside them comes **the web app**: a local page from the service, organised by workspace, for
+setup and health, sessions, review, settings and connections, in light and dark. Its first version
+needs only what's built now; see [docs/web-app.md](docs/web-app.md).
+
 Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
 awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's
 built, with a worked example: growing a website into a lead generator.
@@ -1054,6 +1058,7 @@ yet:
 - [Drivers and plugins](docs/drivers.md): the contracts and their contract tests
 - [The Herdr runtime driver](docs/herdr.md)
 - [Roadmap](docs/roadmap.md): the milestones and open questions
+- [The web app](docs/web-app.md): the planned local page, organised by workspace
 - [Milestone 2 plan](docs/plans/milestone-2.md) and its [research](docs/research/knowledge-loop.md)
 - [Architecture ideas](docs/ideas/architecture.md), the [two design proposals](docs/ideas/proposal-claude.md) ([and the other](docs/ideas/proposal-codex.md)) and [the decisions taken](docs/ideas/decisions.md)
 
