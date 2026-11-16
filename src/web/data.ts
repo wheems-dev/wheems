@@ -10,7 +10,12 @@ import { request, type ServiceReport } from '../service/control.js';
 import { listAboutYou } from '../review/review.js';
 import { readSecrets } from '../secrets.js';
 import { listProposals } from '../skills/proposals.js';
-import { StateStore, type MessageRecord, type SessionRecord } from '../state/store.js';
+import {
+  StateStore,
+  type ChatTurn,
+  type MessageRecord,
+  type SessionRecord,
+} from '../state/store.js';
 
 /**
  * What the web app's pages show, read fresh for each page: config from the install folder, the
@@ -75,6 +80,8 @@ export interface InstallSummary {
 }
 
 export interface SessionMessage {
+  /** Unique among a session's messages, for the page to tell them apart. */
+  key: string;
   who: string;
   initial: string;
   when: string;
@@ -149,7 +156,13 @@ export async function workspacePage(
   };
 }
 
-/** A session's latest messages and answers, newest last, read from their files. */
+/** How many of a session's latest messages and chat turns are shown. */
+const LATEST_MESSAGES = 12;
+
+/**
+ * A session's latest messages, newest last: what was said in its chat thread, and messages
+ * sent to it through Wheems with their answers, read from their files.
+ */
 export async function sessionMessages(
   context: WebContext,
   workspace: string,
@@ -159,26 +172,46 @@ export async function sessionMessages(
   const store = await openStore(where).catch(() => null);
   if (!store) return [];
   let records: MessageRecord[];
+  let turns: ChatTurn[];
   try {
-    records = store.workspace(workspace).messages(session.id, 5);
+    const sessions = store.workspace(workspace);
+    records = sessions.messages(session.id, LATEST_MESSAGES);
+    turns = sessions.chat(session.id, LATEST_MESSAGES);
   } finally {
     store.close();
   }
-  const out: SessionMessage[] = [];
-  for (const record of [...records].sort((a, b) => a.sentAt.localeCompare(b.sentAt))) {
+  const out: SessionMessage[] = turns.map((turn) => {
+    const who =
+      turn.author === 'person' ? 'You' : turn.author === 'agent' ? 'This session' : 'Wheems';
+    return { key: turn.id, who, initial: who.charAt(0), when: turn.at, text: capped(turn.text) };
+  });
+  for (const record of records) {
     const sender =
       record.sender === null ? 'You' : record.sender === session.owner ? 'Its owner' : 'A session';
     const text = await readCappedText(record.messageFile);
-    if (text !== null)
-      out.push({ who: sender, initial: sender.charAt(0), when: record.sentAt, text });
+    if (text !== null) {
+      out.push({
+        key: record.id,
+        who: sender,
+        initial: sender.charAt(0),
+        when: record.sentAt,
+        text,
+      });
+    }
     if (record.answerFile !== null && record.answeredAt !== null) {
       const answer = await readCappedText(record.answerFile);
       if (answer !== null) {
-        out.push({ who: 'This session', initial: 'S', when: record.answeredAt, text: answer });
+        out.push({
+          key: `${record.id}-answer`,
+          who: 'This session',
+          initial: 'S',
+          when: record.answeredAt,
+          text: answer,
+        });
       }
     }
   }
-  return out;
+  return out.sort((a, b) => a.when.localeCompare(b.when)).slice(-LATEST_MESSAGES);
 }
 
 export function doctorReport(context: WebContext): Promise<DoctorReport> {
@@ -298,10 +331,14 @@ async function countMarkdown(dir: string): Promise<number> {
 /** The most of one message or answer shown on a page. */
 const MESSAGE_LIMIT = 4000;
 
+function capped(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > MESSAGE_LIMIT ? `${trimmed.slice(0, MESSAGE_LIMIT)}…` : trimmed;
+}
+
 async function readCappedText(file: string): Promise<string | null> {
   try {
-    const text = (await readFile(file, 'utf8')).trim();
-    return text.length > MESSAGE_LIMIT ? `${text.slice(0, MESSAGE_LIMIT)}…` : text;
+    return capped(await readFile(file, 'utf8'));
   } catch {
     return null;
   }

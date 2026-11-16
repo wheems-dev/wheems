@@ -169,12 +169,12 @@ function Detail({
         <h3>Latest messages</h3>
         {messages.length === 0 ? (
           <p className="muted small">
-            No messages through Wheems yet. A chat thread's messages are in the chat.
+            No messages yet. Chat from before Wheems kept a copy here is only in the chat app.
           </p>
         ) : (
           <div className="msg-list">
             {messages.map((m) => (
-              <div key={`${m.when}-${m.who}`} className="msg">
+              <div key={m.key} className="msg">
                 <span className={`av${m.who === 'This session' ? ' inv' : ''}`}>{m.initial}</span>
                 <div className="grow">
                   <span className="small">

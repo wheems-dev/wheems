@@ -226,6 +226,51 @@ describe('the web app', () => {
     expect((await get('/w/default/sessions/nope')).status).toBe(404);
   });
 
+  it("shows a session's chat and the messages sent to it, oldest first, the latest only", async () => {
+    const state = await StateStore.open(paths(home, env).store);
+    const sessions = state.workspace('default');
+    const at = (minute: number) => `2026-11-16T10:${String(minute).padStart(2, '0')}:00.000Z`;
+    sessions.addChat({ session: 'root', author: 'person', text: 'Find a marina', at: at(1) });
+    sessions.addChat({ session: 'root', author: 'agent', text: 'On it.', at: at(2) });
+    const file = join(home, 'sent.md');
+    writeFileSync(file, 'How are prices looking?');
+    sessions.addMessage({
+      id: 'm1',
+      sender: null,
+      receiver: 'root',
+      messageFile: file,
+      sentAt: at(3),
+    });
+    sessions.addChat({
+      session: 'root',
+      author: 'wheems',
+      text: 'The agent hit an error.',
+      at: at(4),
+    });
+    for (let i = 0; i < 14; i++) {
+      sessions.addChat({
+        session: 'child',
+        author: 'person',
+        text: `ping ${String(i)}`,
+        at: at(10 + i),
+      });
+    }
+    state.close();
+    const root = (await get('/w/default/sessions/root')).json();
+    expect(root.messages.map((m: { who: string; text: string }) => [m.who, m.text])).toEqual([
+      ['You', 'Find a marina'],
+      ['This session', 'On it.'],
+      ['You', 'How are prices looking?'],
+      ['Wheems', 'The agent hit an error.'],
+    ]);
+    const child = (await get('/w/default/sessions/child')).json();
+    expect(child.messages).toHaveLength(12);
+    expect(child.messages[0].text).toBe('ping 2');
+    expect(child.messages[11].text).toBe('ping 13');
+    const keys: string[] = child.messages.map((m: { key: string }) => m.key);
+    expect(new Set(keys).size).toBe(12);
+  });
+
   it('shows a session still running under an ended one, and ended ones when asked', async () => {
     const state = await StateStore.open(paths(home, env).store);
     state
@@ -286,6 +331,7 @@ describe('the web app', () => {
     const detail = await get('/w/default/sessions/old');
     expect(detail.status).toBe(200);
     expect(detail.json().item.session).toMatchObject({ title: 'An old session', ask: null });
+    expect(detail.json().messages).toEqual([]);
     const after = new DatabaseSync(store, { readOnly: true });
     expect(after.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
     after.close();

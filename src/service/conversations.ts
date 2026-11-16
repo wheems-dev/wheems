@@ -21,7 +21,7 @@ import {
   readCapped,
   writeNote,
 } from '../knowledge/notes.js';
-import { sessionLabels } from '../state/store.js';
+import { sessionLabels, type ChatAuthor } from '../state/store.js';
 import { launchSession } from './launch.js';
 import type { Conversation, ConversationStore } from './store.js';
 
@@ -327,6 +327,7 @@ export class ConversationManager {
   private async post(key: string, text: string): Promise<void> {
     const conversation = await this.options.store.get(key);
     if (!conversation) throw new Error(`No conversation ${key}`);
+    const at = new Date();
     const channel = this.channel(conversation.connection);
     const workspace = this.options.bindings.find(
       (b) => b.workspace.id === conversation.workspace,
@@ -338,6 +339,7 @@ export class ConversationManager {
       text,
       ...(identity && channel.capabilities.identities && { identity }),
     });
+    await this.chat(key, 'agent', text, at);
     await this.options.store.touch(key, new Date());
     const watch = this.watches.get(key);
     if (watch) {
@@ -484,6 +486,7 @@ export class ConversationManager {
         // Taken before sending: a quick agent can reply before the turn is being followed.
         const sentAt = Date.now();
         const sent = await this.options.runtime.send(session.id, event.text);
+        if (seen) await this.chat(key, 'person', event.text, new Date(sentAt));
         await this.options.store.touch(key, now);
         await this.options.store.addPending(key);
         this.watchTurn(
@@ -573,6 +576,7 @@ export class ConversationManager {
     // A new thread's first message is the person's ask, which every session started for it keeps.
     const ask = askFrom(event.text);
     if (existing === undefined && ask !== '') await this.options.store.recordAsk(uuidFor(key), ask);
+    if (seen) await this.chat(key, 'person', event.text, now);
     // A new session's turns count from 0; its first turn is the message it was started with.
     // `now` was taken before the session started, so a reply to its first message counts.
     this.watchTurn(
@@ -1208,6 +1212,19 @@ export class ConversationManager {
     const conversation = await this.options.store.get(key);
     const target = conversation?.channel ?? key.split(':')[2] ?? '';
     await channel.send({ channel: target, threadId: thread, text: `_Wheems:_ ${text}` });
+    if (conversation) await this.chat(key, 'wheems', text, new Date());
+  }
+
+  /**
+   * Keeps a turn said in a conversation's thread, to read back in the web app. A turn that
+   * seems to hold a password, token or key is kept only as a line saying so, never the text.
+   * Keeping it is never worth failing the conversation over, so a failure is only logged.
+   */
+  private async chat(key: string, author: ChatAuthor, text: string, at: Date): Promise<void> {
+    const kept = holdsCredential(text) ? CHAT_WITHHELD : text;
+    await this.options.store.recordChat(key, author, kept, at).catch((error: unknown) => {
+      this.options.log(`Conversation ${key}: couldn't keep its chat: ${describe(error)}`);
+    });
   }
 
   private async unmark(channel: ChannelDriver, message: MessageRef): Promise<void> {
@@ -1221,6 +1238,10 @@ export class ConversationManager {
     return channel;
   }
 }
+
+/** What's kept of a chat turn that seemed to hold a password, token or key. */
+export const CHAT_WITHHELD =
+  '(Not kept here: it seemed to hold a password, token or key. It is in the chat.)';
 
 /** One conversation per thread: `<workspace>:<connection>:<channel>:<thread>`. */
 export function conversationKey(

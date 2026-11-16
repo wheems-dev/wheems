@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall, type LoadedInstall } from '../src/config/load.js';
 import {
+  CHAT_WITHHELD,
   ConversationManager,
   askFrom,
   conversationKey,
@@ -194,6 +195,35 @@ describe('conversations', () => {
     expect(sessions).toHaveLength(1);
     expect(received.get(sessions[0]!.id)).toEqual(['one', 'two', 'three']);
     expect(posts().map((p) => p.thread)).toEqual([first, first, first]);
+  });
+
+  it("keeps each thread's chat in the store: the person's messages and the answers", async () => {
+    const first = await dm('one');
+    await settle();
+    await dm('two', first);
+    await settle();
+    const id = uuidFor(conversationKey('personal', 'slack', 'D1', first));
+    const chat = state.workspace('personal').chat(id);
+    expect(chat.map((t) => [t.author, t.text]).reverse()).toEqual([
+      ['person', 'one'],
+      ['agent', 'echo: one'],
+      ['person', 'two'],
+      ['agent', 'echo: two'],
+    ]);
+    expect(chat.every((t) => t.session === id)).toBe(true);
+  });
+
+  it("keeps Wheems's own notices in the chat, and never a turn that seems to hold a secret", async () => {
+    behaviour = () => 'silent';
+    const first = await dm('the token is xoxb-1234567890-abcdefghijkl');
+    await settle();
+    const chat = state
+      .workspace('personal')
+      .chat(uuidFor(conversationKey('personal', 'slack', 'D1', first)))
+      .reverse();
+    expect(chat.map((t) => t.author)).toEqual(['person', 'wheems']);
+    expect(chat[0]?.text).toBe(CHAT_WITHHELD);
+    expect(chat[1]?.text).toMatch(/finished without replying here/);
   });
 
   it('counts a reply that came before the turn was being followed', async () => {

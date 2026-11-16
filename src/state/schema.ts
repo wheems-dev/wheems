@@ -107,6 +107,19 @@ export const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE sessions ADD COLUMN ask TEXT;
   `,
+  // 4: a chat thread's turns, as said in chat: the person's messages, the agent's answers and
+  // Wheems's own notices, so they can be read back (in the web app) without the chat app.
+  `
+  CREATE TABLE chat (
+    id TEXT PRIMARY KEY,
+    workspace TEXT NOT NULL,
+    session TEXT NOT NULL REFERENCES sessions (id),
+    author TEXT NOT NULL CHECK (author IN ('person', 'agent', 'wheems')),
+    text TEXT NOT NULL,
+    at TEXT NOT NULL
+  ) STRICT;
+  CREATE INDEX chat_session ON chat (workspace, session, at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;
