@@ -246,7 +246,17 @@ export function sessionsPage(
             .join('\n')
     }
   </div>
-  <p class="muted small">Watch it with <span class="mono">hc attach ${esc(selected.herdrName ?? selected.id)}</span>, or send it a message with <span class="mono">wheems session send ${esc(selected.id)} "…"</span>. Sending from this page comes next.</p>
+  ${
+    selected.state === 'ended'
+      ? '<p class="muted small">It has ended; it stays as a record.</p>'
+      : `<form method="post" action="/w/${encodeURIComponent(w.id)}/sessions/${encodeURIComponent(selected.id)}" class="stack" style="gap:8px">
+    <label class="stack small">Send it a message
+      <textarea class="field" name="text" rows="3" placeholder="Ask it something…"></textarea>
+    </label>
+    <div class="row"><button class="btn primary" type="submit" name="action" value="send">Send</button><button class="btn" type="submit" name="action" value="end">End this session</button></div>
+  </form>`
+  }
+  <p class="muted small">Watch it work with <span class="mono">hc attach ${esc(selected.herdrName ?? selected.id)}</span>.</p>
 </section>`;
   const body = `
 <header class="stack"><h1>Sessions in ${esc(w.name)}</h1><p class="muted">The chief of staff and the sessions working for it, each in Herdr.</p></header>
@@ -319,9 +329,6 @@ function kv(label: string, value: string, mono = false): string {
   return `<div class="kv"><span>${esc(label)}</span><span${mono ? ' class="mono"' : ''}>${esc(value)}</span></div>`;
 }
 
-const LATER = (what: string, command: string) =>
-  `<p class="muted small">${what} with <span class="mono">${esc(command)}</span>; doing it from this page comes next.</p>`;
-
 export function reviewPage(view: ReviewView): string {
   const w = view.workspace;
   const cards =
@@ -333,14 +340,30 @@ export function reviewPage(view: ReviewView): string {
   <div class="row"><span class="badge info">${p.basedOn === null ? 'New skill' : `New version of v${String(p.basedOn)}`}</span><span class="muted small">Proposed by ${esc(p.agent)} · ${esc(ago(p.created))} ago</span></div>
   <h2><span class="mono">${esc(p.name)}</span></h2>
   ${p.similar.length > 0 ? `<p class="soft small">Close to: ${esc(p.similar.join(', '))}</p>` : ''}
-  <pre class="preview">${esc(p.text)}</pre>
+  <form method="post" action="/w/${encodeURIComponent(w.id)}/review/${encodeURIComponent(p.id)}" class="stack" style="gap:12px">
+    <details><summary class="small" style="cursor:pointer">Read or edit SKILL.md before approving</summary>
+      <label class="stack small" style="margin-top:8px">The skill as it will be added
+        <textarea class="field mono" name="text" rows="14">${esc(p.text)}</textarea>
+      </label>
+    </details>
+    ${
+      p.agents.length > 0
+        ? `<fieldset class="choices"><legend class="small">Which agents in ${esc(w.name)} get it?</legend>${p.agents
+            .map(
+              (a) =>
+                `<label class="choice"><input type="checkbox" name="agents" value="${esc(a.name)}"${a.checked ? ' checked' : ''}> <span class="mono">${esc(a.name)}</span>${a.name === p.agent ? ' <span class="muted small">proposed it</span>' : ''}</label>`,
+            )
+            .join('')}</fieldset>`
+        : ''
+    }
+    <div class="row"><button class="btn primary" type="submit" name="decision" value="approve">Approve</button><button class="btn" type="submit" name="decision" value="decline">Decline</button></div>
+  </form>
 </article>`,
           )
           .join('\n');
   const body = `
 <header class="stack"><h1>Review in ${esc(w.name)}</h1><p class="muted">Agents propose; you decide. Nothing here takes effect until you approve it.</p></header>
 ${cards}
-${view.proposals.length > 0 ? LATER('Approve, edit or decline each', 'wheems review') : ''}
 <section class="card pad stack later"><h2 style="font-size:16px">Approvals history</h2><p class="soft small">When agents ask before acting (milestone 3), each request and your answer will be listed here, with what the agent knew and your original ask.</p></section>`;
   return layout({
     title: `Review · ${w.name}`,
@@ -433,7 +456,7 @@ export function connectionsPage(view: ConnectionsView, workspace: WorkspaceSumma
 export function aboutYouPage(view: AboutYouView, workspace: WorkspaceSummary | null): string {
   const body = `
 <header class="stack"><h1>About you</h1><p class="muted">What every agent in every workspace knows about you, from <span class="mono">about-you.md</span> in the install folder. The nightly tidy suggests changes from what you tell your chiefs; none is made until you approve it.</p></header>
-${view.suggestions.length > 0 ? view.suggestions.map((s) => `<article class="card pad stack" style="gap:12px"><div class="row"><span class="badge info">Suggested change</span>${s.workspace !== null ? `<span class="muted small">From ${esc(s.workspace)}</span>` : ''}</div><pre class="preview">${esc(s.text)}</pre></article>`).join('\n') + LATER('Approve or decline each', 'wheems review') : ''}
+${view.suggestions.length > 0 ? view.suggestions.map((s) => `<article class="card pad stack" style="gap:12px"><div class="row"><span class="badge info">Suggested new version</span>${s.workspace !== null ? `<span class="muted small">From ${esc(s.workspace)}</span>` : ''}</div><pre class="preview">${esc(s.text)}</pre><form method="post" action="/about-you/${encodeURIComponent(s.name)}${workspace ? `?w=${encodeURIComponent(workspace.id)}` : ''}" class="row"><button class="btn primary" type="submit" name="decision" value="approve">Approve</button><button class="btn" type="submit" name="decision" value="decline">Decline</button></form></article>`).join('\n') : ''}
 <section class="card pad stack" style="gap:12px"><h2>about-you.md now</h2>${view.current === null ? '<p class="muted">Empty so far. Your chiefs fill it in as they learn about you, with your approval.</p>' : `<pre class="preview">${esc(view.current)}</pre>`}</section>`;
   return layout({ title: 'About you', install: view.install, workspace, current: 'about', body });
 }

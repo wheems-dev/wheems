@@ -1,4 +1,5 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { runDoctor, type DoctorReport } from '../doctor/doctor.js';
@@ -339,6 +340,8 @@ export interface ProposalView {
   basedOn: number | null;
   similar: string[];
   text: string;
+  /** The workspace's agents, and whether each would get it: whoever proposed it, and any that has it. */
+  agents: { name: string; checked: boolean }[];
 }
 
 export interface ReviewView {
@@ -349,7 +352,8 @@ export interface ReviewView {
 
 /** The skill proposals waiting from one workspace, oldest first. */
 export async function reviewData(context: WebContext, id: string): Promise<ReviewView | null> {
-  const { summary } = await installSummary(context);
+  const { install, summary } = await installSummary(context);
+  const agents = install.workspaces.find((w) => w.id === id)?.agents ?? [];
   const workspace = summary.workspaces.find((w) => w.id === id);
   if (!workspace) return null;
   const where = paths(context.home, context.env);
@@ -365,7 +369,12 @@ export async function reviewData(context: WebContext, id: string): Promise<Revie
         (s) =>
           `${s.kind === 'skill' ? 'skill' : 'proposal'} ${s.name}${s.version !== undefined ? ` v${String(s.version)}` : ''}`,
       ),
-      text: cap(p.text, TEXT_LIMIT),
+      text: p.text,
+      agents: agents.map((a) => ({
+        name: a.definition.name,
+        checked:
+          a.definition.name === p.proposal.agent || a.definition.skills.includes(p.proposal.name),
+      })),
     }));
   return { install: summary, workspace, proposals };
 }
@@ -505,7 +514,8 @@ export interface AboutYouView {
   install: InstallSummary;
   /** about-you.md as it is, or null when it's empty or missing. */
   current: string | null;
-  suggestions: { workspace: string | null; text: string }[];
+  /** Each suggestion's file name, which the page's buttons name it by. */
+  suggestions: { name: string; workspace: string | null; text: string }[];
 }
 
 /** `about-you.md`, read by every agent in every workspace, and the changes waiting for it. */
@@ -524,6 +534,7 @@ export async function aboutYouData(context: WebContext): Promise<AboutYouView> {
         ? null
         : cap(current, TEXT_LIMIT),
     suggestions: suggestions.map((s) => ({
+      name: basename(s.file),
       workspace:
         s.workspace === null
           ? null

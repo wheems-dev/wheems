@@ -664,8 +664,9 @@ wheems web run            # serve it on its own in this terminal, until Ctrl+C
 ```
 
 The service serves it whenever it runs, so `wheems start` starts it too, on `127.0.0.1` port 4317
-(`$WHEEMS_WEB_PORT` or `--port` to change it). It only reads for now: to change things, use the
-commands it names. Only this computer can reach it, and only with the link `wheems web open`
+(`$WHEEMS_WEB_PORT` or `--port` to change it). From it you can approve or decline what your agents
+propose, and send a message to a session or end it; for anything else, use the commands it
+names. Only this computer can reach it, and only with the link `wheems web open`
 gives, which carries a token kept in `.wheems/web-token`. What comes next is in
 [docs/web-app.md](docs/web-app.md).
 
@@ -1014,8 +1015,8 @@ Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 | 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                  |
 
 Alongside them comes **the web app**: a local page from the service, organised by workspace. Its
-first pages are built (Overview, Sessions, Setup and health, read-only); review, settings,
-connections and actions come next. See [docs/web-app.md](docs/web-app.md).
+pages are built, and you can review proposals and talk to sessions from it; editing settings and
+connecting things from it come next. See [docs/web-app.md](docs/web-app.md).
 
 Until milestone 10 the service runs on your Mac under launchd, so agents answer only while it's
 awake. [docs/architecture.md](docs/architecture.md) designs the planned parts and marks what's

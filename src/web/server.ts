@@ -4,6 +4,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { join } from 'node:path';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { paths } from '../home.js';
+import { actOnSession, decideAboutYou, decideProposal, parseForm, type Flash } from './actions.js';
 import { CSS, SCRIPT } from './assets.js';
 import {
   aboutYouData,
@@ -81,15 +82,21 @@ export function webUrl(port: number, token?: string): string {
 }
 
 /**
- * Serves the web app on 127.0.0.1. It only reads for now: config, the session store
- * (read-only) and doctor's checks. Every request needs the token, and the Host header must be
+ * Serves the web app on 127.0.0.1. It reads config, the session store (read-only) and doctor's
+ * checks, and acts only through the code the CLI uses (actions.ts). Every request needs the token, and the Host header must be
  * this address, so neither another user's process nor another site in the browser can use it.
  */
 export async function startWeb(options: WebOptions): Promise<RunningWeb> {
   const token = await webToken(options.home, options.env);
   const context: WebContext = { home: options.home, env: options.env, registry: options.registry };
   // The port it ends up on, known once it listens (port 0 lets the system choose).
-  const web = { port: 0, token, context };
+  const web = {
+    port: 0,
+    token,
+    context,
+    flashes: new Flashes(),
+    log: options.log ?? (() => undefined),
+  };
   const server = createServer((req, res) => {
     handle(req, res, web).catch((error: unknown) => {
       options.log?.(`Web app: ${error instanceof Error ? error.message : String(error)}`);
@@ -134,16 +141,32 @@ function listen(server: Server, port: number): Promise<void> {
 async function handle(
   req: IncomingMessage,
   res: ServerResponse,
-  web: { port: number; token: string; context: WebContext },
+  web: {
+    port: number;
+    token: string;
+    context: WebContext;
+    flashes: Flashes;
+    log: (message: string) => void;
+  },
 ): Promise<void> {
   const allowedHosts = [`127.0.0.1:${String(web.port)}`, `localhost:${String(web.port)}`];
   if (!allowedHosts.includes(req.headers.host ?? '')) {
     send(res, 421, 'Wrong host', 'text/plain; charset=utf-8');
     return;
   }
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    send(res, 405, 'Only GET is served', 'text/plain; charset=utf-8');
+  const posting = req.method === 'POST';
+  if (req.method !== 'GET' && req.method !== 'HEAD' && !posting) {
+    send(res, 405, 'Only GET and POST are served', 'text/plain; charset=utf-8');
     return;
+  }
+  // A form may be sent only from this page: browsers name the page a POST came from, and a
+  // form on another site can't send this one's Origin. The token in the address is a second lock.
+  if (posting) {
+    const origins = allowedHosts.map((h) => `http://${h}`);
+    if (!origins.includes(req.headers.origin ?? '')) {
+      send(res, 403, 'Forms are accepted only from the Wheems page', 'text/plain; charset=utf-8');
+      return;
+    }
   }
   const url = new URL(req.url ?? '/', `http://${allowedHosts[0] ?? ''}`);
   if (url.pathname === '/health') {
@@ -182,9 +205,51 @@ async function handle(
   }
   const base = `/k/${web.token}`;
   const page = (status: number, html: string) => {
-    // Every link on the page stays under the token.
-    send(res, status, html.replaceAll('href="/', `href="${base}/`));
+    // Every link and form on the page stays under the token, and an action's outcome shows once.
+    const flash = web.flashes.take(url.searchParams.get('flash'));
+    const shown = flash
+      ? html.replace(
+          '<div class="wrap">',
+          `<div class="wrap"><p class="card pad flash ${flash.ok ? 'ok' : 'no'}" role="status">${esc(flash.text)}</p>`,
+        )
+      : html;
+    send(
+      res,
+      status,
+      shown.replaceAll('href="/', `href="${base}/`).replaceAll('action="/', `action="${base}/`),
+    );
   };
+
+  if (posting) {
+    const form = parseForm(await readBody(req));
+    const done = (flash: Flash, to: string) => {
+      const sep = to.includes('?') ? '&' : '?';
+      redirect(res, `${base}${to}${sep}flash=${web.flashes.put(flash)}`);
+    };
+    const [area, id, sub, item] = all.slice(2).map((p) => decodeURIComponent(p));
+    if (area === 'w' && id !== undefined && sub === 'review' && item !== undefined) {
+      done(
+        await decideProposal(web.context, id, item, form),
+        `/w/${encodeURIComponent(id)}/review`,
+      );
+      return;
+    }
+    if (area === 'w' && id !== undefined && sub === 'sessions' && item !== undefined) {
+      const flash = await actOnSession(web.context, id, item, form, web.log);
+      done(flash, `/w/${encodeURIComponent(id)}/sessions?s=${encodeURIComponent(item)}`);
+      return;
+    }
+    if (area === 'about-you' && id !== undefined && sub === undefined) {
+      const back = url.searchParams.get('w');
+      done(
+        await decideAboutYou(web.context, id, form),
+        `/about-you${back !== null ? `?w=${encodeURIComponent(back)}` : ''}`,
+      );
+      return;
+    }
+    send(res, 404, 'No such action', 'text/plain; charset=utf-8');
+    return;
+  }
 
   const parts = all.slice(2);
   if (parts.length === 0) {
@@ -292,4 +357,47 @@ function same(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
+}
+
+/** The most a form may send: a skill's text, edited, fits well within it. */
+const MAX_FORM = 256 * 1024;
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_FORM) {
+        reject(new Error('The form is too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+    req.on('error', reject);
+  });
+}
+
+/** Outcomes of actions, each shown once by the page an action returns to, then forgotten. */
+class Flashes {
+  private readonly kept = new Map<string, { flash: Flash; until: number }>();
+
+  put(flash: Flash): string {
+    const now = Date.now();
+    for (const [id, entry] of this.kept) if (entry.until < now) this.kept.delete(id);
+    const id = randomBytes(9).toString('base64url');
+    this.kept.set(id, { flash, until: now + 5 * 60_000 });
+    return id;
+  }
+
+  take(id: string | null): Flash | undefined {
+    if (id === null) return undefined;
+    const entry = this.kept.get(id);
+    this.kept.delete(id);
+    return entry && entry.until >= Date.now() ? entry.flash : undefined;
+  }
 }
