@@ -50,6 +50,36 @@ export function looksLikeSecret(text: string): boolean {
   return SECRET_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+/**
+ * A credential given in words or as a header, which SECRET_PATTERNS can't recognise by its
+ * shape: `password=…`, `token: …`, "my password is …", `Authorization: Bearer …`.
+ */
+const CREDENTIAL_VALUES = [
+  /\b((?:pass(?:word|wd|phrase|code)?|pwd|pin|secret|api[ _-]?key|access[ _-]?key|token)s?)(\s*[:=]\s*|\s+is\s+)("[^"]*"|'[^']*'|\S+)/gi,
+  /\b(bearer|basic)(\s+)([A-Za-z0-9._~+/=-]{8,})/gi,
+];
+
+/**
+ * Text with every credential it seems to hold replaced by `[removed]`: those SECRET_PATTERNS
+ * recognise, and passwords, keys and tokens given in words or as an Authorization header. For
+ * text that is kept for its meaning, such as a session's ask. Returns null for text holding a
+ * private key, which can't be cut out safely.
+ */
+export function withoutCredentials(text: string): string | null {
+  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(text)) return null;
+  let out = text;
+  for (const pattern of SECRET_PATTERNS) {
+    out = out.replace(new RegExp(pattern.source, 'g'), '[removed]');
+  }
+  for (const pattern of CREDENTIAL_VALUES) {
+    out = out.replace(
+      pattern,
+      (_match, word: string, joiner: string) => `${word}${joiner}[removed]`,
+    );
+  }
+  return out;
+}
+
 /** A file's text, cut to a limit, or null when it is missing or holds nothing yet. */
 export async function readCapped(file: string, limit: number): Promise<string | null> {
   let text: string;

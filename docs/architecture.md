@@ -678,8 +678,10 @@ mends older ones when it starts.
   a session's `ask`: a chat thread's first message, cut to 2,000 characters. Every session started
   for the thread, and every session those start, inherits it, and its instructions quote it, so
   work that is handed down stays tied to what was asked. A session the person starts themselves
-  has its purpose as its ask. A message that looks like it holds a password, token or key isn't
-  kept, and the ask isn't searchable. `wheems session show` prints it.
+  has its purpose as its ask. Anything in it that looks like a password, token or key is replaced
+  by `[removed]` first: tokens the notes check recognises, passwords and keys given in words
+  (`password=…`, "my password is …") and Authorization headers. A message holding a private key
+  isn't kept at all. The ask isn't searchable. `wheems session show` prints it.
 - **One store per install, not per workspace.** It holds no content, every row carries its
   workspace, and `max_sessions` counts across workspaces. The workspace filter lives in one module,
   like `hc` calls do.

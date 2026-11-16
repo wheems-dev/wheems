@@ -1064,6 +1064,22 @@ describe('askFrom', () => {
     const long = askFrom('x'.repeat(3000));
     expect(long).toHaveLength(2000);
     expect(long.endsWith('…')).toBe(true);
-    expect(askFrom('my token is xoxb-1234567890-abcdefghij')).toBe('');
+  });
+
+  it('removes credentials from an ask, keeping the rest of what was asked', () => {
+    expect(askFrom('Use xoxb-1234567890-abcdefghij to post')).toBe('Use [removed] to post');
+    expect(askFrom('Log in to the router, password=hunter22, and restart it')).toBe(
+      'Log in to the router, password=[removed] and restart it',
+    );
+    expect(askFrom('Call it with Authorization: Bearer abc.def.ghi1234567')).toBe(
+      'Call it with Authorization: Bearer [removed]',
+    );
+    expect(askFrom('my password is hunter2 so book it')).toBe(
+      'my password is [removed] so book it',
+    );
+    expect(askFrom('api_key: "s3cr3t value"')).toBe('api_key: [removed]');
+    expect(askFrom('-----BEGIN RSA PRIVATE KEY-----\nabc')).toBe('');
+    // Words about passwords, with no value given, stay as they are.
+    expect(askFrom('Remind me to change my passwords')).toBe('Remind me to change my passwords');
   });
 });

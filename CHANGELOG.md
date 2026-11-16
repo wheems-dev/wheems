@@ -10,8 +10,8 @@ change anything, including commands and config formats, without a migration path
 - Sessions keep what you asked: a chat thread's first message is recorded as its session's ask,
   and every session started for it, at any depth, inherits it. Their instructions quote it, so
   work handed down stays tied to what you asked, and `wheems session show` prints it. A session
-  you start yourself has its purpose as its ask. A message that looks like it holds a password,
-  token or key isn't kept.
+  you start yourself has its purpose as its ask. Passwords, tokens and keys in it are replaced by
+  `[removed]` before it's kept.
 
 ## 0.1.1
 
