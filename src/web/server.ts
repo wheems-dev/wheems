@@ -6,13 +6,28 @@ import type { DriverRegistry } from '../contracts/registry.js';
 import { paths } from '../home.js';
 import { CSS, SCRIPT } from './assets.js';
 import {
+  aboutYouData,
+  connectionsData,
   doctorReport,
   installSummary,
+  reviewData,
   sessionMessages,
+  settingsData,
   workspacePage,
+  type InstallSummary,
   type WebContext,
 } from './data.js';
-import { esc, messagePage, overviewPage, sessionsPage, setupPage } from './pages.js';
+import {
+  aboutYouPage,
+  connectionsPage,
+  esc,
+  messagePage,
+  overviewPage,
+  reviewPage,
+  sessionsPage,
+  settingsPage,
+  setupPage,
+} from './pages.js';
 
 /** The web app's port unless `--port` or `WHEEMS_WEB_PORT` says otherwise. */
 export const DEFAULT_WEB_PORT = 4317;
@@ -178,11 +193,43 @@ async function handle(
     redirect(res, first ? `${base}/w/${encodeURIComponent(first.id)}` : `${base}/setup`);
     return;
   }
+  // Install pages keep the workspace the person came from (?w=) in the switcher.
+  const chosen = (summary: InstallSummary) =>
+    summary.workspaces.find((w) => w.id === url.searchParams.get('w')) ??
+    summary.workspaces[0] ??
+    null;
   if (parts[0] === 'setup' && parts.length === 1) {
     const { summary } = await installSummary(web.context);
     const report = await doctorReport(web.context);
-    page(200, setupPage(summary, summary.workspaces[0] ?? null, report));
+    page(200, setupPage(summary, chosen(summary), report));
     return;
+  }
+  if (parts[0] === 'connections' && parts.length === 1) {
+    const view = await connectionsData(web.context);
+    page(200, connectionsPage(view, chosen(view.install)));
+    return;
+  }
+  if (parts[0] === 'about-you' && parts.length === 1) {
+    const view = await aboutYouData(web.context);
+    page(200, aboutYouPage(view, chosen(view.install)));
+    return;
+  }
+  if (parts[0] === 'w' && parts[1] !== undefined && parts.length === 3) {
+    const id = decodeURIComponent(parts[1]);
+    if (parts[2] === 'review') {
+      const view = await reviewData(web.context, id);
+      if (view) {
+        page(200, reviewPage(view));
+        return;
+      }
+    }
+    if (parts[2] === 'settings') {
+      const view = await settingsData(web.context, id);
+      if (view) {
+        page(200, settingsPage(view));
+        return;
+      }
+    }
   }
   if (parts[0] === 'w' && parts[1] !== undefined && parts.length <= 3) {
     const id = decodeURIComponent(parts[1]);

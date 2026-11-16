@@ -652,8 +652,11 @@ file, or remove it to start its threads afresh, then run `wheems restart`.
 A page in your browser for seeing what Wheems is doing: pick a workspace at the top of the
 sidebar, then its **Overview** (its chief of staff with the sessions working for it as a tree,
 the knowledge base and skills), its **Sessions** (each one's state, what you originally asked,
-its purpose and latest messages), and **Setup and health** (doctor's checks). It follows your
-computer's light or dark setting, or the switch at the bottom of the sidebar.
+its purpose and latest messages), its **Review** (skills its agents proposed) and its
+**Settings**. For the whole install there are **Connections** (chat channels, integrations and
+engine accounts, and which workspaces use each), **About you** (`about-you.md` and the changes
+suggested for it) and **Setup and health** (doctor's checks). It follows your computer's light or
+dark setting, or the switch at the bottom of the sidebar.
 
 ```bash
 wheems web open           # open it in your browser

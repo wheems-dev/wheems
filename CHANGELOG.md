@@ -3,6 +3,15 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Added**
+
+- The web app's Review (skills a workspace's agents proposed), Settings (its `workspace.yaml`,
+  agents and pinned skills), Connections (chat channels, integrations and engine accounts, and
+  which workspaces use each; credentials are never shown) and About you (`about-you.md` and the
+  changes suggested for it). Still read-only: each page names the command that acts.
+
 ## 0.1.3
 
 Released 16 November 2026. `wheems start` and `wheems status` show the web app's address, ready

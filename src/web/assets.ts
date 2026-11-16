@@ -81,6 +81,10 @@ p{margin:0}
 .check .grow{flex:1 1 300px}
 .empty{padding:20px;color:var(--muted)}
 .code{display:inline-block;padding:2px 6px;border-radius:6px;background:var(--sunk)}
+.kv{display:flex;justify-content:space-between;gap:16px;padding:10px 0;border-top:1px solid var(--hair);font-size:14px}
+.kv span:first-child{color:var(--muted)}.kv span:last-child{font-weight:600;text-align:right;overflow-wrap:anywhere}
+.preview{margin:0;padding:14px 16px;border-radius:12px;background:#202735;color:#e7e9ef;font:400 13px/1.6 "IBM Plex Mono",ui-monospace,monospace;white-space:pre-wrap;overflow-x:auto;overflow-wrap:anywhere}
+.later{background:var(--sunk);border-style:dashed}
 `;
 
 /** The theme switch: remembers the person's choice, and otherwise follows the computer. */

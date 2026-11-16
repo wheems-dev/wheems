@@ -1,7 +1,11 @@
 import type { DoctorReport } from '../doctor/doctor.js';
 import type { SessionRecord } from '../state/store.js';
 import type {
+  AboutYouView,
+  ConnectionsView,
   InstallSummary,
+  ReviewView,
+  SettingsView,
   SessionMessage,
   TreeItem,
   WorkspacePage,
@@ -18,11 +22,15 @@ export function esc(text: string | number | null | undefined): string {
     .replace(/'/g, '&#39;');
 }
 
-type Current = 'overview' | 'sessions' | 'setup';
+type Current = 'overview' | 'sessions' | 'review' | 'settings' | 'connections' | 'about' | 'setup';
 
 const ICONS = {
   home: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/>',
   chat: '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',
+  check: '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  link: '<path d="M9 7H7a5 5 0 0 0 0 10h2"/><path d="M15 7h2a5 5 0 0 1 0 10h-2"/><path d="M8 12h8"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   tool: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
   twig: '<path d="M5 2v10a4 4 0 0 0 4 4h12"/>',
   updown: '<path d="M8 9l4-4 4 4"/><path d="M8 15l4 4 4-4"/>',
@@ -53,17 +61,21 @@ function layout(options: {
     ${install.workspaces
       .map(
         (w) =>
-          `<a class="mi" href="/w/${encodeURIComponent(w.id)}${current === 'sessions' ? '/sessions' : ''}"${w.id === workspace.id ? ' aria-current="true"' : ''}><span class="av">${esc(w.initial)}</span><span class="grow"><span style="font-weight:700">${esc(w.name)}</span><span class="muted" style="font-size:12px">${esc(w.chat)}</span></span>${w.id === workspace.id ? '<span aria-hidden="true">✓</span>' : ''}</a>`,
+          `<a class="mi" href="/w/${encodeURIComponent(w.id)}${current === 'sessions' || current === 'review' || current === 'settings' ? `/${current}` : ''}"${w.id === workspace.id ? ' aria-current="true"' : ''}><span class="av">${esc(w.initial)}</span><span class="grow"><span style="font-weight:700">${esc(w.name)}</span><span class="muted" style="font-size:12px">${esc(w.chat)}</span></span>${w.id === workspace.id ? '<span aria-hidden="true">✓</span>' : ''}</a>`,
       )
       .join('\n    ')}
   </div>
 </details>`;
+  // Install pages keep the chosen workspace in the switcher.
+  const inWorkspace = workspace === null ? '' : `?w=${encodeURIComponent(workspace.id)}`;
   const workspaceNav =
     workspace === null
       ? ''
       : `<span class="navlabel">${esc(workspace.name)}</span>
     <a href="/w/${encodeURIComponent(workspace.id)}"${here('overview')}>${icon(ICONS.home)}Overview</a>
-    <a href="/w/${encodeURIComponent(workspace.id)}/sessions"${here('sessions')}>${icon(ICONS.chat)}Sessions</a>`;
+    <a href="/w/${encodeURIComponent(workspace.id)}/sessions"${here('sessions')}>${icon(ICONS.chat)}Sessions</a>
+    <a href="/w/${encodeURIComponent(workspace.id)}/review"${here('review')}>${icon(ICONS.check)}<span style="flex:1">Review</span>${workspace.waiting > 0 ? `<span class="badge warn" style="height:20px;padding:0 8px">${String(workspace.waiting)}</span>` : ''}</a>
+    <a href="/w/${encodeURIComponent(workspace.id)}/settings"${here('settings')}>${icon(ICONS.gear)}Settings</a>`;
   const service = install.service.running
     ? `<span class="badge ok">● Service running</span><span class="soft small">Wheems ${esc(install.service.report?.version)}</span>`
     : `<span class="badge no">● Service not running</span><span class="soft small">Start it with <span class="mono">wheems start</span></span>`;
@@ -84,7 +96,9 @@ function layout(options: {
     <nav class="nav" aria-label="Main">
     ${workspaceNav}
     <span class="navlabel">Install</span>
-    <a href="/setup"${here('setup')}>${icon(ICONS.tool)}Setup and health</a>
+    <a href="/connections${inWorkspace}"${here('connections')}>${icon(ICONS.link)}Connections</a>
+    <a href="/about-you${inWorkspace}"${here('about')}>${icon(ICONS.person)}About you</a>
+    <a href="/setup${inWorkspace}"${here('setup')}>${icon(ICONS.tool)}Setup and health</a>
     </nav>
     <div class="foot">${service}<button class="theme" id="theme" type="button">Dark mode</button></div>
   </aside>
@@ -146,7 +160,7 @@ export function overviewPage(page: WorkspacePage): string {
   const chief = page.chief;
   const needs =
     page.proposals > 0
-      ? `<section class="card pad notice row between" aria-labelledby="needs"><div class="stack"><h2 id="needs">Needs you</h2><p class="soft">${String(page.proposals)} skill ${page.proposals === 1 ? 'proposal waits' : 'proposals wait'} for your review. Run <span class="mono">wheems review</span> to go through ${page.proposals === 1 ? 'it' : 'them'}.</p></div></section>`
+      ? `<section class="card pad notice row between" aria-labelledby="needs"><div class="stack"><h2 id="needs">Needs you</h2><p class="soft">${String(page.proposals)} skill ${page.proposals === 1 ? 'proposal waits' : 'proposals wait'} for your review.</p></div><a class="pill" href="/w/${encodeURIComponent(w.id)}/review">Review ${String(page.proposals)}</a></section>`
       : '';
   const tree =
     page.chiefTree.length === 0
@@ -298,4 +312,128 @@ export function ago(iso: string, now = Date.now()): string {
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `${String(hours)} h`;
   return `${String(Math.round(hours / 24))} days`;
+}
+
+/** A label and its value, as a row in a card. */
+function kv(label: string, value: string, mono = false): string {
+  return `<div class="kv"><span>${esc(label)}</span><span${mono ? ' class="mono"' : ''}>${esc(value)}</span></div>`;
+}
+
+const LATER = (what: string, command: string) =>
+  `<p class="muted small">${what} with <span class="mono">${esc(command)}</span>; doing it from this page comes next.</p>`;
+
+export function reviewPage(view: ReviewView): string {
+  const w = view.workspace;
+  const cards =
+    view.proposals.length === 0
+      ? '<section class="card pad"><p class="muted">Nothing waits for review in this workspace.</p></section>'
+      : view.proposals
+          .map(
+            (p) => `<article class="card pad stack" style="gap:14px">
+  <div class="row"><span class="badge info">${p.basedOn === null ? 'New skill' : `New version of v${String(p.basedOn)}`}</span><span class="muted small">Proposed by ${esc(p.agent)} · ${esc(ago(p.created))} ago</span></div>
+  <h2><span class="mono">${esc(p.name)}</span></h2>
+  ${p.similar.length > 0 ? `<p class="soft small">Close to: ${esc(p.similar.join(', '))}</p>` : ''}
+  <pre class="preview">${esc(p.text)}</pre>
+</article>`,
+          )
+          .join('\n');
+  const body = `
+<header class="stack"><h1>Review in ${esc(w.name)}</h1><p class="muted">Agents propose; you decide. Nothing here takes effect until you approve it.</p></header>
+${cards}
+${view.proposals.length > 0 ? LATER('Approve, edit or decline each', 'wheems review') : ''}
+<section class="card pad stack later"><h2 style="font-size:16px">Approvals history</h2><p class="soft small">When agents ask before acting (milestone 3), each request and your answer will be listed here, with what the agent knew and your original ask.</p></section>`;
+  return layout({
+    title: `Review · ${w.name}`,
+    install: view.install,
+    workspace: w,
+    current: 'review',
+    body,
+  });
+}
+
+export function settingsPage(view: SettingsView): string {
+  const w = view.workspace;
+  const chief = view.chief;
+  const body = `
+<header class="stack"><h1>${esc(w.name)} settings</h1><p class="muted">From <span class="mono">workspaces/${esc(w.id)}/workspace.yaml</span>, its agent files and <span class="mono">skills.yaml</span>. Edit those files, then <span class="mono">wheems restart</span>; editing here comes next.</p></header>
+<div class="grid">
+  <section class="card pad stack" aria-labelledby="chief"><h2 id="chief">Chief of staff</h2>
+    ${chief ? kv('Agent file', chief.file, true) + kv('Engine', chief.engine) + kv('Model', chief.model, true) + kv('Account', chief.account, true) + kv('Permissions', chief.permissions) : '<p class="muted">No chief of staff agent file found.</p>'}
+    ${view.postsAs !== null ? kv('Posts as', view.postsAs) : ''}
+  </section>
+  <section class="card pad stack" aria-labelledby="chat"><h2 id="chat">Chat and sessions</h2>
+    ${view.channels.map((c) => kv(c.name === 'chat' ? 'Chats in' : `Channel ${c.name}`, c.place)).join('')}
+    ${kv('Open sessions per owner', `up to ${String(view.sessions.maxOpenPerOwner)}`)}
+    ${kv('Sessions may start sessions', `${String(view.sessions.maxDepth)} levels deep`)}
+  </section>
+  <section class="card pad stack" aria-labelledby="kb"><h2 id="kb">Knowledge base</h2>
+    ${kv('Folder', `workspaces/${w.id}/knowledge`, true)}
+    ${kv('A note is asked for after', view.knowledge.noteAfterIdle === 0 ? 'never' : `${String(view.knowledge.noteAfterIdle)} min quiet`)}
+    ${kv('Nightly tidy', view.knowledge.tidyAt)}
+  </section>
+  <section class="card pad stack" aria-labelledby="skills"><h2 id="skills">Skills</h2>
+    ${view.skills.length === 0 ? '<p class="muted">None pinned yet.</p>' : view.skills.map((s) => kv(s.name, `v${String(s.version)}`, true)).join('')}
+    ${kv('Budget', `${String(view.skills.length)} of ${String(view.skillBudget)}`)}
+  </section>
+  <section class="card pad stack" aria-labelledby="access"><h2 id="access">Accounts and connections it may use</h2>
+    ${view.accounts.map((a) => kv('Account', a, true)).join('')}
+    ${view.integrations.length === 0 ? '<p class="muted small">No integrations granted. They arrive in milestone 9.</p>' : view.integrations.map((i) => kv(i.name, i.access, true)).join('')}
+    <a class="small" href="/connections">All connections</a>
+  </section>
+  <section class="card pad stack" aria-labelledby="agents"><h2 id="agents">Agents</h2>
+    ${view.agents.map((a) => kv(a.name, `${a.engine} · ${a.model}`)).join('')}
+  </section>
+</div>
+<section class="card pad stack" aria-labelledby="careful"><h2 id="careful">Archive or remove ${esc(w.name)}</h2>
+  <p class="soft">Archive stops its chief and sessions and keeps everything, to bring back later: <span class="mono">wheems workspace archive ${esc(w.id)}</span>. Remove deletes its folder, knowledge base, sessions and records for good: <span class="mono">wheems workspace remove ${esc(w.id)}</span>.</p>
+</section>`;
+  return layout({
+    title: `Settings · ${w.name}`,
+    install: view.install,
+    workspace: w,
+    current: 'settings',
+    body,
+  });
+}
+
+export function connectionsPage(view: ConnectionsView, workspace: WorkspaceSummary | null): string {
+  const uses = (names: string[]) =>
+    names.length === 0
+      ? '<span class="muted small">Not used by any workspace</span>'
+      : names.map((n) => `<span class="tag small">${esc(n)}</span>`).join(' ');
+  const chats = view.connections.filter((c) => c.kind === 'chat');
+  const integrations = view.connections.filter((c) => c.kind === 'integration');
+  const row = (c: (typeof view.connections)[number]) =>
+    `<div class="check"><span class="badge ${c.connected ? 'ok' : 'warn'}">${c.connected ? 'Connected' : 'No credentials'}</span><span class="grow"><span><b>${esc(c.name)}</b> <span class="muted small">${esc(c.driver)}${c.kind === 'chat' ? ` · ${String(c.allowedUsers)} ${c.allowedUsers === 1 ? 'person' : 'people'} allowed` : ''}</span></span><span>${uses(c.usedBy)}</span></span></div>`;
+  const body = `
+<header class="stack"><h1>Connections</h1><p class="muted">Connected once for the whole install, with credentials kept outside the install folder. Each workspace then chooses which it may use.</p></header>
+<section class="card" style="overflow:hidden"><div class="group"><h2>Chat channels</h2></div>
+  ${chats.length === 0 ? '<p class="empty">None yet. Connect one with <span class="mono">wheems channel connect slack</span>.</p>' : chats.map(row).join('')}
+</section>
+<section class="card" style="overflow:hidden"><div class="group"><span class="grow"><h2>Integrations and MCP servers</h2><span class="muted small" style="font-weight:500">Outside services agents use, reached through Wheems's broker. Connecting and granting them arrives in milestone 9.</span></span></div>
+  ${integrations.length === 0 ? '<p class="empty">None connected.</p>' : integrations.map(row).join('')}
+</section>
+<section class="card" style="overflow:hidden"><div class="group"><span class="grow"><h2>Engine accounts</h2><span class="muted small" style="font-weight:500">The subscriptions and API keys agents run on. Sign in with <span class="mono">wheems engine login &lt;engine&gt;</span>.</span></span></div>
+  ${view.accounts
+    .map(
+      (a) =>
+        `<div class="check"><span class="badge ${a.needsSecret && !a.hasSecret ? 'warn' : 'idle'}">${a.needsSecret ? (a.hasSecret ? 'Key saved' : 'No key yet') : 'Signs in'}</span><span class="grow"><span><b class="mono">${esc(a.name)}</b> <span class="muted small">${esc(a.driver)}${a.maxSessions !== null ? ` · up to ${String(a.maxSessions)} sessions` : ''}</span></span><span>${uses(a.usedBy)}</span></span></div>`,
+    )
+    .join('')}
+</section>`;
+  return layout({
+    title: 'Connections',
+    install: view.install,
+    workspace,
+    current: 'connections',
+    body,
+  });
+}
+
+export function aboutYouPage(view: AboutYouView, workspace: WorkspaceSummary | null): string {
+  const body = `
+<header class="stack"><h1>About you</h1><p class="muted">What every agent in every workspace knows about you, from <span class="mono">about-you.md</span> in the install folder. The nightly tidy suggests changes from what you tell your chiefs; none is made until you approve it.</p></header>
+${view.suggestions.length > 0 ? view.suggestions.map((s) => `<article class="card pad stack" style="gap:12px"><div class="row"><span class="badge info">Suggested change</span>${s.workspace !== null ? `<span class="muted small">From ${esc(s.workspace)}</span>` : ''}</div><pre class="preview">${esc(s.text)}</pre></article>`).join('\n') + LATER('Approve or decline each', 'wheems review') : ''}
+<section class="card pad stack" style="gap:12px"><h2>about-you.md now</h2>${view.current === null ? '<p class="muted">Empty so far. Your chiefs fill it in as they learn about you, with your approval.</p>' : `<pre class="preview">${esc(view.current)}</pre>`}</section>`;
+  return layout({ title: 'About you', install: view.install, workspace, current: 'about', body });
 }
