@@ -113,15 +113,20 @@ export async function workspacePage(
       store.close();
     }
   }
-  const shown =
-    options.includeEnded === true ? sessions : sessions.filter((s) => s.state !== 'ended');
+  const shown = visible(sessions, options.includeEnded === true);
+  const ids = new Set(shown.map((s) => s.id));
+  // A session whose parent isn't here (gone from the store) is shown as a root of its own.
+  const orphan = (s: SessionRecord) => s.parent !== null && !ids.has(s.parent);
   const knowledge = knowledgePaths(workspace.dir);
   return {
     install: summary,
     workspace: summarise(workspace),
     chief: chiefOf(workspace),
-    chiefTree: tree(shown, (s) => s.kind === 'thread'),
-    mine: tree(shown, (s) => s.kind !== 'thread' && s.owner === null && s.parent === null),
+    chiefTree: tree(shown, (s) => s.kind === 'thread' || (orphan(s) && s.owner !== null)),
+    mine: tree(
+      shown,
+      (s) => s.kind !== 'thread' && s.owner === null && (s.parent === null || orphan(s)),
+    ),
     knowledge: {
       pages: await countMarkdown(knowledge.pages),
       inbox: await countMarkdown(knowledge.inbox),
@@ -201,6 +206,25 @@ function chiefOf(workspace: LoadedWorkspace): ChiefSummary | null {
     model: agent.definition.model,
     account: agent.definition.account,
   };
+}
+
+/**
+ * The sessions to show: every one that isn't ended (or every one, with `includeEnded`), and the
+ * ended sessions above them, so a session still running under an ended one is never hidden.
+ */
+function visible(sessions: SessionRecord[], includeEnded: boolean): SessionRecord[] {
+  if (includeEnded) return sessions;
+  const byId = new Map(sessions.map((s) => [s.id, s]));
+  const keep = new Set<string>();
+  for (const s of sessions) {
+    if (s.state === 'ended') continue;
+    let at: SessionRecord | undefined = s;
+    while (at !== undefined && !keep.has(at.id)) {
+      keep.add(at.id);
+      at = at.parent !== null ? byId.get(at.parent) : undefined;
+    }
+  }
+  return sessions.filter((s) => keep.has(s.id));
 }
 
 /** The sessions that are roots by `isRoot`, each followed by the sessions it started, depth first. */

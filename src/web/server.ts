@@ -17,8 +17,6 @@ import { esc, messagePage, overviewPage, sessionsPage, setupPage } from './pages
 /** The web app's port unless `--port` or `WHEEMS_WEB_PORT` says otherwise. */
 export const DEFAULT_WEB_PORT = 4317;
 
-const COOKIE = 'wheems_web';
-
 export interface WebOptions {
   home: string;
   env: NodeJS.ProcessEnv;
@@ -64,7 +62,7 @@ export async function webToken(home: string, env: NodeJS.ProcessEnv): Promise<st
 /** The address that opens the web app, with the token that lets the browser in. */
 export function webUrl(port: number, token?: string): string {
   const base = `http://127.0.0.1:${String(port)}/`;
-  return token === undefined ? base : `${base}?token=${encodeURIComponent(token)}`;
+  return token === undefined ? base : `${base}k/${token}/`;
 }
 
 /**
@@ -137,38 +135,26 @@ async function handle(
     send(res, 200, '{"wheems":true}', 'application/json');
     return;
   }
-  if (url.pathname === '/app.css') {
+  if (url.pathname === '/app.css' || url.pathname.endsWith('/app.css')) {
     send(res, 200, CSS, 'text/css; charset=utf-8');
     return;
   }
-  if (url.pathname === '/app.js') {
+  if (url.pathname === '/app.js' || url.pathname.endsWith('/app.js')) {
     send(res, 200, SCRIPT, 'text/javascript; charset=utf-8');
     return;
   }
 
-  // The token arrives once in the address from `wheems web open`; the cookie carries it after.
+  // Pages live under /k/<token>/: the token is in every address, never in a cookie, because a
+  // browser sends cookies for 127.0.0.1 to every port on it, and other local servers could
+  // read them. `wheems web open` gives the address; an old ?token= link is moved there.
   const offered = url.searchParams.get('token');
-  if (offered !== null) {
-    if (!same(offered, web.token)) {
-      send(
-        res,
-        403,
-        messagePage(
-          'That link has expired',
-          'Open the web app again with <span class="mono">wheems web open</span>.',
-        ),
-      );
-      return;
-    }
+  if (offered !== null && same(offered, web.token)) {
     url.searchParams.delete('token');
-    res.setHeader(
-      'Set-Cookie',
-      `${COOKIE}=${web.token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`,
-    );
-    redirect(res, `${url.pathname}${url.search}`);
+    redirect(res, `/k/${web.token}${url.pathname}${url.search}`);
     return;
   }
-  if (!same(cookie(req, COOKIE) ?? '', web.token)) {
+  const all = url.pathname.split('/').filter((p) => p !== '');
+  if (all[0] !== 'k' || !same(all[1] ?? '', web.token)) {
     send(
       res,
       401,
@@ -179,30 +165,34 @@ async function handle(
     );
     return;
   }
+  const base = `/k/${web.token}`;
+  const page = (status: number, html: string) => {
+    // Every link on the page stays under the token.
+    send(res, status, html.replaceAll('href="/', `href="${base}/`));
+  };
 
-  const parts = url.pathname.split('/').filter((p) => p !== '');
+  const parts = all.slice(2);
   if (parts.length === 0) {
     const { summary } = await installSummary(web.context);
     const first = summary.workspaces[0];
-    redirect(res, first ? `/w/${encodeURIComponent(first.id)}` : '/setup');
+    redirect(res, first ? `${base}/w/${encodeURIComponent(first.id)}` : `${base}/setup`);
     return;
   }
   if (parts[0] === 'setup' && parts.length === 1) {
     const { summary } = await installSummary(web.context);
     const report = await doctorReport(web.context);
-    send(res, 200, setupPage(summary, summary.workspaces[0] ?? null, report));
+    page(200, setupPage(summary, summary.workspaces[0] ?? null, report));
     return;
   }
   if (parts[0] === 'w' && parts[1] !== undefined && parts.length <= 3) {
     const id = decodeURIComponent(parts[1]);
     const view = parts[2] ?? 'overview';
     const includeEnded = url.searchParams.get('ended') === '1';
-    const page = await workspacePage(web.context, id, {
+    const data = await workspacePage(web.context, id, {
       includeEnded: view === 'sessions' && includeEnded,
     });
-    if (!page) {
-      send(
-        res,
+    if (!data) {
+      page(
         404,
         messagePage(
           'No such workspace',
@@ -212,24 +202,20 @@ async function handle(
       return;
     }
     if (view === 'overview') {
-      send(res, 200, overviewPage(page));
+      page(200, overviewPage(data));
       return;
     }
     if (view === 'sessions') {
       const wanted = url.searchParams.get('s');
-      const sessions = [...page.chiefTree, ...page.mine].map((i) => i.session);
+      const sessions = [...data.chiefTree, ...data.mine].map((i) => i.session);
       const selected =
         (wanted !== null ? sessions.find((s) => s.id === wanted) : sessions[0]) ?? null;
       const messages = selected ? await sessionMessages(web.context, id, selected) : [];
-      send(res, 200, sessionsPage(page, selected, messages, includeEnded));
+      page(200, sessionsPage(data, selected, messages, includeEnded));
       return;
     }
   }
-  send(
-    res,
-    404,
-    messagePage('Not found', 'There\'s no page here. <a href="/">Go to the start</a>.'),
-  );
+  page(404, messagePage('Not found', 'There\'s no page here. <a href="/">Go to the start</a>.'));
 }
 
 function send(
@@ -253,14 +239,6 @@ function send(
 function redirect(res: ServerResponse, location: string): void {
   res.writeHead(303, { Location: location, 'Cache-Control': 'no-store' });
   res.end();
-}
-
-function cookie(req: IncomingMessage, name: string): string | undefined {
-  for (const part of (req.headers.cookie ?? '').split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return rest.join('=');
-  }
-  return undefined;
 }
 
 function same(a: string, b: string): boolean {

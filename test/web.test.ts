@@ -19,22 +19,19 @@ describe('the web app', () => {
   let web: RunningWeb;
   let token: string;
 
-  /** A GET, with the cookie unless `cookie` is false, and the Host header given. */
+  /** A GET of a page under the token, unless `bare`, with the Host header given. */
   const get = (
     path: string,
-    options: { cookie?: boolean; host?: string; method?: string } = {},
+    options: { bare?: boolean; host?: string; method?: string } = {},
   ): Promise<{ status: number; body: string; headers: Record<string, unknown> }> =>
     new Promise((resolve, reject) => {
       const req = httpRequest(
         {
           host: '127.0.0.1',
           port: web.port,
-          path,
+          path: options.bare === true ? path : `/k/${token}${path}`,
           method: options.method ?? 'GET',
-          headers: {
-            Host: options.host ?? `127.0.0.1:${String(web.port)}`,
-            ...(options.cookie !== false && { Cookie: `wheems_web=${token}` }),
-          },
+          headers: { Host: options.host ?? `127.0.0.1:${String(web.port)}` },
         },
         (res) => {
           let body = '';
@@ -87,17 +84,23 @@ describe('the web app', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('keeps its token owner-only, and lets in only a browser that has it', async () => {
+  it('keeps its token owner-only, and serves pages only under it, never by cookie', async () => {
     expect(statSync(join(home, '.wheems', 'web-token')).mode & 0o777).toBe(0o600);
-    expect((await get('/health', { cookie: false })).status).toBe(200);
-    const outside = await get('/w/default', { cookie: false });
+    expect((await get('/health', { bare: true })).status).toBe(200);
+    const outside = await get('/w/default', { bare: true });
     expect(outside.status).toBe(401);
     expect(outside.body).toContain('wheems web open');
-    expect((await get('/?token=wrong', { cookie: false })).status).toBe(403);
-    const signIn = await get(`/w/default?token=${token}`, { cookie: false });
-    expect(signIn.status).toBe(303);
-    expect(signIn.headers.location).toBe('/w/default');
-    expect(String(signIn.headers['set-cookie'])).toContain('HttpOnly; SameSite=Strict');
+    expect((await get('/k/wrong/w/default', { bare: true })).status).toBe(401);
+    expect((await get('/?token=wrong', { bare: true })).status).toBe(401);
+    // An old ?token= link moves under the token, and sets no cookie.
+    const moved = await get(`/w/default?token=${token}`, { bare: true });
+    expect(moved.status).toBe(303);
+    expect(moved.headers.location).toBe(`/k/${token}/w/default`);
+    expect(moved.headers['set-cookie']).toBeUndefined();
+    // Every link on a page stays under the token.
+    const page = await get('/w/default');
+    expect(page.body).toContain(`href="/k/${token}/w/default/sessions"`);
+    expect(page.body).not.toMatch(/href="\/(w|setup)/);
   });
 
   it('refuses another host and anything but reading', async () => {
@@ -108,7 +111,7 @@ describe('the web app', () => {
   });
 
   it("shows a workspace's sessions as a tree, with what was asked, escaping what it shows", async () => {
-    expect((await get('/')).headers.location).toBe('/w/default');
+    expect((await get('/')).headers.location).toBe(`/k/${token}/w/default`);
     const overview = await get('/w/default');
     expect(overview.status).toBe(200);
     expect(overview.body).toContain('<h1>Default</h1>');
@@ -122,6 +125,19 @@ describe('the web app', () => {
     expect(detail.body).toContain('Shortlist marinas for the winter');
     expect(detail.body).toContain('Prices for each marina');
     expect((await get('/w/nope')).status).toBe(404);
+  });
+
+  it('shows a session still running under an ended one, and keeps ended ones shown when asked', async () => {
+    const state = await StateStore.open(paths(home, env).store);
+    state
+      .workspace('default')
+      .update('root', { state: 'ended', endedAt: new Date().toISOString() });
+    state.close();
+    const open = await get('/w/default');
+    expect(open.body).toContain('s=child');
+    expect(open.body).toContain('s=root');
+    const ended = await get('/w/default/sessions?ended=1');
+    expect(ended.body).toContain('s=root&amp;ended=1');
   });
 
   it('reads a session store from an older Wheems without changing it', async () => {

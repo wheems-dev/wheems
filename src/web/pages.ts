@@ -110,13 +110,18 @@ function badgeFor(s: SessionRecord): string {
   return `<span class="badge ${cls}">${text}</span>`;
 }
 
-function treeRows(items: TreeItem[], workspace: string, selected: string | null): string {
+function treeRows(
+  items: TreeItem[],
+  workspace: string,
+  selected: string | null,
+  showingEnded = false,
+): string {
   return items
     .map((item) => {
       const s = item.session;
       const indent = 20 + (item.depth - 1) * 28;
       const cls = `tree${s.id === selected ? ' sel' : ''}${s.state === 'ended' ? ' ended' : ''}`;
-      return `<a class="${cls}" style="padding-left:${String(indent)}px" href="/w/${encodeURIComponent(workspace)}/sessions?s=${encodeURIComponent(s.id)}">${icon(ICONS.twig)}<span class="grow"><span class="title">${esc(item.label)}</span><span class="muted small">${esc(item.kind)} · ${esc(ago(s.lastActiveAt))} ago</span></span>${badgeFor(s)}</a>`;
+      return `<a class="${cls}" style="padding-left:${String(indent)}px" href="/w/${encodeURIComponent(workspace)}/sessions?s=${encodeURIComponent(s.id)}${showingEnded ? '&amp;ended=1' : ''}">${icon(ICONS.twig)}<span class="grow"><span class="title">${esc(item.label)}</span><span class="muted small">${esc(item.kind)} · ${esc(ago(s.lastActiveAt))} ago</span></span>${badgeFor(s)}</a>`;
     })
     .join('\n');
 }
@@ -195,8 +200,8 @@ export function sessionsPage(
   const list = `
 <section class="card list" aria-label="Session tree">
   <div class="group"><span class="av inv">C</span><span class="grow">Chief of staff<span class="muted small" style="font-weight:500">${page.chief ? esc(`${page.chief.engine} · ${page.chief.model}`) : ''}</span></span></div>
-  ${page.chiefTree.length === 0 ? '<p class="empty">Nothing here yet.</p>' : treeRows(page.chiefTree, w.id, selected?.id ?? null)}
-  ${page.mine.length > 0 ? `<div class="group" style="border-top:1px solid var(--hair)"><span class="av">Y</span>Started by you</div>${treeRows(page.mine, w.id, selected?.id ?? null)}` : ''}
+  ${page.chiefTree.length === 0 ? '<p class="empty">Nothing here yet.</p>' : treeRows(page.chiefTree, w.id, selected?.id ?? null, showingEnded)}
+  ${page.mine.length > 0 ? `<div class="group" style="border-top:1px solid var(--hair)"><span class="av">Y</span>Started by you</div>${treeRows(page.mine, w.id, selected?.id ?? null, showingEnded)}` : ''}
   <p class="empty small"><a href="${showingEnded ? base : `${base}?ended=1`}">${showingEnded ? 'Hide ended sessions' : 'Show ended sessions'}</a></p>
 </section>`;
   const detail =

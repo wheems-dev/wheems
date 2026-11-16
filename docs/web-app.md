@@ -20,9 +20,10 @@ until then the pages say which command does it.
   (a store from an older Wheems is read as if current, without changing it), the service's status
   over its control socket, and doctor's quick checks.
 - **Only you can use it.** It's local only, and every request needs a token that Wheems keeps in
-  `.wheems/web-token` (readable only by you). `wheems web open` passes it once in the address, and
-  the page keeps it in a cookie (HttpOnly, SameSite=Strict). The server also checks the `Host`
-  header and answers only GET, so another site open in your browser can't reach it, and a strict
+  `.wheems/web-token` (readable only by you). Pages live under it (`/k/<token>/…`), so every
+  address `wheems web open` gives and every link carries it. It's never a cookie: a browser sends
+  cookies for `127.0.0.1` to every port, so other local servers could read one. The server also
+  checks the `Host` header and answers only GET, so another site open in your browser can't reach it, and a strict
   Content-Security-Policy keeps the page to its own script and styles. It loads nothing from the
   internet.
 - **One set of code paths.** Every change goes through the code the CLI uses: config edits through
