@@ -10,7 +10,10 @@ change anything, including commands and config formats, without a migration path
 - The web app's Review (skills a workspace's agents proposed), Settings (its `workspace.yaml`,
   agents and pinned skills), Connections (chat channels, integrations and engine accounts, and
   which workspaces use each; credentials are never shown) and About you (`about-you.md` and the
-  changes suggested for it). Still read-only: each page names the command that acts.
+  changes suggested for it).
+- Acting from the web app: approve or decline a skill proposal (choosing which agents get it,
+  and editing it first if you like) or a change to `about-you.md`, and send a message to a
+  session or end it. A form is accepted only from the Wheems page itself.
 
 ## 0.1.3
 

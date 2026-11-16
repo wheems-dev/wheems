@@ -85,6 +85,15 @@ p{margin:0}
 .kv span:first-child{color:var(--muted)}.kv span:last-child{font-weight:600;text-align:right;overflow-wrap:anywhere}
 .preview{margin:0;padding:14px 16px;border-radius:12px;background:#202735;color:#e7e9ef;font:400 13px/1.6 "IBM Plex Mono",ui-monospace,monospace;white-space:pre-wrap;overflow-x:auto;overflow-wrap:anywhere}
 .later{background:var(--sunk);border-style:dashed}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:10px;font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;border:1px solid var(--field-line);background:var(--surface);color:var(--ink)}
+.btn:hover{background:var(--hover)}
+.btn.primary{background:#3156c8;border-color:#3156c8;color:#ffffff}.btn.primary:hover{background:#23409a}
+.field{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--field-line);background:var(--main);color:var(--ink);font-family:inherit;font-size:14px}
+textarea.field{resize:vertical}
+.choices{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 16px}
+.choices legend{padding:0 0 6px;font-weight:600}
+.choice{display:inline-flex;align-items:center;gap:6px;min-height:32px}
+.flash.ok{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}.flash.no{border-color:var(--no);color:var(--no);background:var(--no-bg)}
 `;
 
 /** The theme switch: remembers the person's choice, and otherwise follows the computer. */

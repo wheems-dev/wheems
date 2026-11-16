@@ -1,5 +1,5 @@
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, join, relative } from 'node:path';
+import { mkdir, readdir, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, relative } from 'node:path';
 import { isMap, isSeq, parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import type { LoadedInstall } from '../config/load.js';
 import { commitFiling } from '../knowledge/filing.js';
@@ -12,6 +12,51 @@ import { removeProposal, type WaitingProposal } from '../skills/proposals.js';
  * `about-you.md`. `wheems review` shows each one and the person approves, edits or turns it
  * down. Nothing here runs without them.
  */
+
+/** How long a review lock may be held before Wheems says it looks abandoned. */
+const REVIEW_LOCK_STALE_MS = 120_000;
+
+/**
+ * Runs a review change holding the install-wide review lock. Approving and declining rewrite
+ * shared files (the library, skills.yaml, agent files, about-you.md), and `wheems review`, the
+ * service's web app and a web app run on its own may each be doing it at once. Making the lock
+ * folder is the lock, so only one process ever holds it. A lock is held only for the moment a
+ * change takes; one left by a process that died is never taken over (two processes could both
+ * take it), but reported, with how to remove it. Read what the change needs inside `work`, so it
+ * sees what the change before it left.
+ */
+export async function withReviewLock<T>(
+  stateDir: string,
+  work: () => Promise<T>,
+  waitMs = 30_000,
+): Promise<T> {
+  const lock = join(stateDir, 'review', '.lock');
+  await mkdir(dirname(lock), { recursive: true });
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    try {
+      await mkdir(lock);
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const held = await stat(lock).catch(() => null);
+    if (held !== null && held.mtimeMs < Date.now() - REVIEW_LOCK_STALE_MS) {
+      throw new Error(
+        `Another review seems stuck: ${lock} has been there since ${held.mtime.toISOString()}. If no review is running, remove that folder and try again.`,
+      );
+    }
+    if (Date.now() > deadline) {
+      throw new Error('Another review is being saved just now. Try again in a moment.');
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  try {
+    return await work();
+  } finally {
+    await rmdir(lock).catch(() => undefined);
+  }
+}
 
 export interface AboutYouSuggestion {
   /** The suggestion's file, in `.wheems/review/about-you/`. */

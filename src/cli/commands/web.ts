@@ -61,7 +61,7 @@ export function registerWeb(program: Command, io: Io): void {
         throw error;
       });
       io.out(
-        `Serving the web app at ${running.url}, read-only. Open it with:\n${webUrl(port, await webToken(home, io.env))}\nPress Ctrl+C to stop.\n`,
+        `Serving the web app at ${running.url}. Open it with:\n${webUrl(port, await webToken(home, io.env))}\nPress Ctrl+C to stop.\n`,
       );
       await new Promise<void>((done) => {
         process.once('SIGTERM', done);

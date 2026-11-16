@@ -5,10 +5,11 @@ they propose. Designed on 16 November 2026 from a clickable mockup. Chat stays t
 your chiefs: the web app is for looking things over and changing settings, the way `wheems setup`,
 `wheems status` and `wheems review` are today.
 
-**Built so far (stage 1, read-only):** the workspace switcher; each workspace's Overview,
-Sessions, Review and Settings; and the install's Connections, About you, and Setup and health; in
-light and dark. Acting from the page (approving, sending to a session, changing settings) comes
-next; until then each page names the command that does it.
+**Built so far (stage 1):** the workspace switcher; each workspace's Overview, Sessions, Review and
+Settings; and the install's Connections, About you, and Setup and health; in light and dark. From
+the page you can approve or decline skills (choosing which agents get each, and editing it first)
+and changes to `about-you.md`, and send a message to a session or end it. Editing settings,
+connecting and granting, and setup steps still use the commands each page names.
 
 ## How it runs
 
@@ -17,14 +18,19 @@ next; until then each page names the command that does it.
   logs why. `wheems web open` opens it in your browser.
 - **Or on its own:** `wheems web run` serves it in a terminal until Ctrl+C, beside a service that
   doesn't serve it, such as an older one.
-- **It only reads, for now.** Config from the install folder, the session store opened read-only
-  (a store from an older Wheems is read as if current, without changing it), the service's status
-  over its control socket, and doctor's quick checks.
+- **What it reads:** config from the install folder, the session store opened read-only (a store
+  from an older Wheems is read as if current, without changing it), the service's status over its
+  control socket, and doctor's quick checks.
+- **What it does:** approving and declining run the same code as `wheems review`; sending to a
+  session and ending one go through the service's control socket, as `wheems session send` and
+  `end` do, as you, in that session's workspace. Each action's outcome shows once at the top of
+  the page it returns to.
 - **Only you can use it.** It's local only, and every request needs a token that Wheems keeps in
   `.wheems/web-token` (readable only by you). Pages live under it (`/k/<token>/…`), so every
   address `wheems web open` gives and every link carries it. It's never a cookie: a browser sends
   cookies for `127.0.0.1` to every port, so other local servers could read one. The server also
-  checks the `Host` header and answers only GET, so another site open in your browser can't reach it, and a strict
+  checks the `Host` header, and takes a form only when the browser says it came from this page
+  (its `Origin`), so another site open in your browser can't reach it or act through it, and a strict
   Content-Security-Policy keeps the page to its own script and styles. It loads nothing from the
   internet.
 - **One set of code paths.** Every change goes through the code the CLI uses: config edits through

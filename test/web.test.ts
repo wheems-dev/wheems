@@ -1,7 +1,17 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { createServer } from 'node:net';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initWorkspace } from '../src/cli/commands/init.js';
@@ -10,6 +20,8 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
 import { MIGRATIONS } from '../src/state/schema.js';
 import { StateStore } from '../src/state/store.js';
+import { withReviewLock } from '../src/review/review.js';
+import { fingerprint } from '../src/web/data.js';
 import { esc } from '../src/web/pages.js';
 import { startWeb, webToken, type RunningWeb } from '../src/web/server.js';
 
@@ -44,6 +56,47 @@ describe('the web app', () => {
       req.on('error', reject);
       req.end();
     });
+
+  /** A form sent from the page (or from `origin`), under the token unless `bare`. */
+  const post = (
+    path: string,
+    fields: Record<string, string | string[]>,
+    options: { origin?: string | null; bare?: boolean } = {},
+  ): Promise<{ status: number; body: string; headers: Record<string, unknown> }> =>
+    new Promise((resolve, reject) => {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(fields)) {
+        for (const one of Array.isArray(value) ? value : [value]) params.append(key, one);
+      }
+      const body = params.toString();
+      const origin =
+        options.origin === undefined ? `http://127.0.0.1:${String(web.port)}` : options.origin;
+      const req = httpRequest(
+        {
+          host: '127.0.0.1',
+          port: web.port,
+          path: options.bare === true ? path : `/k/${token}${path}`,
+          method: 'POST',
+          headers: {
+            Host: `127.0.0.1:${String(web.port)}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...(origin !== null && { Origin: origin }),
+          },
+        },
+        (res) => {
+          let text = '';
+          res.on('data', (chunk: Buffer) => (text += chunk.toString()));
+          res.on('end', () => {
+            resolve({ status: res.statusCode ?? 0, body: text, headers: res.headers });
+          });
+        },
+      );
+      req.on('error', reject);
+      req.end(body);
+    });
+
+  /** Where a 303 sends the browser, under the token, for a GET. */
+  const follow = (location: unknown) => get(String(location).replace(`/k/${token}`, ''));
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'web-'));
@@ -103,11 +156,14 @@ describe('the web app', () => {
     expect(page.body).not.toMatch(/href="\/(w|setup)/);
   });
 
-  it('refuses another host and anything but reading', async () => {
+  it('refuses another host, other methods, and forms from elsewhere', async () => {
     expect((await get('/w/default', { host: 'evil.example:80' })).status).toBe(421);
-    expect((await get('/w/default', { method: 'POST' })).status).toBe(405);
+    expect((await get('/w/default', { method: 'PUT' })).status).toBe(405);
+    expect((await get('/w/default', { method: 'POST' })).status).toBe(403);
     const page = await get('/w/default');
     expect(String(page.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
+    // same-origin, never no-referrer: with no-referrer a browser sends its forms with Origin: null.
+    expect(page.headers['referrer-policy']).toBe('same-origin');
   });
 
   it("shows a workspace's sessions as a tree, with what was asked, escaping what it shows", async () => {
@@ -190,6 +246,195 @@ describe('the web app', () => {
     expect(about.body).toContain('Prefers the 08:15 ferry.');
     expect(about.body).toContain('Lives by the sea.');
     expect((await get('/w/nope/settings')).status).toBe(404);
+  });
+
+  it('acts only on forms from its own page, under the token', async () => {
+    expect(
+      (await post('/w/default/review/p1', { decision: 'decline' }, { origin: null })).status,
+    ).toBe(403);
+    expect(
+      (
+        await post(
+          '/w/default/review/p1',
+          { decision: 'decline' },
+          { origin: 'https://evil.example' },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (await post('/w/default/review/p1', { decision: 'decline' }, { bare: true })).status,
+    ).toBe(401);
+  });
+
+  it('approves a skill for the agents chosen, declines a change about you, and says what came of it', async () => {
+    const proposal = join(home, '.wheems', 'review', 'skills', 'p2');
+    mkdirSync(proposal, { recursive: true });
+    writeFileSync(
+      join(proposal, 'proposal.json'),
+      JSON.stringify({
+        id: 'p2',
+        name: 'ferry-times',
+        workspace: 'default',
+        agent: 'chief-of-staff',
+        conversation: null,
+        created: new Date().toISOString(),
+        basedOn: null,
+        similar: [],
+      }),
+    );
+    writeFileSync(
+      join(proposal, 'SKILL.md'),
+      '---\nname: ferry-times\ndescription: Finds ferry times\n---\n\n# Ferry times\n\nCheck the timetable.\n',
+    );
+    const review = await get('/w/default/review');
+    expect(review.body).toContain(`action="/k/${token}/w/default/review/p2"`);
+    expect(review.body).toMatch(/name="agents" value="chief-of-staff" checked/);
+
+    const seen = /name="seen" value="(\w+)"/.exec(review.body)?.[1] ?? '';
+    // What the page showed is what's approved: a stale page is refused.
+    const stale = await post('/w/default/review/p2', { decision: 'approve', seen: 'old' });
+    expect((await follow(stale.headers.location)).body).toContain(
+      'changed since the page showed it',
+    );
+    const approved = await post('/w/default/review/p2', {
+      decision: 'approve',
+      seen,
+      agents: ['chief-of-staff', 'not-an-agent'],
+    });
+    expect(approved.status).toBe(303);
+    const after = await follow(approved.headers.location);
+    expect(after.body).toContain(
+      'Added ferry-times version 1 to the library, pinned in default, for chief-of-staff.',
+    );
+    expect(readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8')).toContain(
+      'ferry-times: 1',
+    );
+    expect(
+      readFileSync(join(home, 'workspaces', 'default', 'agents', 'chief-of-staff.md'), 'utf8'),
+    ).toContain('ferry-times');
+    // Shown once, then gone.
+    expect((await follow(approved.headers.location)).body).not.toContain('Added ferry-times');
+    expect(
+      (await post('/w/default/review/p2', { decision: 'approve' })).headers.location,
+    ).toBeDefined();
+
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    const suggestion = join(home, '.wheems', 'review', 'about-you', 'n9-default.md');
+    writeFileSync(suggestion, 'Prefers tea.');
+    const declined = await post('/about-you/n9-default.md', {
+      decision: 'decline',
+      seen: fingerprint('Prefers tea.'),
+    });
+    expect((await follow(declined.headers.location)).body).toContain(
+      'Declined the change to about-you.md.',
+    );
+    expect(existsSync(suggestion)).toBe(false);
+  });
+
+  it('applies two approvals at once one after the other, losing neither', async () => {
+    const propose = (id: string, name: string) => {
+      const dir = join(home, '.wheems', 'review', 'skills', id);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'proposal.json'),
+        JSON.stringify({
+          id,
+          name,
+          workspace: 'default',
+          agent: 'chief-of-staff',
+          conversation: null,
+          created: new Date().toISOString(),
+          basedOn: null,
+          similar: [],
+        }),
+      );
+      const text = `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`;
+      writeFileSync(join(dir, 'SKILL.md'), text);
+      return fingerprint(text);
+    };
+    const a = propose('pa', 'tide-tables');
+    const b = propose('pb', 'mooring-fees');
+    await Promise.all([
+      post('/w/default/review/pa', { decision: 'approve', seen: a, agents: 'chief-of-staff' }),
+      post('/w/default/review/pb', { decision: 'approve', seen: b, agents: 'chief-of-staff' }),
+    ]);
+    const pinned = readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8');
+    expect(pinned).toContain('tide-tables: 1');
+    expect(pinned).toContain('mooring-fees: 1');
+  });
+
+  it('shows a long change about you in full before it can be approved', async () => {
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    const long = `${'Likes sailing. '.repeat(700)}The end.`;
+    writeFileSync(join(home, '.wheems', 'review', 'about-you', 'n8-default.md'), long);
+    const page = await get('/about-you');
+    expect(page.body).toContain('The end.');
+    expect(page.body).toContain(`value="${fingerprint(long)}"`);
+  });
+
+  it('shows how a slow send turned out when the page is reloaded, even a failure', async () => {
+    await web.close();
+    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0, sendWaitMs: 20 });
+    const socket = paths(home, env).socket;
+    mkdirSync(dirname(socket), { recursive: true });
+    const slowService = createServer((conn) => {
+      conn.on('data', () => {
+        setTimeout(() => conn.end('{"ok":false,"error":"it could not be resumed"}\n'), 150);
+      });
+    });
+    await new Promise<void>((done) => slowService.listen(socket, done));
+    try {
+      const sent = await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' });
+      const first = await follow(sent.headers.location);
+      expect(first.body).toContain(esc("Sending: it's starting up first."));
+      await new Promise((done) => setTimeout(done, 400));
+      // A reload of the very same address, whose own message was shown already.
+      const reloaded = await follow(sent.headers.location);
+      expect(reloaded.body).toContain(esc("Your message wasn't sent: it could not be resumed"));
+      expect((await follow(sent.headers.location)).body).not.toContain('could not be resumed');
+    } finally {
+      await new Promise((done) => slowService.close(done));
+    }
+  });
+
+  it('holds one review change at a time across processes, and never takes over an abandoned lock', async () => {
+    const state = paths(home, env).state;
+    const file = join(home, 'shared.txt');
+    writeFileSync(file, '');
+    // Two writers that each read, wait, then write: without the lock one would lose the other's line.
+    const append = (line: string) =>
+      withReviewLock(state, async () => {
+        const before = readFileSync(file, 'utf8');
+        await new Promise((done) => setTimeout(done, 50));
+        writeFileSync(file, `${before}${line}\n`);
+      });
+    await Promise.all([append('one'), append('two')]);
+    expect(readFileSync(file, 'utf8').split('\n').filter(Boolean).sort()).toEqual(['one', 'two']);
+    // A lock left by a process that died is never taken over, since two processes could both
+    // take it: both contenders are told how to clear it, and neither runs.
+    const lock = join(state, 'review', '.lock');
+    mkdirSync(lock, { recursive: true });
+    const old = new Date(Date.now() - 10 * 60_000);
+    utimesSync(lock, old, old);
+    let ran = 0;
+    const contend = () =>
+      withReviewLock(state, () => {
+        ran += 1;
+        return Promise.resolve();
+      });
+    const results = await Promise.allSettled([contend(), contend()]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(String((results[0] as PromiseRejectedResult).reason)).toContain(
+      'Another review seems stuck',
+    );
+    expect(ran).toBe(0);
+    expect(existsSync(lock)).toBe(true);
+  });
+
+  it("says so when the service isn't there to send to", async () => {
+    const sent = await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' });
+    expect(sent.status).toBe(303);
+    expect((await follow(sent.headers.location)).body).toContain(esc("The service isn't running"));
   });
 
   it('reads a session store from an older Wheems without changing it', async () => {
