@@ -4,7 +4,7 @@ import { defaultHome, paths } from '../../home.js';
 import { request, type ControlRequest, type ControlResponse } from '../../service/control.js';
 import type { SessionDetails } from '../../service/sessions.js';
 import type { SessionRecord } from '../../state/store.js';
-import { callerFrom, workspaceHere } from '../caller.js';
+import { callerFrom, speakerFrom, workspaceHere } from '../caller.js';
 import type { Io } from '../program.js';
 import { since } from './service.js';
 
@@ -252,6 +252,73 @@ export function registerSession(program: Command, io: Io): void {
         12 * 60_000,
       );
       io.out(`Ended ${id}. ${answer.message ?? ''}\n`);
+    });
+
+  session
+    .command('restart')
+    .description(
+      "Start a chat thread's session afresh: from a handover its agent writes (the default), or with nothing but the thread's ask",
+    )
+    .argument('<id>', "the thread session's id (wheems session list)")
+    .option('--fresh', "start with nothing but the thread's ask, no handover")
+    .option('--carry-on', 'only stop its session; its next message resumes it on the settings then')
+    .option('--workspace <id>', workspaceHelp)
+    .option('--home <dir>', homeHelp)
+    .action(
+      async (
+        id: string,
+        options: { fresh?: boolean; carryOn?: boolean; workspace?: string; home?: string },
+      ) => {
+        if (options.fresh === true && options.carryOn === true) {
+          throw new Error('Choose --fresh or --carry-on, not both.');
+        }
+        const workspace = caller(options).workspace;
+        if (workspace === undefined) throw new Error('Say which workspace, with --workspace.');
+        const answer = await ask(
+          options,
+          {
+            op: 'conversations-restart',
+            workspace,
+            choices: [
+              {
+                session: id,
+                choice:
+                  options.fresh === true
+                    ? 'fresh'
+                    : options.carryOn === true
+                      ? 'carry-on'
+                      : 'hand-over',
+              },
+            ],
+          },
+          // A handover turn gets as long as a note turn.
+          12 * 60_000,
+        );
+        const outcome = answer.restarted?.[0];
+        if (!outcome?.done) throw new Error(outcome?.text ?? 'It was not restarted.');
+        io.out(`${outcome.text}\n`);
+      },
+    );
+
+  session
+    .command('handover')
+    .description(
+      'Save a handover for the session taking over this chat thread, when Wheems asks for one (agents run this)',
+    )
+    .argument('[text...]', 'the handover, in Markdown; "-" or nothing reads it from standard input')
+    .option('--home <dir>', homeHelp)
+    .action(async (words: string[], options: { home?: string }) => {
+      const from = speakerFrom(io.env, 'wheems session handover');
+      const text = (
+        words.length === 0 || (words.length === 1 && words[0] === '-')
+          ? await io.stdin()
+          : words.join(' ')
+      ).trim();
+      if (text === '') throw new Error('The handover is empty.');
+      const home = resolve(options.home ?? defaultHome(io.env));
+      const answer = await request(paths(home, io.env).socket, { op: 'handover', ...from, text });
+      if (!answer.ok) throw new Error(answer.error);
+      io.out(`${answer.message ?? 'Saved.'}\n`);
     });
 }
 

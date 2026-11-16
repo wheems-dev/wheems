@@ -354,6 +354,17 @@ wheems session create --title "Packaging suppliers" --purpose "Find five UK pack
 - You can run the same commands yourself, from a terminal; add `--workspace <id>` when there's
   more than one. Sessions you start are yours.
 
+A chat thread can start over with `wheems session restart <id>`, where `<id>` is its session's
+(`wheems session list --kind thread`). By default its chief **hands over**: Wheems asks it, in a
+turn whose answer is never posted, to write a handover with `wheems session handover`: what you
+asked, what's done, what's in progress, decisions, open questions and promises. Its session
+stops, and the thread's next message starts a new session from the handover; Wheems posts a line
+in the thread saying so. When the chief can't write one (it isn't running, or doesn't finish in
+time), Wheems writes one from the thread's ask and its latest messages, and says so. With
+`--fresh`, the next session starts with only the thread's ask; with `--carry-on`, its session
+just stops, and the next message resumes it as it was, on the settings then. A thread answering a
+message is left alone. See [docs/session-handover.md](docs/session-handover.md).
+
 Sessions only ever see their own workspace's sessions. A chief (or you) may send to any ad-hoc
 session in the workspace; an ad-hoc session only to the sessions it started and to its owner
 (`wheems session send owner "…"`). Limits stop them multiplying or looping:
@@ -654,7 +665,9 @@ each chat thread with the session it talks to, where the answers have got to and
 Herdr says whether a session is running; the store says what it's for, including **what you
 asked**: a thread's first message, which every session started for it inherits and is reminded
 of, so work handed down stays tied to it (`wheems session show` prints it as "Asked"). It also
-keeps what's said in each chat thread, for the web app to show. Every session Wheems
+keeps what's said in each chat thread, for the web app to show, and each thread's handovers.
+Version 5 of its schema adds handovers: opening a store with Wheems 0.1.8 brings it up to 5, after
+which an older Wheems won't open it. Every session Wheems
 starts is labelled `wheems=<session id>` in Herdr, and when the service starts it matches the
 store against Herdr: a session whose Herdr session has gone is marked stopped, and resumes when
 it's next needed.
@@ -778,6 +791,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                        |
 | `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`              |
 | `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note |
+| `wheems session restart <id> [--fresh] [--carry-on]`                | Starts a chat thread's session over: from a handover its chief writes, afresh, or just resumed       |
 | `wheems knowledgebase search <query...> [--workspace] [--limit]`    | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)              |
 | `wheems knowledgebase reindex [--workspace]`                        | Rebuilds search indexes, every workspace's by default                                                |
 | `wheems skill list`, `show <name> [version]`                        | Lists the library and waiting proposals, or prints a skill's `SKILL.md`                              |
@@ -807,6 +821,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems knowledgebase note "…"` or `wheems knowledgebase note -` | Saves a note to the workspace's inbox                         |
 | `wheems knowledgebase search "…"`                                | Searches the agent's own workspace                            |
 | `wheems skill propose <name> [-]`                                | Proposes a skill, read from standard input, for you to review |
+| `wheems session handover -`                                      | Saves a handover for its thread's next session, when asked    |
 | `wheems session …`                                               | The session commands above, in the agent's own workspace      |
 
 In a workspace's folder (`~/wheems/workspaces/acme/…`), commands that take `--workspace` default

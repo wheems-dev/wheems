@@ -9,6 +9,7 @@ import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { IndexStatus } from '../knowledge/search.js';
 import type { MessageRecord, SessionRecord } from '../state/store.js';
+import type { OpenConversation, RestartOutcome } from './conversations.js';
 import type { SessionDetails } from './sessions.js';
 
 /**
@@ -73,6 +74,32 @@ export const requestSchema = z.discriminatedUnion('op', [
    * its records in the session store. `wheems workspace archive` and `workspace remove` ask it first.
    */
   z.object({ op: z.literal('workspace-retire'), id: z.string().min(1), forget: z.boolean() }),
+  /** A thread's agent saves its handover, when Wheems asked for one (`wheems session handover`). */
+  z.object({
+    op: z.literal('handover'),
+    conversation: z.string().min(1).optional(),
+    session: z.string().min(1).optional(),
+    text: z.string().min(1),
+  }),
+  /** A workspace's chat threads, newest first, for choosing how each restarts. */
+  z.object({ op: z.literal('conversations'), workspace: z.string().min(1) }),
+  /**
+   * Restarts chat threads as chosen: carry on, hand over or start fresh (see
+   * ConversationManager.restart). Each is named by its session's id.
+   */
+  z.object({
+    op: z.literal('conversations-restart'),
+    workspace: z.string().min(1),
+    choices: z
+      .array(
+        z.object({
+          session: z.string().min(1),
+          choice: z.enum(['carry-on', 'hand-over', 'fresh']),
+        }),
+      )
+      .min(1)
+      .max(200),
+  }),
   /** Restarts the service with the latest config, once it has answered (the web app's Restart). */
   z.object({ op: z.literal('restart') }),
   /** The first chief greets the person in chat; with `once`, only if it never has. */
@@ -101,6 +128,10 @@ export type ControlResponse =
       details?: SessionDetails;
       /** For `greet` with `once`: true when it had greeted before, so it didn't again. */
       skipped?: boolean;
+      /** For `conversations`: the workspace's chat threads. */
+      conversations?: OpenConversation[];
+      /** For `conversations-restart`: how each went. */
+      restarted?: RestartOutcome[];
       /** The answer to a `session send --wait`. */
       answer?: string;
       sent?: MessageRecord;

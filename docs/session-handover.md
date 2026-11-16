@@ -1,8 +1,10 @@
 # Session handover
 
-**Status: proposal, not built.** This explores what happens to a chat thread that's already open
-when its chief changes: a new engine, model, account or permissions. It's the open question that
-keeps those four settings read-only in the web app ([web-app.md](web-app.md#settings)).
+**Status: the service side is built (0.1.8): `wheems session restart` and `wheems session
+handover`, and the session store's handovers. The web app's choices come next.** What happens to
+a chat thread that's already open when its chief changes: a new engine, model, account or
+permissions. It's the question that kept those four settings read-only in the web app
+([web-app.md](web-app.md#settings)). Mike's decisions are at the end.
 
 ## The problem
 
@@ -53,10 +55,16 @@ the thread, and no message can slip in between. The chief is asked for:
 It answers with a new command, `wheems session handover`, which saves the note to the session
 store. Saving it there, rather than in the engine's history, means it outlives the old engine.
 
-**When the old chief can't write one**, because it times out or its engine is gone, Wheems
-assembles a handover from what it already keeps: the thread's ask, the conversation's latest
-knowledge note, and its latest chat turns (kept since 0.1.6). Such a note is marked as written by
-Wheems, so the new chief knows it's thinner.
+**When the old chief can't write one**, because it isn't running, times out or its engine is
+gone, Wheems writes a handover from what it keeps: the thread's ask and its latest 20 chat turns
+(kept since 0.1.6). It's marked as written by Wheems, so the new chief knows it's thinner, and
+the line in the thread says so.
+
+**Built differently from the proposal:** a thread whose session was already stopped isn't
+resumed on the old settings to write its handover. It gets Wheems's handover instead. A stopped
+session was asked for its note before it stopped, and resuming one just to ask for a handover
+would make a restart start sessions. Wheems's handover also leaves out the knowledge note, which
+by then may have been filed into the knowledge base; the new chief has the workspace's brief.
 
 ### The new chief
 
@@ -73,15 +81,14 @@ so it can ask the old sessions for theirs:
 2. The page lists the open conversations with a choice for each. The defaults depend on the change.
 3. **Apply and restart:**
    - every **Hand over** conversation gets its handover turn, using the old settings;
-   - a conversation whose session was already stopped is resumed briefly on the old settings to
-     write its handover;
+   - a conversation whose session was already stopped gets a handover Wheems writes;
    - every **Carry on** or **Start fresh** session is stopped;
    - then the service restarts.
 4. Each new session starts at that thread's next message, not straight away. A thread nobody
    comes back to costs nothing more.
 
-A conversation that's mid-turn waits for the turn to end, as a note turn does. The page shows
-each one's progress: writing handover, handed over, stopped.
+A conversation that's answering a message is left as it is, and says so: restart it once it has
+answered. The page shows how each went.
 
 ### What the person sees
 
@@ -89,8 +96,10 @@ each one's progress: writing handover, handed over, stopped.
   runs on Codex (gpt-6). It has a handover of this conversation so far." After **Start fresh**:
   "This conversation starts afresh: the chief doesn't remember it." Without that line, a change in
   what the chief remembers would be a surprise.
-- **On the Sessions page,** the old and new sessions are linked ("Took over from …", "Handed over
-  to …"), with the handover readable on both. The original ask carries on, as it does for every
+- **On the Sessions page,** the thread keeps its one session record, as a chat thread does, with
+  its handovers listed and readable: who wrote each, from which engine and model, and when it was
+  used. (The proposal linked an old and a new session; one record per thread is simpler and
+  keeps the thread's history together.) The original ask carries on, as it does for every
   session.
 
 ## Beyond settings changes
@@ -123,15 +132,28 @@ The handover note is also the natural seed for moving a thread to a different ag
   - A conversation mid-turn.
   - A restart in the middle of applying.
 
-## Open questions
+## Decisions
 
-1. **Announce in the thread?** Proposed: yes, one line, as above.
-2. **When does the new chief start?** Proposed: at the thread's next message, not straight away.
-3. **Defaults.** Proposed: **Carry on** when only the model, account or permissions change;
-   **Hand over** when the engine changes. Or should every change default to **Hand over**?
-4. **How many at once?** A workspace with many open threads would write many handovers at once.
-   Proposed: hand over the ones active in the last week; older ones start fresh, unless chosen
-   otherwise.
-5. **Does the handover also go to the knowledge base?** It overlaps with the note a session
-   writes. Proposed: no. A handover is for the next chief, a note is for the knowledge base, and
-   the handover turn can skip the note when one was written recently.
+Mike decided, on 16 November 2026:
+
+1. **Announce in the thread:** yes, one line from Wheems when a new session takes over.
+2. **When the new chief starts:** at the thread's next message.
+3. **Defaults:** **Carry on** when only the model, account or permissions change; **Hand over**
+   when the engine changes.
+4. **How many at once:** hand over the threads active in the last week; older ones start fresh,
+   unless chosen otherwise.
+5. **The knowledge base:** a handover doesn't go there. It's for the next chief; notes are for the
+   knowledge base.
+
+## How it's built
+
+- **Engine ids.** A thread's `generation` counts its fresh starts. For an engine that takes
+  Wheems's id (Claude Code), each generation has its own id, so the old session is never resumed.
+  For one that picks its own (Codex, opencode), the old id is forgotten and the new one found as
+  for a new thread. Wheems's own id for the session stays the thread's.
+- **Pending start.** A thread's `handover` is what its next session starts from: a handover's id,
+  or `fresh`. The next message launches a new session with the handover (or the ask) before the
+  person's message, posts the line, and clears it.
+- **Control.** `conversations` lists a workspace's threads; `conversations-restart` applies
+  choices, each in its thread's queue, so no message slips in between; `handover` saves an
+  agent's handover, accepted only during a handover turn Wheems asked for.

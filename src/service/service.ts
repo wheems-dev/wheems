@@ -382,6 +382,33 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             await manager.reply(from.conversation, request.text);
             return { ok: true };
           }
+          case 'handover': {
+            const from = speaker(request);
+            if (!('conversation' in from)) {
+              throw new Error('Only a chat thread hands over; this session has no thread.');
+            }
+            await manager.handover(from.conversation, request.text);
+            return { ok: true, message: 'Saved. Now answer "done".' };
+          }
+          case 'conversations': {
+            return { ok: true, conversations: await manager.openConversations(request.workspace) };
+          }
+          case 'conversations-restart': {
+            const restarted = await Promise.all(
+              request.choices.map(({ session, choice }) => {
+                const key = state.threadKeyOf(session);
+                if (key === undefined || !key.startsWith(`${request.workspace}:`)) {
+                  return Promise.resolve({
+                    key: session,
+                    done: false,
+                    text: `There's no chat thread with session ${session} in ${request.workspace}.`,
+                  });
+                }
+                return manager.restart(key, choice);
+              }),
+            );
+            return { ok: true, restarted };
+          }
           case 'note': {
             const from = speaker(request);
             if ('conversation' in from) {

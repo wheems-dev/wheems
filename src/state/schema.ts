@@ -120,6 +120,27 @@ export const MIGRATIONS: readonly string[] = [
   ) STRICT;
   CREATE INDEX chat_session ON chat (workspace, session, at);
   `,
+  // 5: handing a chat thread over to a new engine session, or starting it afresh. A thread's
+  // generation counts its fresh starts, so each gets an engine session id of its own; its
+  // handover is what the next one starts from: a handover's id, 'fresh', or null for none.
+  `
+  ALTER TABLE threads ADD COLUMN generation INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE threads ADD COLUMN handover TEXT;
+  CREATE TABLE handovers (
+    id TEXT PRIMARY KEY,
+    workspace TEXT NOT NULL,
+    session TEXT NOT NULL REFERENCES sessions (id),
+    text TEXT NOT NULL,
+    author TEXT NOT NULL CHECK (author IN ('agent', 'wheems')),
+    from_engine TEXT,
+    from_model TEXT,
+    written_at TEXT NOT NULL,
+    to_engine TEXT,
+    to_model TEXT,
+    used_at TEXT
+  ) STRICT;
+  CREATE INDEX handovers_session ON handovers (workspace, session, written_at);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

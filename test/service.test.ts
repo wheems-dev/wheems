@@ -369,6 +369,41 @@ describe('the service', () => {
     expect(channel.sent).toHaveLength(1);
   });
 
+  it('lists chat threads and restarts one with wheems session restart, and refuses an unasked handover', async () => {
+    const first = await channel.receive({
+      channel: 'D1',
+      text: 'plan the trip',
+      userId: 'UME',
+      direct: true,
+    });
+    await waitFor(() => channel.sent.length === 1);
+    const key = `personal:slack:D1:${first}`;
+    const listed = await request(paths(home, env).socket, {
+      op: 'conversations',
+      workspace: 'personal',
+    });
+    expect(listed.ok && listed.conversations?.map((c) => c.ask)).toEqual(['plan the trip']);
+    const session = listed.ok ? (listed.conversations?.[0]?.session ?? '') : '';
+
+    const unasked = await cliReply(key, ['-'], '# Handover', 'session handover');
+    expect(unasked.code).toBe(1);
+    expect(unasked.err).toContain("Wheems hasn't asked this conversation for a handover");
+
+    const fresh = await cliReply(
+      '',
+      [session, '--fresh', '--workspace', 'personal'],
+      '',
+      'session restart',
+    );
+    expect(fresh).toMatchObject({
+      code: 0,
+      out: "Its next message starts a new session, with only the thread's ask.\n",
+    });
+    const wrong = await cliReply('', ['nope', '--workspace', 'personal'], '', 'session restart');
+    expect(wrong.code).toBe(1);
+    expect(wrong.err).toContain("There's no chat thread with session nope in personal.");
+  });
+
   it('takes a skill proposal from an agent, for the person to review', async () => {
     const first = await channel.receive({
       channel: 'D1',
