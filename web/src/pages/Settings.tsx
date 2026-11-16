@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import type { Flash } from '../../../src/web/actions.js';
 import type { SettingsView } from '../../../src/web/data.js';
@@ -10,10 +10,6 @@ interface Values {
   name: string;
   description: string;
   postsAs: string;
-  engine: string;
-  model: string;
-  account: string;
-  permissions: string;
   maxOpenPerOwner: string;
   maxDepth: string;
   noteAfterIdle: string;
@@ -27,10 +23,6 @@ function valuesOf(v: SettingsView): Values {
     name: v.workspace.name,
     description: v.description ?? '',
     postsAs: v.postsAs ?? '',
-    engine: v.chief?.engine ?? '',
-    model: v.chief?.model ?? '',
-    account: v.chief?.account ?? '',
-    permissions: v.chief?.permissions ?? 'ask',
     maxOpenPerOwner: String(v.sessions.maxOpenPerOwner),
     maxDepth: String(v.sessions.maxDepth),
     noteAfterIdle: String(v.knowledge.noteAfterIdle),
@@ -49,46 +41,34 @@ const PERMISSIONS: Record<string, string> = {
 export function Settings() {
   const id = useParams().id ?? '';
   const view = useView<SettingsView>(`/w/${encodeURIComponent(id)}/settings`);
-  const [flash, setFlash] = useState<Flash | null>(null);
-  // Kept here, as the flash is: saving changes the files, and the form starts again.
-  const [saved, setSaved] = useState(false);
   if (view.isPending) return <Loading />;
   if (view.error) return <Problem error={view.error} />;
-  // A new key once the files change, so the form starts again from what they now say.
-  return (
-    <SettingsForm
-      key={view.data.seen}
-      v={view.data}
-      flash={flash}
-      setFlash={setFlash}
-      saved={saved}
-      setSaved={setSaved}
-      id={id}
-    />
-  );
+  // A new form only for another workspace: a refresh keeps what you've typed.
+  return <SettingsForm key={id} v={view.data} id={id} />;
 }
 
-function SettingsForm({
-  v,
-  id,
-  flash,
-  setFlash,
-  saved,
-  setSaved,
-}: {
-  v: SettingsView;
-  id: string;
-  flash: Flash | null;
-  setFlash: (flash: Flash | null) => void;
-  saved: boolean;
-  setSaved: (saved: boolean) => void;
-}) {
+function SettingsForm({ v, id }: { v: SettingsView; id: string }) {
+  const [flash, setFlash] = useState<Flash | null>(null);
+  const [saved, setSaved] = useState(false);
+  // Only the fields you've edited, over what the file says now, so a refresh (after a save, or
+  // a save refused because the file changed) never loses them, and never undoes a field you
+  // didn't touch.
+  const [edits, setEdits] = useState<Partial<Values>>({});
+  const submitted = useRef<Partial<Values>>({});
   const w = v.workspace;
   const start = valuesOf(v);
-  const [values, setValues] = useState<Values>(start);
+  const values: Values = { ...start, ...edits };
   const save = useAction(`/w/${encodeURIComponent(id)}/settings`, (result) => {
     setFlash(result);
-    setSaved(result.ok && result.text.startsWith('Saved'));
+    if (!result.ok) return;
+    setSaved((was) => was || result.text.startsWith('Saved'));
+    // What was saved is in the file now; keep anything typed since.
+    const sent = submitted.current;
+    setEdits((now) =>
+      Object.fromEntries(
+        Object.entries(now).filter(([key, typed]) => sent[key as keyof Values] !== typed),
+      ),
+    );
   });
   const restart = useAction('/restart', (result) => {
     setFlash(result);
@@ -100,9 +80,10 @@ function SettingsForm({
   const set =
     <K extends keyof Values>(key: K) =>
     (next: Values[K]) => {
-      setValues((now) => ({ ...now, [key]: next }));
+      setEdits((now) => ({ ...now, [key]: next }));
     };
   const submit = () => {
+    submitted.current = { ...edits };
     const fields: Record<string, string> = { seen: v.seen };
     for (const key of changed) {
       if (key === 'tidy' || key === 'tidyAt') fields.tidyAt = values.tidy ? values.tidyAt : 'off';
@@ -126,9 +107,8 @@ function SettingsForm({
       <header className="stack">
         <h1>{w.name} settings</h1>
         <p className="muted">
-          Saved to <span className="mono">workspaces/{w.id}/workspace.yaml</span> and the chief of
-          staff&apos;s agent file, keeping your comments, so you can still edit the files. The
-          service uses a change once it restarts.
+          Saved to <span className="mono">workspaces/{w.id}/workspace.yaml</span>, keeping your
+          comments, so you can still edit the file. The service uses a change once it restarts.
         </p>
       </header>
       <FlashBanner flash={flash} />
@@ -180,65 +160,17 @@ function SettingsForm({
           {v.chief ? (
             <>
               <Kv label="Agent file" value={v.chief.file} mono />
-              <Field label="Engine">
-                <select
-                  className="field"
-                  value={values.engine}
-                  onChange={(e) => {
-                    set('engine')(e.target.value);
-                  }}
-                >
-                  {[...new Set([values.engine, ...v.engines])].map((e) => (
-                    <option key={e} value={e}>
-                      {e}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Model" hint="The engine's model id">
-                <input
-                  className="field mono"
-                  value={values.model}
-                  onChange={(e) => {
-                    set('model')(e.target.value);
-                  }}
-                />
-              </Field>
-              <Field label="Account" hint="Who pays, from this workspace's accounts">
-                <select
-                  className="field"
-                  value={values.account}
-                  onChange={(e) => {
-                    set('account')(e.target.value);
-                  }}
-                >
-                  {[...new Set([values.account, ...v.accounts])].map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Permissions">
-                <select
-                  className="field"
-                  value={values.permissions}
-                  onChange={(e) => {
-                    set('permissions')(e.target.value);
-                  }}
-                >
-                  {Object.entries(PERMISSIONS).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              {values.permissions === 'skip' && (
-                <p className="small flash no card pad">
-                  With skip, the chief never asks before acting, even for risky actions.
-                </p>
-              )}
+              <Kv label="Engine" value={v.chief.engine} />
+              <Kv label="Model" value={v.chief.model} mono />
+              <Kv label="Account" value={v.chief.account} mono />
+              <Kv
+                label="Permissions"
+                value={PERMISSIONS[v.chief.permissions] ?? v.chief.permissions}
+              />
+              <p className="muted small">
+                Change these in its agent file. A conversation that&apos;s already open keeps its
+                chief as it started, even after a restart; new ones use the change.
+              </p>
             </>
           ) : (
             <p className="muted">No chief of staff agent file found.</p>
@@ -383,7 +315,7 @@ function SettingsForm({
             type="button"
             disabled={changed.length === 0 || save.isPending}
             onClick={() => {
-              setValues(start);
+              setEdits({});
             }}
           >
             Undo changes

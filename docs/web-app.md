@@ -105,16 +105,21 @@ of staff (agent file, engine, model, account, the name it posts as), chat and se
 knowledge base (folder, search, rebuilding the index), the skills pinned in `skills.yaml`, and
 archive or remove.
 
-**Built:** editing the name and description; the chief's engine, model, account, permissions and
-the name it posts as; open sessions per owner and how deep sessions may start sessions; when a note
-is asked for and the nightly tidy; and the skill budget. A save changes only the values that
-changed, in `workspace.yaml` and the chief's agent file, keeping comments, and commits them as an
-approval does. Nothing is written if either file changed since the page showed it, or if a value
-fails the checks the files have; the page says which. Renaming moves the name it posts as along,
-when it was made from the old name, as `wheems workspace rename` does. The service uses a change once
-it restarts, so a save offers **Restart now**: the service answers, then has launchd restart it.
-A Wheems that launchd doesn't run (`wheems service run`) says to restart it where it runs. Still
-commands: the chat channel, accounts, archive and remove.
+**Built:** editing the name and description, the name the chief posts as, open sessions per owner
+and how deep sessions may start sessions, when a note is asked for and the nightly tidy, and the
+skill budget. A save changes only the values you changed in `workspace.yaml`, keeping comments,
+and commits it as an approval does. Nothing is written if the file changed since the page showed
+it, or if a value fails the checks the file has; the page says which, and keeps what you typed, so
+saving again applies it to the file as it now is. Renaming moves the name it posts as along, when
+it was made from the old name, as `wheems workspace rename` does. The service uses a change once
+it restarts, so a save offers **Restart now**: the service answers, then has launchd restart it. A
+Wheems that launchd doesn't run (`wheems service run`) says to restart it where it runs.
+
+The chief's engine, model, account and permissions are shown, not edited: they're in its agent
+file, and a chat thread's chief keeps running in Herdr across a restart as it started, so a change
+reaches only new conversations, and an engine change would break the open ones. Editing them
+here waits on deciding what a change does to open conversations. Still commands: the chat
+channel, accounts, archive and remove.
 
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because

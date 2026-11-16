@@ -16,7 +16,6 @@ import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall } from '../src/config/load.js';
-import { StubEngine } from '../src/testing/index.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { installYaml } from '../src/cli/templates.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
@@ -404,12 +403,7 @@ describe('the web app', () => {
     expect(about.suggestions[0]).toMatchObject({ text: long, seen: fingerprint(long) });
   });
 
-  it('saves settings to workspace.yaml and the chief, keeping comments, only as seen', async () => {
-    await web.close();
-    const registry = new DriverRegistry()
-      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
-      .register('engine', 'codex', () => new StubEngine({ name: 'codex' }));
-    web = await startWeb({ home, env, registry, port: 0, appDir });
+  it("saves settings to workspace.yaml, keeping comments, only as seen, never the chief's agent file", async () => {
     const dir = join(home, 'workspaces', 'default');
     const yamlFile = join(dir, 'workspace.yaml');
     const chiefFile = join(dir, 'agents', 'chief-of-staff.md');
@@ -417,7 +411,6 @@ describe('the web app', () => {
     const chiefBefore = readFileSync(chiefFile, 'utf8');
 
     const view = (await get('/w/default/settings')).json();
-    expect(view.engines).toEqual(['claude-code', 'codex']);
     const stale = (await post('/w/default/settings', { seen: 'old', name: 'Home' })).json();
     expect(stale).toEqual({ ok: false, text: expect.stringContaining('changed since') });
 
@@ -426,16 +419,12 @@ describe('the web app', () => {
         seen: view.seen,
         maxDepth: '0',
         noteAfterIdle: '',
-        engine: 'nope',
-        account: 'someone-else',
         tidyAt: '25:00',
       })
     ).json();
     expect(bad.ok).toBe(false);
     expect(bad.text).toContain('How deep sessions may start sessions must be a whole number');
     expect(bad.text).toContain('Minutes before a note must be a whole number, 0 or more.');
-    expect(bad.text).toContain("There's no engine called nope.");
-    expect(bad.text).toContain('The account must be one this workspace may use');
     expect(bad.text).toContain('24-hour time');
     expect(readFileSync(chiefFile, 'utf8')).toBe(chiefBefore);
 
@@ -447,9 +436,9 @@ describe('the web app', () => {
         maxDepth: '3',
         tidyAt: 'off',
         postsAs: 'Home desk',
+        // Not changed here: an open conversation's chief keeps running as it started.
         engine: 'codex',
-        model: 'gpt-6',
-        permissions: 'ask',
+        permissions: 'skip',
       })
     ).json();
     expect(saved).toEqual({
@@ -468,12 +457,7 @@ describe('the web app', () => {
       knowledge: { tidy_at: false },
       identity: { name: 'Home desk' },
     });
-    const chief = loaded?.agents.find((a) => a.definition.name === 'chief-of-staff');
-    expect(chief?.config).toMatchObject({ engine: 'codex', model: 'gpt-6', permissions: 'ask' });
-    // The agent file's instructions are kept as they were.
-    expect(readFileSync(chiefFile, 'utf8')).toContain(
-      chiefBefore.split('---').slice(2).join('---'),
-    );
+    expect(readFileSync(chiefFile, 'utf8')).toBe(chiefBefore);
 
     const again = (await get('/w/default/settings')).json();
     expect(again.seen).not.toBe(view.seen);
