@@ -67,6 +67,9 @@ The order was set in the architecture design round of 13 November 2026; the reas
 - Creating workflows by asking the chief, and agents starting saved workflows
 - The database driver (SQLite, Postgres) and blueprints, with the CRM blueprint first
 - `wheems machine run` on other machines, and choosing the machine per agent
+- **The web app**: a local page from the service for setup and health, a workspace's sessions,
+  review and settings, and the install's connections, in light and dark (see
+  [web-app.md](web-app.md))
 - Creating skills and building plugins by asking the chief of staff, with the framework skill and
   `make:` commands
 - Plugins installed from npm, with manifests
@@ -80,10 +83,9 @@ The order was set in the architecture design round of 13 November 2026; the reas
 - Single-use payment cards
 - Shell and HTTP workflow steps (outside calls go through integrations and the broker instead)
 - Postgres with pgvector, and other hosted vector stores, for search
-- Read-only web views of blueprint data, folded into the web interface
+- Read-only web views of blueprint data, in the web app
 - The read-only overseer across workspaces (summaries only; no chief above workspaces)
 - A Teams channel
-- A web interface: a set-up screen first, then approval history
 - Hard isolation through separate machines or user accounts
 - Workflow branches and loops
 - Voice: phone calls with an agent
@@ -114,6 +116,18 @@ next.
 | 9   | Integrations, guardrails and the vault  | `integration connect` and `grant`, the vault (Keychain, secret service, encrypted file) with a log of every use, GitHub, integrations through the broker, rules applied as GitHub rulesets and git hooks, purchases with limits                                                                                                                                                                                                                                                                                                                                                          | A release hold is one rule in config, enforced on GitHub for every engine; an agent buys a domain after one tap, and an over-limit purchase is refused without asking                                                                                                                                                                                           |
 | 10  | Always on, more channels, more machines | Running on an always-on server, `setup` installing Herdr core, laptops connecting out to collect work, `wheems machine run` and `machine:` per agent, Telegram, email                                                                                                                                                                                                                                                                                                                                                                                                                    | Agents answer while the laptop is asleep, a worker runs on another machine, an agent answers email at its own address, and a fresh machine is set up with two commands                                                                                                                                                                                          |
 | 11  | Plugins and release                     | The framework skill, `create` commands for every area (Laravel's `make:`), npm plugins with manifests, published contract tests, docs, the open-source release                                                                                                                                                                                                                                                                                                                                                                                                                           | A chief of staff builds a working plugin on request, and a stranger can install Wheems from the docs alone                                                                                                                                                                                                                                                      |
+
+### The web app, alongside the milestones
+
+The [web app](web-app.md) grows with the milestones rather than waiting for one of its own. Its
+first version uses only what 0.1 already has, and each later milestone adds its page or switch.
+
+| Stage | With               | What it adds                                                                                                                                                                                        | Done when                                                                                                            |
+| ----- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1     | 0.x, now           | `wheems open`, the service serving the page locally with a token, the workspace switcher, Overview, Sessions, Review, Settings, Setup and health, Slack and accounts in Connections, light and dark | You check the install's health, follow a chief's sessions and approve a skill from the browser, without the terminal |
+| 2     | Milestone 3        | Approvals history, and answering approvals from the page                                                                                                                                            | An approval asked in Slack can be seen, and answered, in the browser                                                 |
+| 3     | Milestone 4        | Projects in the switcher and the session tree                                                                                                                                                       | A project's lead and its sessions show under the project                                                             |
+| 4     | Milestones 7 and 9 | Integrations and MCP servers in Connections, and each workspace's connection switches                                                                                                               | GitHub is connected and granted to one workspace from the page                                                       |
 
 Until milestone 10 the service runs on the laptop, so it only answers, and workflows only run,
 while the laptop is awake. Integration events are polled when it wakes.
