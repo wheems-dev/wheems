@@ -332,7 +332,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       started.push(channel);
       log(`Connected ${connection}`);
     }
-    // The web app, read-only for now, before the control socket: once the service answers, the
+    // The web app, before the control socket: once the service answers, the
     // web app has started or failed, so status never reports one that is still starting.
     // Wheems runs without it if its port is taken.
     if (options.webPort !== null) {
