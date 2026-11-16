@@ -18,6 +18,8 @@ import {
   type LaunchdStatus,
 } from '../../service/launchd.js';
 import { runService } from '../../service/service.js';
+import type { HealthCheck } from '../../contracts/driver.js';
+import { chatProblems } from '../../doctor/doctor.js';
 import type { Io } from '../program.js';
 import { packageVersion } from '../version.js';
 
@@ -119,7 +121,7 @@ export function formatStatus(facts: StatusFacts, color: boolean): { text: string
     lines.push(
       line(
         '!',
-        `Starting, or stuck: launchd runs it (pid ${String(facts.launchd.pid)}), but it isn't answering yet. See wheems logs.`,
+        `Starting, or stuck: launchd runs it (pid ${String(facts.launchd.pid)}), but it isn't answering yet. It answers once it has connected to every chat app: wheems doctor checks that they can be reached.`,
       ),
     );
   } else if (facts.launchd.loaded) {
@@ -224,13 +226,33 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
     await printStatus(where, io);
     return;
   }
-  const tail = await logTail(where, 15);
-  io.out(
-    tail !== null
-      ? `It hasn't answered yet. The end of its log:\n\n${tail}\nMore with: wheems logs\n`
-      : "It hasn't answered yet, and has written no log. To watch it start, run it in this terminal: wheems service run\n",
-  );
+  // It answers once it has connected to every chat app, so ask whether they can be reached.
+  const problems = await chatProblems({ home: where.home, registry: io.registry(), env: io.env });
+  io.out(notAnswering(problems, problems.length > 0 ? null : await logTail(where, 15)));
   process.exitCode = 1;
+}
+
+/**
+ * What `wheems start` says when the service hasn't answered in time: why, when a chat app can't
+ * be reached or refuses its tokens, or else the end of the log.
+ */
+export function notAnswering(problems: HealthCheck[], tail: string | null): string {
+  if (problems.length > 0) {
+    const lines = problems.map(
+      (p) => `  ✗ ${p.name}: ${p.message}${p.hint !== undefined ? `\n      ${p.hint}` : ''}`,
+    );
+    return [
+      "It hasn't answered yet: it answers once it has connected to every chat app, and it can't yet.",
+      '',
+      ...lines,
+      '',
+      'It keeps trying in the background. See when it connects with: wheems status',
+      '',
+    ].join('\n');
+  }
+  return tail !== null
+    ? `It hasn't answered yet. The end of its log:\n\n${tail}\nMore with: wheems logs\n`
+    : "It hasn't answered yet, and has written no log. To watch it start, run it in this terminal: wheems service run\n";
 }
 
 async function stop(io: Io): Promise<void> {

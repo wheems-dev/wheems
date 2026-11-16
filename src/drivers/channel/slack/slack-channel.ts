@@ -7,7 +7,12 @@ import type {
   SentMessage,
 } from '../../../contracts/channel.js';
 import { DriverError, type HealthCheck } from '../../../contracts/driver.js';
-import type { SlackEvent, SlackResult, SlackTransport } from './transport.js';
+import {
+  unreachable,
+  type SlackEvent,
+  type SlackResult,
+  type SlackTransport,
+} from './transport.js';
 
 /** Slack's limit for one markdown block is 12,000 characters; stay under it. */
 const MAX_BLOCK = 11_000;
@@ -38,7 +43,7 @@ export class SlackChannel implements ChannelDriver {
 
   async check(): Promise<HealthCheck[]> {
     try {
-      const auth = await this.transport.call('auth.test', {});
+      const auth = await this.transport.call('auth.test', {}, { quick: true });
       return [
         {
           name: 'Slack',
@@ -47,6 +52,17 @@ export class SlackChannel implements ChannelDriver {
         },
       ];
     } catch (error) {
+      const reason = unreachable(error);
+      if (reason !== null) {
+        return [
+          {
+            name: 'Slack',
+            status: 'fail',
+            message: `Couldn't reach Slack (${reason})`,
+            hint: "Check this Mac's internet connection. Wheems keeps trying on its own.",
+          },
+        ];
+      }
       return [
         {
           name: 'Slack',

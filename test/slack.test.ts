@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SlackChannel } from '../src/drivers/channel/slack/slack-channel.js';
 import { slackManifest } from '../src/drivers/channel/slack/setup.js';
+import { unreachable } from '../src/drivers/channel/slack/transport.js';
 import { tokenProblem } from '../src/drivers/channel/slack/connect.js';
 import { channelContract, expectDriverError } from '../src/testing/index.js';
 import type { InboundEvent } from '../src/contracts/channel.js';
@@ -194,6 +195,43 @@ describe('slack channel', () => {
         message: expect.stringContaining('invalid_auth') as string,
       }),
     ]);
+  });
+
+  it("says Slack couldn't be reached, rather than blaming the token, when this Mac is offline", async () => {
+    const { fake, driver } = setup();
+    fake.offline = true;
+    const [check] = await driver.check();
+    expect(check).toEqual(
+      expect.objectContaining({
+        status: 'fail',
+        message: "Couldn't reach Slack (fetch failed, ENOTFOUND)",
+        hint: expect.stringContaining('internet connection') as string,
+      }),
+    );
+    // A check gives up quickly rather than retrying for half an hour.
+    expect(fake.calls[0]).toEqual(expect.objectContaining({ options: { quick: true } }));
+  });
+
+  it('tells network failures apart from what Slack itself said', () => {
+    expect(
+      unreachable({ code: 'slack_webapi_request_error', original: new Error('fetch failed') }),
+    ).toBe('fetch failed');
+    expect(
+      unreachable({
+        code: 'slack_webapi_request_error',
+        original: Object.assign(new Error('fetch failed'), { cause: { code: 'ETIMEDOUT' } }),
+      }),
+    ).toBe('fetch failed, ETIMEDOUT');
+    expect(unreachable({ code: 'slack_webapi_http_error', statusCode: 503 })).toBe(
+      'Slack answered with HTTP 503',
+    );
+    expect(
+      unreachable({
+        code: 'slack_webapi_platform_error',
+        data: { ok: false, error: 'invalid_auth' },
+      }),
+    ).toBeNull();
+    expect(unreachable(new Error('boom'))).toBeNull();
   });
 
   it('finds channels by name across pages, and passes ids through', async () => {

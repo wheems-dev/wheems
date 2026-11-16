@@ -1,5 +1,5 @@
 import { SocketModeClient } from '@slack/socket-mode';
-import { WebClient } from '@slack/web-api';
+import { ErrorCode, LogLevel, WebClient } from '@slack/web-api';
 
 /** A Slack Events API event, such as a `message`. */
 export type SlackEvent = Record<string, unknown> & { type: string };
@@ -15,8 +15,51 @@ export interface SlackTransport {
   /** Connects and delivers each event. Events are acknowledged before delivery. */
   start(onEvent: (event: SlackEvent) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
-  /** Calls a Web API method. Slack errors reject with an error whose `data.error` is Slack's code. */
-  call(method: string, args: Record<string, unknown>): Promise<SlackResult>;
+  /**
+   * Calls a Web API method. Slack errors reject with an error whose `data.error` is Slack's code.
+   * A `quick` call, for a check, gives up after a few seconds when Slack can't be reached, and
+   * logs nothing; other calls keep trying for half an hour, so a message survives an outage.
+   */
+  call(
+    method: string,
+    args: Record<string, unknown>,
+    options?: { quick?: boolean },
+  ): Promise<SlackResult>;
+}
+
+/**
+ * A Web API client for checks and setup: one retry, ten seconds a try, and none of the SDK's
+ * own warnings, so a Mac that is offline gets a plain answer rather than half an hour of retries.
+ */
+export function quickClient(token: string): WebClient {
+  return new WebClient(token, {
+    retryConfig: { retries: 1 },
+    timeout: 10_000,
+    logLevel: LogLevel.ERROR,
+  });
+}
+
+/**
+ * Why Slack couldn't be reached, such as `fetch failed`, or null when the error came from Slack
+ * itself (a refused token, a missing channel) and says nothing about the network.
+ */
+export function unreachable(error: unknown): string | null {
+  const e = error as
+    | {
+        code?: unknown;
+        original?: { message?: unknown; cause?: { code?: unknown } };
+        statusCode?: unknown;
+      }
+    | undefined;
+  if (e?.code === ErrorCode.RequestError) {
+    const cause = e.original?.cause?.code;
+    const message = typeof e.original?.message === 'string' ? e.original.message : 'no answer';
+    return typeof cause === 'string' ? `${message}, ${cause}` : message;
+  }
+  if (e?.code === ErrorCode.HTTPError) {
+    return `Slack answered with HTTP ${typeof e.statusCode === 'number' ? e.statusCode : 'error'}`;
+  }
+  return null;
 }
 
 export interface SlackTokens {
@@ -35,9 +78,12 @@ interface Envelope {
 /** The real transport: Socket Mode (no public URL needed) and the Web API. */
 export class SocketModeTransport implements SlackTransport {
   private readonly web: WebClient;
+  private quickWeb: WebClient | undefined;
   private readonly socket: SocketModeClient;
+  private readonly botToken: string;
 
   constructor(tokens: SlackTokens) {
+    this.botToken = tokens.botToken;
     this.web = new WebClient(tokens.botToken);
     this.socket = new SocketModeClient({ appToken: tokens.appToken });
   }
@@ -67,7 +113,12 @@ export class SocketModeTransport implements SlackTransport {
     await this.socket.disconnect();
   }
 
-  async call(method: string, args: Record<string, unknown>): Promise<SlackResult> {
-    return (await this.web.apiCall(method, args)) as SlackResult;
+  async call(
+    method: string,
+    args: Record<string, unknown>,
+    options: { quick?: boolean } = {},
+  ): Promise<SlackResult> {
+    const web = options.quick === true ? (this.quickWeb ??= quickClient(this.botToken)) : this.web;
+    return (await web.apiCall(method, args)) as SlackResult;
   }
 }

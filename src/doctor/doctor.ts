@@ -268,6 +268,19 @@ async function agentChecks(install: LoadedInstall, options: DoctorOptions): Prom
   return checks;
 }
 
+/**
+ * Whether each chat app the workspaces use can be reached and accepts its tokens: the checks that
+ * fail, empty when all pass. `wheems start` asks when the service hasn't answered in time.
+ */
+export async function chatProblems(
+  options: Pick<DoctorOptions, 'home' | 'registry' | 'env'>,
+): Promise<HealthCheck[]> {
+  if (!(await exists(join(options.home, 'install.yaml')))) return [];
+  const install = await loadInstall(options.home);
+  const checks = await channelChecks(install, { ...options, quick: true });
+  return checks.filter((check) => check.status === 'fail');
+}
+
 async function channelChecks(
   install: LoadedInstall,
   options: DoctorOptions,

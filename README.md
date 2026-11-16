@@ -625,6 +625,23 @@ says why: `wheems start` prints the end of the log when it doesn't answer. Run `
 to see the errors. The commands are also under `wheems service` (`wheems service start` and so
 on).
 
+The service answers once it has connected to every chat app. When this Mac can't reach one, such
+as when the internet connection drops, it keeps trying in the background and starts answering
+when it gets through. `wheems start` waits 30 seconds, then
+says which chat app it can't reach rather than printing the log:
+
+```text
+It hasn't answered yet: it answers once it has connected to every chat app, and it can't yet.
+
+  ✗ slack: Slack: Couldn't reach Slack (fetch failed)
+      Check this Mac's internet connection. Wheems keeps trying on its own.
+
+It keeps trying in the background. See when it connects with: wheems status
+```
+
+Running `wheems start` again restarts it and starts the wait over, so there's no need: check
+`wheems status` instead.
+
 Agents reach the service through the `wheems` command, which Wheems puts first on each session's
 `PATH`, pinned to the same Node.js and the same copy of Wheems. The command talks to the service
 over a Unix socket in `.wheems/` that only you can open.
@@ -681,7 +698,7 @@ gives, which carries a token kept in `.wheems/web-token`. What comes next is in
 | Herdr core | `hc` is installed, new enough and answering. It also starts a tiny test session and removes it again (`--quick` skips that). |
 | Config     | Every config file, and the links between them                                                                                |
 | Agents     | Each engine is installed and signed in, and trusts each workspace folder and the folder sessions start in                    |
-| Channels   | Each Slack connection's tokens work                                                                                          |
+| Channels   | Each Slack connection can be reached and its tokens work; an offline Mac fails in seconds, saying Slack couldn't be reached  |
 | Knowledge  | The embeddings driver and model, the vector store, and each workspace's search index                                         |
 | Review     | What waits for `wheems review`                                                                                               |
 | Service    | Whether the service is installed and answering, and the session store (see below)                                            |
