@@ -277,13 +277,16 @@ export async function chatProblems(
 ): Promise<HealthCheck[]> {
   if (!(await exists(join(options.home, 'install.yaml')))) return [];
   const install = await loadInstall(options.home);
-  const checks = await channelChecks(install, { ...options, quick: true });
+  // Only whether each can be reached and takes its tokens: a channel the app isn't in only warns,
+  // and doesn't keep the service from answering.
+  const checks = await channelChecks(install, { ...options, quick: true }, false);
   return checks.filter((check) => check.status === 'fail');
 }
 
 async function channelChecks(
   install: LoadedInstall,
   options: DoctorOptions,
+  membership = true,
 ): Promise<HealthCheck[]> {
   const config = install.config;
   if (!config) return [];
@@ -329,7 +332,7 @@ async function channelChecks(
       const driver = options.registry.create('channel', settings.driver, { ...secret });
       const health = await driver.check();
       checks.push(...health.map((c) => ({ ...c, name: `${connection}: ${c.name}` })));
-      if (health.every((c) => c.status !== 'fail')) {
+      if (membership && health.every((c) => c.status !== 'fail')) {
         checks.push(...(await channelMembership(install, connection, driver, options)));
       }
     } catch (error) {
@@ -360,7 +363,9 @@ async function channelMembership(
     const chat = workspace.config?.channels.chat;
     if (!chat || chat.connection !== connection || !('channel' in chat)) continue;
     const name = `${workspace.id} chat channel`;
-    const id = driver.resolveChannel ? await driver.resolveChannel(chat.channel) : chat.channel;
+    const id = driver.resolveChannel
+      ? await driver.resolveChannel(chat.channel, { quick: true })
+      : chat.channel;
     if (id === null) {
       const fix = options.fixes ? await channelNameFix(workspace, chat.channel, driver) : undefined;
       checks.push({
@@ -372,7 +377,7 @@ async function channelMembership(
       });
       continue;
     }
-    const member = driver.isMember ? await driver.isMember(id) : null;
+    const member = driver.isMember ? await driver.isMember(id, { quick: true }) : null;
     checks.push(
       member === true
         ? { name, status: 'pass', message: `The app is in ${chat.channel}` }
@@ -405,7 +410,7 @@ async function channelNameFix(
 ): Promise<Fix | undefined> {
   if (!driver.listChannels) return undefined;
   const wanted = configured.replace(/^#/, '').toLowerCase();
-  const visible = await driver.listChannels().catch(() => []);
+  const visible = await driver.listChannels({ quick: true }).catch(() => []);
   let best: { name: string; distance: number } | undefined;
   for (const channel of visible) {
     const distance = editDistance(wanted, channel.name.toLowerCase());

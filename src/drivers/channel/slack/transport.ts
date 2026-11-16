@@ -28,36 +28,56 @@ export interface SlackTransport {
 }
 
 /**
- * A Web API client for checks and setup: one retry, ten seconds a try, and none of the SDK's
- * own warnings, so a Mac that is offline gets a plain answer rather than half an hour of retries.
+ * A Web API client for checks and setup: one retry, ten seconds a try, no waiting out Slack's
+ * rate limits, and none of the SDK's own warnings, so a Mac that is offline gets a plain answer
+ * in seconds rather than half an hour of retries.
  */
 export function quickClient(token: string): WebClient {
   return new WebClient(token, {
     retryConfig: { retries: 1 },
     timeout: 10_000,
+    rejectRateLimitedCalls: true,
     logLevel: LogLevel.ERROR,
   });
 }
 
+/** Why a call got no answer from Slack itself, as a check reports it. */
+export interface NoAnswer {
+  message: string;
+  hint: string;
+}
+
 /**
- * Why Slack couldn't be reached, such as `fetch failed`, or null when the error came from Slack
- * itself (a refused token, a missing channel) and says nothing about the network.
+ * Why a call got no answer from Slack: this Mac couldn't reach it, or Slack is limiting requests.
+ * Null when the error is Slack's own answer (a refused token, a missing channel).
  */
-export function unreachable(error: unknown): string | null {
+export function noAnswer(error: unknown): NoAnswer | null {
   const e = error as
     | {
         code?: unknown;
         original?: { message?: unknown; cause?: { code?: unknown } };
         statusCode?: unknown;
+        retryAfter?: unknown;
       }
     | undefined;
+  const offline = (reason: string): NoAnswer => ({
+    message: `Couldn't reach Slack (${reason})`,
+    hint: "Check this Mac's internet connection. Wheems keeps trying on its own.",
+  });
   if (e?.code === ErrorCode.RequestError) {
     const cause = e.original?.cause?.code;
     const message = typeof e.original?.message === 'string' ? e.original.message : 'no answer';
-    return typeof cause === 'string' ? `${message}, ${cause}` : message;
+    return offline(typeof cause === 'string' ? `${message}, ${cause}` : message);
   }
   if (e?.code === ErrorCode.HTTPError) {
-    return `Slack answered with HTTP ${typeof e.statusCode === 'number' ? e.statusCode : 'error'}`;
+    return offline(`HTTP ${typeof e.statusCode === 'number' ? String(e.statusCode) : 'error'}`);
+  }
+  if (e?.code === ErrorCode.RateLimitedError) {
+    const after = typeof e.retryAfter === 'number' ? ` for ${String(e.retryAfter)} seconds` : '';
+    return {
+      message: `Slack is limiting requests${after}`,
+      hint: 'Wait, then try again. Wheems keeps trying on its own.',
+    };
   }
   return null;
 }

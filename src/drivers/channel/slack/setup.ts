@@ -1,5 +1,5 @@
 import { slackError } from './slack-channel.js';
-import { quickClient, unreachable } from './transport.js';
+import { noAnswer, quickClient } from './transport.js';
 
 /** The Slack app manifest: Socket Mode, so no public URL is needed. One app serves every workspace. */
 export function slackManifest(name = 'Wheems'): string {
@@ -90,12 +90,11 @@ export async function slackMemberName(botToken: string, userId: string): Promise
   }
 }
 
-/** Throws a plain error when Slack couldn't be reached, so a token isn't blamed for the network. */
+/**
+ * Throws a plain error when Slack couldn't be reached or is limiting requests, so a token isn't
+ * blamed for the network.
+ */
 function offline(error: unknown): void {
-  const reason = unreachable(error);
-  if (reason !== null) {
-    throw new Error(`Couldn't reach Slack (${reason}). Check this Mac's internet connection.`, {
-      cause: error,
-    });
-  }
+  const why = noAnswer(error);
+  if (why !== null) throw new Error(`${why.message}. ${why.hint}`, { cause: error });
 }

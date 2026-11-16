@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SlackChannel } from '../src/drivers/channel/slack/slack-channel.js';
 import { slackManifest } from '../src/drivers/channel/slack/setup.js';
-import { unreachable } from '../src/drivers/channel/slack/transport.js';
+import { noAnswer } from '../src/drivers/channel/slack/transport.js';
 import { tokenProblem } from '../src/drivers/channel/slack/connect.js';
 import { channelContract, expectDriverError } from '../src/testing/index.js';
 import type { InboundEvent } from '../src/contracts/channel.js';
@@ -212,26 +212,40 @@ describe('slack channel', () => {
     expect(fake.calls[0]).toEqual(expect.objectContaining({ options: { quick: true } }));
   });
 
-  it('tells network failures apart from what Slack itself said', () => {
+  it('tells network failures and rate limits apart from what Slack itself said', () => {
     expect(
-      unreachable({ code: 'slack_webapi_request_error', original: new Error('fetch failed') }),
-    ).toBe('fetch failed');
+      noAnswer({ code: 'slack_webapi_request_error', original: new Error('fetch failed') })
+        ?.message,
+    ).toBe("Couldn't reach Slack (fetch failed)");
     expect(
-      unreachable({
+      noAnswer({
         code: 'slack_webapi_request_error',
         original: Object.assign(new Error('fetch failed'), { cause: { code: 'ETIMEDOUT' } }),
-      }),
-    ).toBe('fetch failed, ETIMEDOUT');
-    expect(unreachable({ code: 'slack_webapi_http_error', statusCode: 503 })).toBe(
-      'Slack answered with HTTP 503',
+      })?.message,
+    ).toBe("Couldn't reach Slack (fetch failed, ETIMEDOUT)");
+    expect(noAnswer({ code: 'slack_webapi_http_error', statusCode: 503 })?.message).toBe(
+      "Couldn't reach Slack (HTTP 503)",
     );
+    expect(noAnswer({ code: 'slack_webapi_rate_limited_error', retryAfter: 120 })).toEqual({
+      message: 'Slack is limiting requests for 120 seconds',
+      hint: expect.stringContaining('try again') as string,
+    });
     expect(
-      unreachable({
-        code: 'slack_webapi_platform_error',
-        data: { ok: false, error: 'invalid_auth' },
-      }),
+      noAnswer({ code: 'slack_webapi_platform_error', data: { ok: false, error: 'invalid_auth' } }),
     ).toBeNull();
-    expect(unreachable(new Error('boom'))).toBeNull();
+    expect(noAnswer(new Error('boom'))).toBeNull();
+  });
+
+  it('passes quick on to Slack for lookups made by a check', async () => {
+    const { fake, driver } = setup();
+    fake.channels = [{ id: 'C0AAAAAAA', name: 'alpha' }];
+    await driver.resolveChannel('alpha', { quick: true });
+    await driver.isMember('C0AAAAAAA', { quick: true });
+    await driver.listChannels({ quick: true });
+    await driver.isMember('C0AAAAAAA');
+    const quick = fake.calls.map((c) => c.options?.quick === true);
+    expect(quick.slice(0, -1).every(Boolean)).toBe(true);
+    expect(quick.at(-1)).toBe(false);
   });
 
   it('finds channels by name across pages, and passes ids through', async () => {

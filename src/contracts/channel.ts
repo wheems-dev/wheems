@@ -38,16 +38,16 @@ export interface ChannelDriver extends Driver<'channel'> {
    * Optional: a channel's id from its name (or its id), or null when the app can't see it.
    * Drivers without it take channel names as ids.
    */
-  resolveChannel?(nameOrId: string): Promise<string | null>;
+  resolveChannel?(nameOrId: string, options?: LookupOptions): Promise<string | null>;
 
   /** Optional: the channels the app can see, to suggest one when a name in config is wrong. */
-  listChannels?(): Promise<{ id: string; name: string }[]>;
+  listChannels?(options?: LookupOptions): Promise<{ id: string; name: string }[]>;
 
   /**
    * Optional: whether the app is a member of a channel, so messages there reach it. Null when it
    * can't tell. Seeing a channel isn't enough: Slack lists public channels the app isn't in.
    */
-  isMember?(channelId: string): Promise<boolean | null>;
+  isMember?(channelId: string, options?: LookupOptions): Promise<boolean | null>;
 
   /**
    * Optional: the channel id of the app's direct messages with a person, opening them if need
@@ -153,4 +153,13 @@ export interface SentMessage {
 /** The thread to reply in to keep a conversation together. */
 export function replyThread(event: InboundMessage | ButtonPress): string {
   return event.threadId ?? event.messageId;
+}
+
+/** Options for a channel lookup. */
+export interface LookupOptions {
+  /**
+   * For a check, such as `wheems doctor`: give up within seconds when the chat app can't be
+   * reached, rather than retrying for as long as the service would.
+   */
+  quick?: boolean;
 }
