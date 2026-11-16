@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import type { Flash } from '../../../src/web/actions.js';
 import type { SessionMessage, TreeItem, WorkspacePage } from '../../../src/web/data.js';
@@ -96,11 +96,19 @@ function Detail({
 }) {
   const path = `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}${ended ? '?ended=1' : ''}`;
   const view = useView<SessionView>(path, 3000);
-  const act = useAction(
-    `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}`,
-  );
   const [text, setText] = useState('');
   const [flash, setFlash] = useState<Flash | null>(null);
+  // The draft that was sent, cleared once it's delivered, unless you've written another since.
+  const sent = useRef<string | null>(null);
+  const act = useAction(
+    `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}`,
+    (result) => {
+      setFlash(result);
+      const draft = sent.current;
+      sent.current = null;
+      if (result.ok && draft !== null) setText((now) => (now === draft ? '' : now));
+    },
+  );
   // A slow send's or end's result, once the service has it.
   useEffect(() => {
     if (view.data?.outcome) setFlash(view.data.outcome);
@@ -121,15 +129,8 @@ function Detail({
   const { item, messages } = view.data;
   const s = item.session;
   const run = (fields: Record<string, string>) => {
-    act.mutate(fields, {
-      onSuccess: (result) => {
-        setFlash(result);
-        if (result.ok && fields.action === 'send') setText('');
-      },
-      onError: (error) => {
-        setFlash({ ok: false, text: error.message });
-      },
-    });
+    sent.current = fields.action === 'send' ? (fields.text ?? null) : null;
+    act.mutate(fields);
   };
   return (
     <section className="card detail" aria-label="Session detail">

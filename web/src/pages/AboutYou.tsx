@@ -44,17 +44,9 @@ function Suggestion({
   suggestion: AboutYouView['suggestions'][number];
   done: (flash: Flash) => void;
 }) {
-  const act = useAction(`/about-you/${encodeURIComponent(s.name)}`);
+  const act = useAction(`/about-you/${encodeURIComponent(s.name)}`, done);
   const decide = (decision: 'approve' | 'decline') => {
-    act.mutate(
-      { decision, seen: s.seen },
-      {
-        onSuccess: done,
-        onError: (error) => {
-          done({ ok: false, text: error.message });
-        },
-      },
-    );
+    act.mutate({ decision, seen: s.seen });
   };
   return (
     <article className="card pad stack" style={{ gap: 12 }}>

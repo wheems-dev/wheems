@@ -62,11 +62,23 @@ export function useView<T>(path: string | null, every?: number) {
   });
 }
 
-/** An action: posts, then reloads every view, since an action can change several. */
-export function useAction(path: string) {
+/**
+ * An action: posts, says how it went through `onResult`, then reloads every view, since an
+ * action can change several. The result is given first, to whatever the page keeps it in, so a
+ * card the reload removes (an approved proposal) can't take its message with it.
+ */
+export function useAction(path: string, onResult: (result: Flash) => void) {
   const client = useQueryClient();
   return useMutation<Flash, ApiError, Record<string, string | string[]>>({
     mutationFn: (fields) => call<Flash>(path, { method: 'POST', body: JSON.stringify(fields) }),
-    onSettled: () => client.invalidateQueries(),
+    onSuccess: (result) => {
+      onResult(result);
+    },
+    onError: (error) => {
+      onResult({ ok: false, text: error.message });
+    },
+    onSettled: () => {
+      void client.invalidateQueries();
+    },
   });
 }

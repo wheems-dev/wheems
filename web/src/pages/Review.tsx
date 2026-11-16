@@ -58,21 +58,16 @@ function Proposal({
   proposal: ProposalView;
   done: (flash: Flash) => void;
 }) {
-  const act = useAction(`/w/${encodeURIComponent(workspace)}/review/${encodeURIComponent(p.id)}`);
+  const act = useAction(
+    `/w/${encodeURIComponent(workspace)}/review/${encodeURIComponent(p.id)}`,
+    done,
+  );
   const [text, setText] = useState(p.text);
   const [agents, setAgents] = useState(
     () => new Set(p.agents.filter((a) => a.checked).map((a) => a.name)),
   );
   const decide = (decision: 'approve' | 'decline') => {
-    act.mutate(
-      { decision, seen: p.seen, text, agents: [...agents] },
-      {
-        onSuccess: done,
-        onError: (error) => {
-          done({ ok: false, text: error.message });
-        },
-      },
-    );
+    act.mutate({ decision, seen: p.seen, text, agents: [...agents] });
   };
   return (
     <article className="card pad stack" style={{ gap: 14 }}>
