@@ -80,6 +80,11 @@ export interface SessionRecord {
   parent: string | null;
   title: string | null;
   purpose: string | null;
+  /**
+   * The person's own words that started the work: the chat thread's first message, inherited
+   * by every session started for it. Null when unknown, such as for sessions from before 0.2.
+   */
+  ask: string | null;
   summary: string | null;
   state: SessionState;
   herdrName: string | null;
@@ -103,6 +108,7 @@ export interface NewSession {
   parent: string | null;
   title: string;
   purpose: string;
+  ask: string | null;
   herdrName: string;
   folder: string;
   createdAt: string;
@@ -345,6 +351,14 @@ export class StateStore {
     return row === undefined ? undefined : toSession(row);
   }
 
+  /**
+   * Records the person's own words that started a thread session: its first message. Never
+   * replaces an ask already recorded, so a later message can't take its place.
+   */
+  recordAsk(sessionId: string, ask: string): void {
+    this.db.prepare('UPDATE sessions SET ask = ? WHERE id = ? AND ask IS NULL').run(ask, sessionId);
+  }
+
   /** The conversation key of a thread session, for callers that know only its session id. */
   threadKeyOf(sessionId: string): string | undefined {
     const row = this.db.prepare('SELECT key FROM threads WHERE session = ?').get(sessionId);
@@ -582,8 +596,8 @@ export class WorkspaceSessions {
     this.db
       .prepare(
         `INSERT INTO sessions (id, workspace, project, agent, kind, owner, parent, title, purpose,
-           summary, state, herdr_name, folder, created_at, last_active_at)
-         VALUES (?, ?, ?, ?, 'adhoc', ?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?)`,
+           ask, summary, state, herdr_name, folder, created_at, last_active_at)
+         VALUES (?, ?, ?, ?, 'adhoc', ?, ?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?)`,
       )
       .run(
         session.id,
@@ -594,6 +608,7 @@ export class WorkspaceSessions {
         session.parent,
         session.title,
         session.purpose,
+        session.ask,
         // The summary is written by code: the purpose at first, then the latest note's title.
         session.purpose,
         session.herdrName,
@@ -785,7 +800,7 @@ const THREAD_SELECT = `SELECT t.key, t.workspace, t.connection, t.channel, t.thr
   FROM threads t JOIN sessions s ON s.id = t.session`;
 
 const SESSION_SELECT = `SELECT id, workspace, project, agent, kind, owner, parent, title, purpose,
-  summary, state, herdr_name, engine_session_id, folder, launch_started_at, launch_tag,
+  ask, summary, state, herdr_name, engine_session_id, folder, launch_started_at, launch_tag,
   launched_at, created_at, last_active_at, ended_at FROM sessions`;
 
 function toConversation(row: Row): Conversation {
@@ -850,6 +865,7 @@ function toSession(row: Row): SessionRecord {
     parent: text(row.parent),
     title: text(row.title),
     purpose: text(row.purpose),
+    ask: text(row.ask),
     summary: text(row.summary),
     state: String(row.state) as SessionState,
     herdrName: text(row.herdr_name),

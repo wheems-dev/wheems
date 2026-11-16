@@ -674,6 +674,12 @@ mends older ones when it starts.
 - **Ids, states and short text, not content.** Messages, briefs, results and notes stay as files
   under `.wheems/` and in the knowledge base. Titles, purposes and summaries go through the same
   credential check as notes.
+- **The person's ask, carried down.** The one piece of the person's own words the store keeps is
+  a session's `ask`: a chat thread's first message, cut to 2,000 characters. Every session started
+  for the thread, and every session those start, inherits it, and its instructions quote it, so
+  work that is handed down stays tied to what was asked. A session the person starts themselves
+  has its purpose as its ask. A message that looks like it holds a password, token or key isn't
+  kept, and the ask isn't searchable. `wheems session show` prints it.
 - **One store per install, not per workspace.** It holds no content, every row carries its
   workspace, and `max_sessions` counts across workspaces. The workspace filter lives in one module,
   like `hc` calls do.

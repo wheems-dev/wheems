@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall, type LoadedInstall } from '../src/config/load.js';
-import { ConversationManager, conversationKey, uuidFor } from '../src/service/conversations.js';
+import {
+  ConversationManager,
+  askFrom,
+  conversationKey,
+  uuidFor,
+} from '../src/service/conversations.js';
 import { ConversationStore } from '../src/service/store.js';
 import { StateStore } from '../src/state/store.js';
 import type { FinalMessage } from '../src/contracts/engine.js';
@@ -1050,5 +1055,15 @@ describe('conversations', () => {
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(uuidFor('personal:slack:D1:1.2')).toBe(id);
     expect(uuidFor('personal:slack:D1:1.3')).not.toBe(id);
+  });
+});
+
+describe('askFrom', () => {
+  it('keeps a first message as an ask, trimmed and cut short, and never a secret', () => {
+    expect(askFrom('  Find cheaper boat insurance  ')).toBe('Find cheaper boat insurance');
+    const long = askFrom('x'.repeat(3000));
+    expect(long).toHaveLength(2000);
+    expect(long.endsWith('…')).toBe(true);
+    expect(askFrom('my token is xoxb-1234567890-abcdefghij')).toBe('');
   });
 });

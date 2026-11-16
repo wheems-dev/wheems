@@ -3,6 +3,16 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Added**
+
+- Sessions keep what you asked: a chat thread's first message is recorded as its session's ask,
+  and every session started for it, at any depth, inherits it. Their instructions quote it, so
+  work handed down stays tied to what you asked, and `wheems session show` prints it. A session
+  you start yourself has its purpose as its ask. A message that looks like it holds a password,
+  token or key isn't kept.
+
 ## 0.1.1
 
 Released 16 November 2026. Commands use full words (`wheems workspace`, `wheems knowledgebase`,

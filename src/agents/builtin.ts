@@ -33,17 +33,26 @@ export function adhocInstructions(session: {
   title: string;
   purpose: string;
   owner: string;
+  /** The person's own words that started the work, when they differ from the purpose. */
+  ask?: string | null;
 }): string {
-  const purpose = session.purpose
-    .split('\n')
-    .map((line) => `> ${line}`)
-    .join('\n');
+  const quote = (text: string) =>
+    text
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n');
+  const ask =
+    session.ask !== undefined &&
+    session.ask !== null &&
+    session.ask.trim() !== session.purpose.trim()
+      ? `\nIt all started with the person asking:\n\n${quote(session.ask)}\n\nKeep your work to what that needs: do your part of it, not more.\n`
+      : '';
   return `## This session (built into Wheems)
 
 You're an ad-hoc session, "${session.title}", started by ${session.owner} for this:
 
-${purpose}
-
+${quote(session.purpose)}
+${ask}
 - Messages reach you through Wheems, usually from ${session.owner}. Nobody watches this
   terminal, and you never talk to the person in a chat: they only talk to their chief of staff,
   who tells them what they need to know.
@@ -209,7 +218,7 @@ export interface Knowledge {
 /** What the built-ins say about the session an agent runs in. */
 export interface SessionBuiltins {
   /** For an ad-hoc session, replacing the chat instructions. */
-  adhoc?: { title: string; purpose: string; owner: string };
+  adhoc?: { title: string; purpose: string; owner: string; ask?: string | null };
   /** For an agent that may start sessions. */
   sessions?: { maxOpen: number; open: OpenSession[] };
 }

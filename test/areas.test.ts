@@ -194,6 +194,7 @@ describe('wheems areas', () => {
           parent: null,
           title: 'Research',
           purpose: 'Research things',
+          ask: null,
           herdrName: `${workspace}-s1`,
           folder: home,
           createdAt: new Date().toISOString(),

@@ -24,6 +24,11 @@ export class ConversationStore {
     this.state.saveConversation(key, conversation);
   }
 
+  /** Records the person's first message as what the thread session was asked. */
+  async recordAsk(sessionId: string, ask: string): Promise<void> {
+    this.state.recordAsk(sessionId, ask);
+  }
+
   async setEngineSession(key: string, id: string): Promise<void> {
     this.state.updateThreadSession(key, { engineSessionId: id });
   }

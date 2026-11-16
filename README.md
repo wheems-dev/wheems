@@ -632,7 +632,9 @@ over a Unix socket in `.wheems/` that only you can open.
 The service keeps a record of every session it runs in `.wheems/state.sqlite`, using Node's
 built-in SQLite: each workspace's chief, written from config every time the service starts, and
 each chat thread with the session it talks to, where the answers have got to and its notes.
-Herdr says whether a session is running; the store says what it's for. Every session Wheems
+Herdr says whether a session is running; the store says what it's for, including **what you
+asked**: a thread's first message, which every session started for it inherits and is reminded
+of, so work handed down stays tied to it (`wheems session show` prints it as "Asked"). Every session Wheems
 starts is labelled `wheems=<session id>` in Herdr, and when the service starts it matches the
 store against Herdr: a session whose Herdr session has gone is marked stopped, and resumes when
 it's next needed.

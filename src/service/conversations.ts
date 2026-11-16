@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { looksLikeSecret } from '../knowledge/notes.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NOTE_REQUEST, withBuiltins, type SessionBuiltins } from '../agents/builtin.js';
@@ -569,6 +570,9 @@ export class ConversationManager {
       ...(launchTag !== undefined && { launchTag }),
       pending: 1,
     });
+    // A new thread's first message is the person's ask, which every session started for it keeps.
+    const ask = askFrom(event.text);
+    if (existing === undefined && ask !== '') await this.options.store.recordAsk(uuidFor(key), ask);
     // A new session's turns count from 0; its first turn is the message it was started with.
     // `now` was taken before the session started, so a reply to its first message counts.
     this.watchTurn(
@@ -1264,4 +1268,17 @@ function sleep(ms: number): Promise<void> {
 
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The most of a person's message kept as a session's ask. */
+const ASK_LIMIT = 2000;
+
+/**
+ * A first message as a session's ask: trimmed, and cut short when it's very long. Empty when
+ * it looks like it holds a password, token or key, which the store never keeps.
+ */
+export function askFrom(text: string): string {
+  const trimmed = text.trim();
+  if (looksLikeSecret(trimmed)) return '';
+  return trimmed.length <= ASK_LIMIT ? trimmed : `${trimmed.slice(0, ASK_LIMIT - 1)}…`;
 }
