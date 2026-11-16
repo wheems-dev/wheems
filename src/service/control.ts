@@ -81,15 +81,19 @@ export const requestSchema = z.discriminatedUnion('op', [
     session: z.string().min(1).optional(),
     text: z.string().min(1),
   }),
-  /** A workspace's chat threads, newest first, for choosing how each restarts. */
-  z.object({ op: z.literal('conversations'), workspace: z.string().min(1) }),
+  /**
+   * A workspace's chat threads, newest first, for choosing how each restarts. For the person
+   * only: an agent's session is refused.
+   */
+  z.object({ op: z.literal('conversations'), caller: callerSchema }),
   /**
    * Restarts chat threads as chosen: carry on, hand over or start fresh (see
-   * ConversationManager.restart). Each is named by its session's id.
+   * ConversationManager.restart). Each is named by its session's id. For the person only, in
+   * the caller's workspace: an agent's session is refused.
    */
   z.object({
     op: z.literal('conversations-restart'),
-    workspace: z.string().min(1),
+    caller: callerSchema,
     choices: z
       .array(
         z.object({

@@ -339,7 +339,10 @@ export class ConversationManager {
   restart(key: string, choice: RestartChoice): Promise<RestartOutcome> {
     let outcome: RestartOutcome = { key, done: false, text: 'It could not be restarted.' };
     return this.enqueue(key, async () => {
-      outcome = await this.restartNow(key, choice);
+      outcome = await this.restartNow(key, choice).catch((error: unknown) => {
+        this.options.log(`Conversation ${key}: not restarted: ${describe(error)}`);
+        return { key, done: false, text: `It was left as it is: ${describe(error)}` };
+      });
     }).then(() => outcome);
   }
 
@@ -350,7 +353,9 @@ export class ConversationManager {
     if (!binding) {
       return { key, done: false, text: "Its workspace or chat connection isn't running." };
     }
-    const session = await this.options.runtime.get(conversation.sessionName).catch(() => null);
+    // Whether its session runs must be known: a restart that couldn't stop it would leave its
+    // messages going to the old session while answers are read from the new one.
+    const session = await this.sessionState(conversation.sessionName);
     const live = session?.state === 'live' ? session : null;
     const watch = this.watches.get(key);
     if (
@@ -397,7 +402,7 @@ export class ConversationManager {
         at: new Date(),
       };
     }
-    const still = await this.options.runtime.get(conversation.sessionName).catch(() => null);
+    const still = await this.sessionState(conversation.sessionName);
     if (still?.state === 'live' && !(await this.stopSession(still))) {
       return {
         key,
@@ -419,6 +424,17 @@ export class ConversationManager {
             ? 'Handed over: its next message starts a new session from the handover.'
             : "Its chief couldn't write a handover, so Wheems wrote one from the thread. Its next message starts a new session from that.",
     };
+  }
+
+  /** A session as the runtime has it, or null when there's none; throws when it can't tell. */
+  private async sessionState(name: string): Promise<SessionInfo | null> {
+    try {
+      return (await this.options.runtime.get(name)) ?? null;
+    } catch (error) {
+      throw new Error(`Herdr couldn't say whether its session is running (${describe(error)})`, {
+        cause: error,
+      });
+    }
   }
 
   /**
@@ -833,14 +849,13 @@ export class ConversationManager {
       ...(launchTag !== undefined && { launchTag }),
       pending: 1,
     });
+    const chief = this.chiefOfStaff(binding).definition;
     if (start !== null) {
-      const chief = this.chiefOfStaff(binding).definition;
       await this.options.store.startedAfresh(key, {
         engine: chief.engine,
         model: chief.model,
         at: launchedAt,
       });
-      await this.notice(key, binding, replyThread(event), start.line(chief.engine, chief.model));
     }
     // A new thread's first message is the person's ask, which every session started for it keeps.
     const ask = askFrom(event.text);
@@ -859,6 +874,18 @@ export class ConversationManager {
       now.getTime(),
     );
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
+    if (start !== null) {
+      // After its answer is being followed: the line is worth saying, never worth losing the
+      // answer over, so a failure to post it is only logged.
+      await this.notice(
+        key,
+        binding,
+        replyThread(event),
+        start.line(chief.engine, chief.model),
+      ).catch((error: unknown) => {
+        this.options.log(`Conversation ${key}: couldn't say it started afresh: ${describe(error)}`);
+      });
+    }
     this.trimLater(binding.workspace.id, sessionName);
   }
 

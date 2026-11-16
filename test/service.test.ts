@@ -380,7 +380,7 @@ describe('the service', () => {
     const key = `personal:slack:D1:${first}`;
     const listed = await request(paths(home, env).socket, {
       op: 'conversations',
-      workspace: 'personal',
+      caller: { workspace: 'personal' },
     });
     expect(listed.ok && listed.conversations?.map((c) => c.ask)).toEqual(['plan the trip']);
     const session = listed.ok ? (listed.conversations?.[0]?.session ?? '') : '';
@@ -399,6 +399,15 @@ describe('the service', () => {
       code: 0,
       out: "Its next message starts a new session, with only the thread's ask.\n",
     });
+    // An agent can't restart threads, its own or any other.
+    const byAgent = await cliReply(
+      key,
+      [session, '--workspace', 'personal'],
+      '',
+      'session restart',
+    );
+    expect(byAgent.code).toBe(1);
+    expect(byAgent.err).toContain('Only you can restart chat threads');
     const wrong = await cliReply('', ['nope', '--workspace', 'personal'], '', 'session restart');
     expect(wrong.code).toBe(1);
     expect(wrong.err).toContain("There's no chat thread with session nope in personal.");

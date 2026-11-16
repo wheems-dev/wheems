@@ -272,13 +272,11 @@ export function registerSession(program: Command, io: Io): void {
         if (options.fresh === true && options.carryOn === true) {
           throw new Error('Choose --fresh or --carry-on, not both.');
         }
-        const workspace = caller(options).workspace;
-        if (workspace === undefined) throw new Error('Say which workspace, with --workspace.');
         const answer = await ask(
           options,
           {
             op: 'conversations-restart',
-            workspace,
+            caller: caller(options),
             choices: [
               {
                 session: id,

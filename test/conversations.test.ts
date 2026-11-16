@@ -1012,6 +1012,44 @@ describe('conversations', () => {
       );
     });
 
+    it("leaves a conversation as it is when Herdr can't say whether its session runs", async () => {
+      behaviour = () => 'answer';
+      const { key } = await threadOf('check the boiler');
+      const get = runtime.get.bind(runtime);
+      runtime.get = () => Promise.reject(new Error('hc is not answering'));
+      try {
+        expect(await manager.restart(key, 'fresh')).toMatchObject({
+          done: false,
+          text: expect.stringContaining(
+            "Herdr couldn't say whether its session is running",
+          ) as string,
+        });
+      } finally {
+        runtime.get = get;
+      }
+      expect(state.conversation(key)?.generation).toBeUndefined();
+      expect(state.conversation(key)?.handover).toBeUndefined();
+    });
+
+    it("follows the new session's answers even when the line in the thread can't be posted", async () => {
+      behaviour = () => 'answer';
+      const { first, key } = await threadOf('pay the invoice');
+      await manager.restart(key, 'fresh');
+      const send = channel.send.bind(channel);
+      channel.send = (message) =>
+        message.text.startsWith('_Wheems:_')
+          ? Promise.reject(new Error('Slack is down'))
+          : send(message);
+      await dm('which one?', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual([
+        'answer: pay the invoice',
+        expect.stringContaining('answer: <wheems-start-afresh>'),
+      ]);
+      expect(state.conversation(key)?.pending).toBe(0);
+      expect(logs.some((l) => l.includes("couldn't say it started afresh"))).toBe(true);
+    });
+
     it('lists the open conversations, newest first, with their asks', async () => {
       behaviour = () => 'answer';
       const a = await threadOf('first thing');

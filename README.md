@@ -363,7 +363,8 @@ in the thread saying so. When the chief can't write one (it isn't running, or do
 time), Wheems writes one from the thread's ask and its latest messages, and says so. With
 `--fresh`, the next session starts with only the thread's ask; with `--carry-on`, its session
 just stops, and the next message resumes it as it was, on the settings then. A thread answering a
-message is left alone. See [docs/session-handover.md](docs/session-handover.md).
+message is left alone, and so is one whose session Herdr can't say is running. Only you restart
+threads, from a terminal or the web app; an agent can't. See [docs/session-handover.md](docs/session-handover.md).
 
 Sessions only ever see their own workspace's sessions. A chief (or you) may send to any ad-hoc
 session in the workspace; an ad-hoc session only to the sessions it started and to its owner
