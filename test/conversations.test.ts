@@ -1050,6 +1050,49 @@ describe('conversations', () => {
       expect(logs.some((l) => l.includes("couldn't say it started afresh"))).toBe(true);
     });
 
+    it("keeps a session's answer waiting outside the queue while held, so setting up isn't stuck", async () => {
+      behaviour = () => 'answer';
+      const { key } = await threadOf('plan the move');
+      expect(await manager.hold('personal')).toBe(true);
+      let told = false;
+      const telling = manager.tell(key, 'The quotes are in.').then(() => {
+        told = true;
+      });
+      // Setting the thread up isn't stuck behind the held answer.
+      expect(await manager.restart(key, 'fresh')).toMatchObject({ done: true });
+      await new Promise((r) => setTimeout(r, 50));
+      expect(told).toBe(false);
+      manager.release('personal');
+      await telling;
+      await settle();
+      const [fresh] = await sessionsNow();
+      expect(received.get(fresh!.id)?.[0]).toContain('The quotes are in.');
+    });
+
+    it('lets a held answer go back to its sender when the service stops, to come again after', async () => {
+      behaviour = () => 'answer';
+      const { key } = await threadOf('plan the move');
+      await manager.hold('personal');
+      const telling = manager.tell(key, 'The quotes are in.');
+      await new Promise((r) => setTimeout(r, 20));
+      await manager.stop();
+      await expect(telling).rejects.toThrow('stopped for its restart');
+    });
+
+    it('gives up a hold while work in the workspace is still going, and lets it go', async () => {
+      behaviour = (line) => (isHandoverRequest(line) ? 'slow-answer' : 'answer');
+      const { key } = await threadOf('plan the move');
+      // A handover under way keeps the thread's queue busy for a while.
+      const handing = manager.restart(key, 'hand-over');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(await manager.hold('personal', 20)).toBe(false);
+      await handing;
+      // Not held: a message from Wheems goes straight in.
+      await manager.tell(key, 'Still there?');
+      await settle();
+      expect(posts().some((p) => p.text.includes('Send that again'))).toBe(false);
+    });
+
     it('lists the open conversations, newest first, with their asks', async () => {
       behaviour = () => 'answer';
       const a = await threadOf('first thing');

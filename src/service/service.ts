@@ -438,7 +438,16 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             // With a restart to follow: the old service starts no session in the workspace until
             // it, and every conversation must be covered, by a choice or by being set up already,
             // so none runs on after the restart with its old session and the new settings.
-            await manager.hold(workspace);
+            if (!(await manager.hold(workspace))) {
+              return {
+                ok: true,
+                restarted: [],
+                restarting: false,
+                stale: true,
+                message:
+                  'Something in the workspace was still starting, so nothing was done. Try again in a minute.',
+              };
+            }
             const chosen = new Set(request.choices.map((c) => c.session));
             const uncovered = (await manager.openConversations(workspace)).filter(
               (c) => !c.startsAfresh && !chosen.has(c.session),
