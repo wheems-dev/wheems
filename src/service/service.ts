@@ -322,6 +322,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const started: ChannelDriver[] = [];
   const startedAt = new Date().toISOString();
   let server: Server | undefined;
+  /** The web app, once it's served; reported by `status`. */
+  let web: RunningWeb | null = null;
   try {
     for (const [connection, channel] of channels) {
       await channel.start((event) => onboarding.handle(connection, event));
@@ -344,6 +346,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
                 home: options.home,
                 connections: [...channels.keys()],
                 workspaces: workspaceReport,
+                web: web ? { port: web.port } : null,
               },
             };
           case 'reply': {
@@ -509,7 +512,6 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const listening = server;
   log(`Wheems ${options.version} is running from ${options.home}`);
   // The web app, read-only for now. Wheems runs without it if its port is taken.
-  let web: RunningWeb | null = null;
   if (options.webPort !== null) {
     web = await startWeb({
       home: options.home,

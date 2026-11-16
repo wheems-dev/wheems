@@ -604,15 +604,16 @@ wheems service run        # run it in this terminal, as launchd does
 wheems service uninstall  # stop it and remove it from launchd
 ```
 
-`wheems status` shows the version, how long it has been up, the chat connections, and each
-workspace's channel, with what stops one from chatting, such as a channel the app hasn't been
-invited to:
+`wheems status` (and `wheems start`, once it's up) shows the version, how long it has been up, the
+chat connections, each workspace's channel, with what stops one from chatting, such as a channel
+the app hasn't been invited to, and the web app's address, which you can click to open it:
 
 ```text
 ✓ Running: Wheems 0.0.4, pid 4242, up 2h 14m
 ✓ Connected to slack
 ✓ default: direct messages on slack
 ! marketing: the app can't see #marketing-chat on slack. Invite the app to the channel, and the chief of staff answers there at once; or check the name in workspace.yaml.
+✓ Web app: http://127.0.0.1:4317/k/…/
 Log: ~/wheems/.wheems/logs/service.log
 ```
 

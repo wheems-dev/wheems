@@ -1,3 +1,4 @@
+import { webToken, webUrl } from '../../web/server.js';
 import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -73,6 +74,8 @@ export interface StatusFacts {
   report: ServiceReport | null;
   /** The version a service too old for a report gave when pinged. */
   version?: string;
+  /** The address that opens the web app, token and all, when the service serves it. */
+  webUrl?: string;
   logFile: string;
   env: NodeJS.ProcessEnv;
   now?: number;
@@ -99,6 +102,11 @@ export function formatStatus(facts: StatusFacts, color: boolean): { text: string
       else if (workspace.problem !== undefined)
         lines.push(line('!', `${workspace.id}: ${workspace.problem}`));
       else lines.push(line('✓', `${workspace.id}: ${workspace.chat}`));
+    }
+    if (facts.webUrl !== undefined) {
+      lines.push(line('✓', `Web app: ${color ? hyperlink(facts.webUrl) : facts.webUrl}`));
+    } else if (report.web === null) {
+      lines.push(line('!', 'Web app: not served, because its port was taken. See wheems logs'));
     }
   } else if (facts.answering) {
     lines.push(
@@ -132,6 +140,14 @@ export function formatStatus(facts: StatusFacts, color: boolean): { text: string
   return { text: `${lines.join('\n')}\n`, ok: facts.answering };
 }
 
+/**
+ * A link a terminal can open with a click (OSC 8), showing the address itself, so terminals
+ * without links still show it whole for Cmd-click or copying.
+ */
+function hyperlink(url: string): string {
+  return `\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\`;
+}
+
 /** How long ago a time was, roughly: "4m", "2h 14m", "3d 2h". */
 export function since(iso: string, now: number): string {
   const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000));
@@ -150,7 +166,13 @@ async function statusFacts(where: Paths, env: NodeJS.ProcessEnv): Promise<Status
   ]);
   const facts = { launchd, installed, logFile: logFile(where), env };
   if (answer?.ok === true && answer.status) {
-    return { ...facts, answering: true, report: answer.status };
+    const web = answer.status.web;
+    return {
+      ...facts,
+      answering: true,
+      report: answer.status,
+      ...(web && { webUrl: webUrl(web.port, await webToken(where.home, env)) }),
+    };
   }
   // A service from before `status` existed still answers ping.
   const ping = await request(where.socket, { op: 'ping' }, 2000).catch(() => null);
@@ -197,7 +219,7 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
   );
   if (await installAndWait(where)) {
     io.out(
-      `${restart ? 'Restarted' : 'Started'}. It runs in the background, and starts again at every login. It serves the web app too: open it with wheems web open\n`,
+      `${restart ? 'Restarted' : 'Started'}. It runs in the background, and starts again at every login.\n`,
     );
     await printStatus(where, io);
     return;
