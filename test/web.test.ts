@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -138,6 +138,58 @@ describe('the web app', () => {
     expect(open.body).toContain('s=root');
     const ended = await get('/w/default/sessions?ended=1');
     expect(ended.body).toContain('s=root&amp;ended=1');
+  });
+
+  it('shows what waits for review, the settings, the connections and about you', async () => {
+    const proposal = join(home, '.wheems', 'review', 'skills', 'p1');
+    mkdirSync(proposal, { recursive: true });
+    writeFileSync(
+      join(proposal, 'proposal.json'),
+      JSON.stringify({
+        id: 'p1',
+        name: 'boat-maintenance',
+        workspace: 'default',
+        agent: 'chief-of-staff',
+        conversation: null,
+        created: new Date().toISOString(),
+        basedOn: null,
+        similar: [],
+      }),
+    );
+    writeFileSync(join(proposal, 'SKILL.md'), '# Boat maintenance\n\nRemind me <soon>.\n');
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    writeFileSync(
+      join(home, '.wheems', 'review', 'about-you', 'n1-default.md'),
+      'Prefers the 08:15 ferry.',
+    );
+    writeFileSync(join(home, 'about-you.md'), 'Lives by the sea.');
+    writeFileSync(
+      join(home, 'secrets.json'),
+      JSON.stringify({ slack: { bot_token: 'xoxb-never-shown', app_token: 'xapp-never-shown' } }),
+    );
+
+    const overview = await get('/w/default');
+    expect(overview.body).toContain(`href="/k/${token}/w/default/review"`);
+    const review = await get('/w/default/review');
+    expect(review.status).toBe(200);
+    expect(review.body).toContain('boat-maintenance');
+    expect(review.body).toContain(esc('Remind me <soon>.'));
+
+    const settings = await get('/w/default/settings');
+    expect(settings.status).toBe(200);
+    expect(settings.body).toContain('agents/chief-of-staff.md');
+    expect(settings.body).toContain('direct messages on slack');
+
+    const connections = await get('/connections?w=default');
+    expect(connections.status).toBe(200);
+    expect(connections.body).toContain('Connected');
+    expect(connections.body).toContain('claude-subscription');
+    expect(connections.body).not.toContain('never-shown');
+
+    const about = await get('/about-you');
+    expect(about.body).toContain('Prefers the 08:15 ferry.');
+    expect(about.body).toContain('Lives by the sea.');
+    expect((await get('/w/nope/settings')).status).toBe(404);
   });
 
   it('reads a session store from an older Wheems without changing it', async () => {

@@ -5,9 +5,10 @@ they propose. Designed on 16 November 2026 from a clickable mockup. Chat stays t
 your chiefs: the web app is for looking things over and changing settings, the way `wheems setup`,
 `wheems status` and `wheems review` are today.
 
-**Built so far (stage 1, first part):** the workspace switcher, Overview, Sessions, and Setup and
-health, read-only, in light and dark. Review, Settings, Connections and every action come next;
-until then the pages say which command does it.
+**Built so far (stage 1, read-only):** the workspace switcher; each workspace's Overview,
+Sessions, Review and Settings; and the install's Connections, About you, and Setup and health; in
+light and dark. Acting from the page (approving, sending to a session, changing settings) comes
+next; until then each page names the command that does it.
 
 ## How it runs
 
