@@ -42,12 +42,22 @@ export function Settings() {
   const id = useParams().id ?? '';
   const view = useView<SettingsView>(`/w/${encodeURIComponent(id)}/settings`);
   if (view.isPending) return <Loading />;
-  if (view.error) return <Problem error={view.error} />;
+  // Settings already shown stay, with what you've typed, when a refresh fails (the service
+  // stopped, say): the error shows above them instead.
+  if (view.data === undefined) return <Problem error={view.error} />;
   // A new form only for another workspace: a refresh keeps what you've typed.
-  return <SettingsForm key={id} v={view.data} id={id} />;
+  return <SettingsForm key={id} v={view.data} id={id} refreshError={view.error?.message ?? null} />;
 }
 
-function SettingsForm({ v, id }: { v: SettingsView; id: string }) {
+function SettingsForm({
+  v,
+  id,
+  refreshError,
+}: {
+  v: SettingsView;
+  id: string;
+  refreshError: string | null;
+}) {
   const [flash, setFlash] = useState<Flash | null>(null);
   const [saved, setSaved] = useState(false);
   // Only the fields you've edited, over what the file says now, so a refresh (after a save, or
@@ -111,6 +121,11 @@ function SettingsForm({ v, id }: { v: SettingsView; id: string }) {
           comments, so you can still edit the file. The service uses a change once it restarts.
         </p>
       </header>
+      {refreshError !== null && (
+        <p className="card pad flash no" role="alert">
+          {refreshError} What you&apos;ve typed is kept here.
+        </p>
+      )}
       <FlashBanner flash={flash} />
       {saved && (
         <div className="card pad row between">
