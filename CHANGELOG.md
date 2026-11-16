@@ -3,7 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.3
+
+Released 16 November 2026. `wheems start` and `wheems status` show the web app's address, ready
+to open, and the service starts the web app before it answers, so the address is there as soon
+as it's up. Still an early preview.
 
 **Changed**
 
