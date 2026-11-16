@@ -52,8 +52,8 @@ export function looksLikeSecret(text: string): boolean {
 
 /**
  * A credential given in words or as a header, which SECRET_PATTERNS can't recognise by its
- * shape, in the order they're removed: an Authorization header's whole value, scheme and all;
- * `password=…`, `"token": "…"`, `token: Bearer …` or "my password is …"; and a bare bearer token.
+ * shape: an Authorization header, `password=…`, `"token": "…"`, `token: Bearer …`, "my password
+ * is …", and a bare bearer token.
  */
 const CREDENTIAL_VALUES = [
   /(["']?\b(?:proxy-)?authori[sz]ation["']?)(\s*[:=]\s*)((?:bearer|basic|digest|token)\s+)?("[^"]*"|'[^']*'|\S+)/gi,
@@ -62,24 +62,16 @@ const CREDENTIAL_VALUES = [
 ];
 
 /**
- * Text with every credential it seems to hold replaced by `[removed]`: those SECRET_PATTERNS
- * recognise, and passwords, keys and tokens given in words or as an Authorization header. For
- * text that is kept for its meaning, such as a session's ask. Returns null for text holding a
- * private key, which can't be cut out safely.
+ * Whether text seems to hold a credential of any kind: one SECRET_PATTERNS recognises, a private
+ * key, or a password, key or token given in words or as an Authorization header. Wider than
+ * looksLikeSecret, for text kept for its meaning, such as a session's ask, which is dropped
+ * rather than redacted: telling that a credential is there is reliable, cutting it out isn't.
  */
-export function withoutCredentials(text: string): string | null {
-  if (/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(text)) return null;
-  let out = text;
-  for (const pattern of SECRET_PATTERNS) {
-    out = out.replace(new RegExp(pattern.source, 'g'), '[removed]');
-  }
-  for (const pattern of CREDENTIAL_VALUES) {
-    out = out.replace(
-      pattern,
-      (_match, word: string, joiner: string) => `${word}${joiner}[removed]`,
-    );
-  }
-  return out;
+export function holdsCredential(text: string): boolean {
+  return (
+    looksLikeSecret(text) ||
+    CREDENTIAL_VALUES.some((pattern) => new RegExp(pattern.source, 'i').test(text))
+  );
 }
 
 /** A file's text, cut to a limit, or null when it is missing or holds nothing yet. */

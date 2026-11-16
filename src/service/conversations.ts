@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { withoutCredentials } from '../knowledge/notes.js';
+import { holdsCredential } from '../knowledge/notes.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { NOTE_REQUEST, withBuiltins, type SessionBuiltins } from '../agents/builtin.js';
@@ -1274,12 +1274,11 @@ function describe(error: unknown): string {
 const ASK_LIMIT = 2000;
 
 /**
- * A first message as a session's ask: trimmed, with anything that looks like a password, token
- * or key replaced by `[removed]`, and cut short when it's very long. Empty for a message holding
- * a private key, which isn't kept at all.
+ * A first message as a session's ask: trimmed, and cut short when it's very long. Empty when it
+ * seems to hold a password, token or key, so no ask is kept and none is passed on.
  */
 export function askFrom(text: string): string {
-  const cleaned = withoutCredentials(text.trim());
-  if (cleaned === null) return '';
-  return cleaned.length <= ASK_LIMIT ? cleaned : `${cleaned.slice(0, ASK_LIMIT - 1)}…`;
+  const trimmed = text.trim();
+  if (holdsCredential(trimmed)) return '';
+  return trimmed.length <= ASK_LIMIT ? trimmed : `${trimmed.slice(0, ASK_LIMIT - 1)}…`;
 }

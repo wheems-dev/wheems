@@ -1066,30 +1066,21 @@ describe('askFrom', () => {
     expect(long.endsWith('…')).toBe(true);
   });
 
-  it('removes credentials from an ask, keeping the rest of what was asked', () => {
-    expect(askFrom('Use xoxb-1234567890-abcdefghij to post')).toBe('Use [removed] to post');
-    expect(askFrom('Log in to the router, password=hunter22, and restart it')).toBe(
-      'Log in to the router, password=[removed] and restart it',
-    );
-    expect(askFrom('Call it with Authorization: Bearer abc.def.ghi1234567')).toBe(
-      'Call it with Authorization: [removed]',
-    );
-    expect(askFrom('Send Authorization: Basic dTpw to it')).toBe(
-      'Send Authorization: [removed] to it',
-    );
-    expect(askFrom('Use token: Bearer abc.def.ghi1234567 there')).toBe(
-      'Use token: [removed] there',
-    );
-    expect(askFrom('Post {"password": "a quoted secret", "user": "me"}')).toBe(
-      'Post {"password": [removed], "user": "me"}',
-    );
-    expect(askFrom('curl -H "Authorization: Bearer abcdefgh12345678"')).not.toContain('abcdefgh');
-    expect(askFrom('my password is hunter2 so book it')).toBe(
-      'my password is [removed] so book it',
-    );
-    expect(askFrom('api_key: "s3cr3t value"')).toBe('api_key: [removed]');
-    expect(askFrom('-----BEGIN RSA PRIVATE KEY-----\nabc')).toBe('');
-    // Words about passwords, with no value given, stay as they are.
+  it('keeps no ask from a message that seems to hold a credential', () => {
+    for (const message of [
+      'Use xoxb-1234567890-abcdefghij to post',
+      'Log in to the router, password=hunter22, and restart it',
+      'Call it with Authorization: Bearer abc.def.ghi1234567',
+      'Send Authorization: Basic dTpw to it',
+      'Use token: Bearer abc.def.ghi1234567 there',
+      'Post {"password": "a quoted secret", "user": "me"}',
+      'Post {"password":"prefix\\"sensitive-suffix"}',
+      'my password is hunter2 so book it',
+      '-----BEGIN RSA PRIVATE KEY-----\nabc',
+    ]) {
+      expect(askFrom(message)).toBe('');
+    }
+    // Words about passwords, with no value given, are kept.
     expect(askFrom('Remind me to change my passwords')).toBe('Remind me to change my passwords');
   });
 });
