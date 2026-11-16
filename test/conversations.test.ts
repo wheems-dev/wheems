@@ -888,6 +888,181 @@ describe('conversations', () => {
     await expect(manager.reply('personal:slack:D1:nope', 'x')).rejects.toThrow(/No conversation/);
   });
 
+  describe('handing over and starting afresh', () => {
+    const isHandoverRequest = (line: string) =>
+      line.startsWith('Wheems: this conversation is being handed over');
+    const threadOf = async (text: string) => {
+      const first = await dm(text);
+      await settle();
+      return { first, key: conversationKey('personal', 'slack', 'D1', first) };
+    };
+    const sessionsNow = () => runtime.list({ labels: { workspace: 'personal' } });
+
+    it("hands over to a new session from the agent's handover, and says so in the thread", async () => {
+      behaviour = (line) => (isHandoverRequest(line) ? 'slow-answer' : 'answer');
+      const { first, key } = await threadOf('plan the launch');
+      const [old] = await sessionsNow();
+      const restarting = manager.restart(key, 'hand-over');
+      // The agent runs wheems session handover during its turn.
+      await until(() => (received.get(old!.id) ?? []).some(isHandoverRequest));
+      await manager.handover(key, '# Handover\n\nDrafted the checklist; DNS is next.');
+      expect(await restarting).toEqual({
+        key,
+        done: true,
+        text: 'Handed over: its next message starts a new session from the handover.',
+      });
+      expect((await runtime.get(old!.id))?.state).not.toBe('live');
+      expect(state.conversation(key)).toMatchObject({ generation: 1 });
+      const pending = state.conversation(key)?.handover;
+      expect(state.handover(pending ?? '')).toMatchObject({
+        author: 'agent',
+        fromEngine: 'claude-code',
+        usedAt: null,
+      });
+      // Its answer to the handover turn never reaches the thread.
+      expect(posts().map((p) => p.text)).toEqual(['answer: plan the launch']);
+
+      await dm('what about DNS?', first);
+      await settle();
+      const [fresh] = await sessionsNow();
+      expect(fresh!.id).not.toBe(old!.id);
+      const firstLine = received.get(fresh!.id)?.[0] ?? '';
+      expect(firstLine).toContain('<wheems-handover>');
+      expect(firstLine).toContain('Drafted the checklist; DNS is next.');
+      expect(firstLine).toContain('what about DNS?');
+      expect(posts().map((p) => p.text)).toEqual([
+        'answer: plan the launch',
+        '_Wheems:_ Your chief of staff started a new session for this conversation. It has a handover of this conversation so far.',
+        expect.stringContaining('answer: <wheems-handover>'),
+      ]);
+      expect(state.conversation(key)?.handover).toBeUndefined();
+      expect(state.handover(pending ?? '')).toMatchObject({
+        toEngine: 'claude-code',
+        usedAt: expect.any(String) as string,
+      });
+      // The thread carries on in the new session.
+      await dm('thanks', first);
+      await settle();
+      expect(received.get(fresh!.id)).toHaveLength(2);
+      expect(posts().at(-1)?.text).toBe('answer: thanks');
+    });
+
+    it("writes the handover from the thread when the agent doesn't", async () => {
+      behaviour = () => 'answer';
+      const { first, key } = await threadOf('book the ferry');
+      expect(await manager.restart(key, 'hand-over')).toMatchObject({
+        done: true,
+        text: expect.stringContaining('Wheems wrote one from the thread') as string,
+      });
+      const handover = state.handover(state.conversation(key)?.handover ?? '');
+      expect(handover?.author).toBe('wheems');
+      expect(handover?.text).toContain('**What the person asked:** book the ferry');
+      expect(handover?.text).toContain('answer: book the ferry');
+      await dm('any news?', first);
+      await settle();
+      expect(posts()[1]?.text).toContain('a summary of this thread from Wheems');
+    });
+
+    it('starts afresh with only the ask, and says so', async () => {
+      behaviour = () => 'answer';
+      const { first, key } = await threadOf('sort my inbox');
+      expect(await manager.restart(key, 'fresh')).toMatchObject({ done: true });
+      expect(state.conversation(key)).toMatchObject({ generation: 1, handover: 'fresh' });
+      await dm('start again', first);
+      await settle();
+      const [fresh] = await sessionsNow();
+      const firstLine = received.get(fresh!.id)?.[0] ?? '';
+      expect(firstLine).toContain('<wheems-start-afresh>');
+      expect(firstLine).toContain('The person first asked: sort my inbox');
+      expect(posts()[1]?.text).toBe(
+        "_Wheems:_ This conversation starts afresh: your chief of staff doesn't remember it.",
+      );
+      expect(state.conversation(key)?.handover).toBeUndefined();
+    });
+
+    it('carries on: stops the session, and the next message resumes it, with no notice', async () => {
+      behaviour = () => 'answer';
+      const { first, key } = await threadOf('draft the post');
+      const [old] = await sessionsNow();
+      expect(await manager.restart(key, 'carry-on')).toMatchObject({ done: true });
+      expect((await runtime.get(old!.id))?.state).not.toBe('live');
+      expect(state.conversation(key)?.generation).toBeUndefined();
+      await dm('shorter please', first);
+      await settle();
+      const [resumed] = await sessionsNow();
+      expect(received.get(resumed!.id)).toEqual(['shorter please']);
+      expect(posts().map((p) => p.text)).toEqual([
+        'answer: draft the post',
+        'answer: shorter please',
+      ]);
+    });
+
+    it("leaves a conversation that's answering alone, and refuses a handover nobody asked for", async () => {
+      behaviour = () => 'slow-answer';
+      const first = await dm('a long job');
+      const key = conversationKey('personal', 'slack', 'D1', first);
+      await until(() => (state.conversation(key)?.pending ?? 0) > 0);
+      expect(await manager.restart(key, 'fresh')).toMatchObject({
+        done: false,
+        text: expect.stringContaining("It's working on a message") as string,
+      });
+      await settle();
+      await expect(manager.handover(key, 'unasked')).rejects.toThrow(
+        "Wheems hasn't asked this conversation for a handover",
+      );
+    });
+
+    it("leaves a conversation as it is when Herdr can't say whether its session runs", async () => {
+      behaviour = () => 'answer';
+      const { key } = await threadOf('check the boiler');
+      const get = runtime.get.bind(runtime);
+      runtime.get = () => Promise.reject(new Error('hc is not answering'));
+      try {
+        expect(await manager.restart(key, 'fresh')).toMatchObject({
+          done: false,
+          text: expect.stringContaining(
+            "Herdr couldn't say whether its session is running",
+          ) as string,
+        });
+      } finally {
+        runtime.get = get;
+      }
+      expect(state.conversation(key)?.generation).toBeUndefined();
+      expect(state.conversation(key)?.handover).toBeUndefined();
+    });
+
+    it("follows the new session's answers even when the line in the thread can't be posted", async () => {
+      behaviour = () => 'answer';
+      const { first, key } = await threadOf('pay the invoice');
+      await manager.restart(key, 'fresh');
+      const send = channel.send.bind(channel);
+      channel.send = (message) =>
+        message.text.startsWith('_Wheems:_')
+          ? Promise.reject(new Error('Slack is down'))
+          : send(message);
+      await dm('which one?', first);
+      await settle();
+      expect(posts().map((p) => p.text)).toEqual([
+        'answer: pay the invoice',
+        expect.stringContaining('answer: <wheems-start-afresh>'),
+      ]);
+      expect(state.conversation(key)?.pending).toBe(0);
+      expect(logs.some((l) => l.includes("couldn't say it started afresh"))).toBe(true);
+    });
+
+    it('lists the open conversations, newest first, with their asks', async () => {
+      behaviour = () => 'answer';
+      const a = await threadOf('first thing');
+      await threadOf('second thing');
+      await manager.restart(a.key, 'fresh');
+      const open = await manager.openConversations('personal');
+      expect(open.map((c) => [c.ask, c.running, c.startsAfresh])).toEqual([
+        ['second thing', true, false],
+        ['first thing', false, true],
+      ]);
+    });
+  });
+
   describe('notes', () => {
     const isNoteRequest = (line: string) =>
       line.startsWith('Wheems: this conversation has gone quiet');

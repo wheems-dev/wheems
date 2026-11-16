@@ -253,6 +253,23 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     if (!state.callingSession(request.session)) throw new Error(`No session ${request.session}`);
     return { session: request.session };
   };
+  /**
+   * The workspace of a request only the person may make, such as restarting chat threads: an
+   * agent's session, which could otherwise reach threads it doesn't own, is refused.
+   */
+  const personsWorkspace = (ref: {
+    session?: string | undefined;
+    conversation?: string | undefined;
+    workspace?: string | undefined;
+  }): string => {
+    const caller = sessions.caller(ref);
+    if (caller.session !== null) {
+      throw new Error(
+        'Only you can restart chat threads, from a terminal or the web app, not an agent.',
+      );
+    }
+    return caller.workspace.id;
+  };
   /** When each engine last said it was signed in: asked again after ten minutes. */
   const signedInAt = new Map<string, number>();
   const manager: ConversationManager = new ConversationManager({
@@ -381,6 +398,36 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             }
             await manager.reply(from.conversation, request.text);
             return { ok: true };
+          }
+          case 'handover': {
+            const from = speaker(request);
+            if (!('conversation' in from)) {
+              throw new Error('Only a chat thread hands over; this session has no thread.');
+            }
+            await manager.handover(from.conversation, request.text);
+            return { ok: true, message: 'Saved. Now answer "done".' };
+          }
+          case 'conversations': {
+            const workspace = personsWorkspace(request.caller);
+            return { ok: true, conversations: await manager.openConversations(workspace) };
+          }
+          case 'conversations-restart': {
+            const workspace = personsWorkspace(request.caller);
+            const restarted = await Promise.all(
+              request.choices.map(({ session, choice }) => {
+                const key = state.threadKeyOf(session);
+                const thread = key === undefined ? undefined : state.conversation(key);
+                if (key === undefined || thread?.workspace !== workspace) {
+                  return Promise.resolve({
+                    key: session,
+                    done: false,
+                    text: `There's no chat thread with session ${session} in ${workspace}.`,
+                  });
+                }
+                return manager.restart(key, choice);
+              }),
+            );
+            return { ok: true, restarted };
           }
           case 'note': {
             const from = speaker(request);

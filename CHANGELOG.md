@@ -3,6 +3,18 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Added**
+
+- A chat thread can start over: `wheems session restart <id>` hands it over, by default, to a new
+  session from a handover its chief writes (`wheems session handover`, in a turn whose answer is
+  never posted), or from one Wheems writes from the thread when the chief can't. `--fresh` starts
+  it with only the thread's ask; `--carry-on` just stops its session, so the next message resumes
+  it on the settings then. Wheems posts a line in the thread when a new session takes over. The
+  session store moves to schema version 5, for handovers; an older Wheems won't open it after
+  that. The web app's choices come next. See `docs/session-handover.md`.
+
 ## 0.1.7
 
 Released 16 November 2026. The web app edits a workspace's settings, asks before ending or

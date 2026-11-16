@@ -247,5 +247,12 @@ export const END_NOTE_REQUEST =
   'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
 
 /** The message Wheems sends when it asks an agent for its note. */
+/**
+ * Asks a chat thread's agent for a handover, before its conversation goes to a new session: on
+ * new settings, or afresh. Like a note turn, its answer is never sent to the person.
+ */
+export const HANDOVER_REQUEST =
+  "Wheems: this conversation is being handed over to a new session of its chief of staff, which won't have your history. Write a handover for it now with `wheems session handover`, in Markdown, on standard input: what the person asked, in their words; what's done, with links, files and commits; what's in progress and what's next; decisions made, and why; open questions, and anything you promised the person; and anything the next chief should know that isn't written down anywhere else. Then answer just \"done\"; that answer is not sent to the person.";
+
 export const NOTE_REQUEST =
   'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';

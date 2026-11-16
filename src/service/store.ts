@@ -1,4 +1,11 @@
-import type { ChatAuthor, Conversation, StateStore } from '../state/store.js';
+import type {
+  ChatAuthor,
+  ChatTurn,
+  Conversation,
+  Handover,
+  HandoverAuthor,
+  StateStore,
+} from '../state/store.js';
 
 export type { Conversation } from '../state/store.js';
 
@@ -79,6 +86,46 @@ export class ConversationStore {
 
   async touch(key: string, at: Date): Promise<void> {
     this.state.updateThreadSession(key, { lastActiveAt: at.toISOString() });
+  }
+
+  /**
+   * Sets a thread up to start afresh at its next message: from a handover, or with only its ask.
+   * Returns the handover's id.
+   */
+  async restart(
+    key: string,
+    handover: {
+      text: string;
+      author: HandoverAuthor;
+      fromEngine: string | null;
+      fromModel: string | null;
+      at: Date;
+    } | null,
+  ): Promise<string | null> {
+    return this.state.restartThread(
+      key,
+      handover === null ? null : { ...handover, at: handover.at.toISOString() },
+    );
+  }
+
+  async handover(id: string): Promise<Handover | undefined> {
+    return this.state.handover(id);
+  }
+
+  /** The thread's next session has started from its handover, or afresh. */
+  async startedAfresh(key: string, to: { engine: string; model: string; at: Date }): Promise<void> {
+    this.state.startedAfresh(key, { ...to, at: to.at.toISOString() });
+  }
+
+  /** The thread's ask and its latest turns in chat, oldest first, for a handover Wheems writes. */
+  async record(key: string, turns: number): Promise<{ ask: string | null; chat: ChatTurn[] }> {
+    const conversation = this.state.conversation(key);
+    if (!conversation) return { ask: null, chat: [] };
+    const sessions = this.state.workspace(conversation.workspace);
+    return {
+      ask: sessions.session(conversation.sessionId)?.ask ?? null,
+      chat: sessions.chat(conversation.sessionId, turns).reverse(),
+    };
   }
 }
 /* eslint-enable @typescript-eslint/require-await */

@@ -121,6 +121,31 @@ describe('session store', () => {
       expect(state.workspace('personal').session('s')?.ask).toBeNull();
     });
 
+    it('reads threads from a store at schema 4 as never handed over, without changing it', async () => {
+      state.close();
+      const old = join(dir, 'v4.sqlite');
+      const db = new DatabaseSync(old);
+      for (const migration of MIGRATIONS.slice(0, 4)) db.exec(migration);
+      db.exec('PRAGMA user_version = 4');
+      db.exec(
+        "INSERT INTO sessions (id, workspace, kind, state, herdr_name, created_at, last_active_at) VALUES ('s', 'personal', 'thread', 'idle', 'personal-1', 't', 't')",
+      );
+      db.exec(
+        "INSERT INTO threads (key, workspace, connection, channel, thread, session) VALUES ('k', 'personal', 'slack', 'D1', '1', 's')",
+      );
+      db.close();
+      const reader = await StateStore.open(old, { readOnly: true, olderSchema: true });
+      expect(reader.conversation('k')).toMatchObject({ sessionId: 's' });
+      expect(reader.conversation('k')?.generation).toBeUndefined();
+      expect(reader.conversation('k')?.handover).toBeUndefined();
+      expect(reader.workspace('personal').handovers('s')).toEqual([]);
+      reader.close();
+      state = await StateStore.open(old);
+      // Opened to write, it's brought up to date.
+      expect(state.restartThread('k', null)).toBeNull();
+      expect(state.conversation('k')).toMatchObject({ generation: 1, handover: 'fresh' });
+    });
+
     it('refuses a store from a newer Wheems, and doctor refuses one at another version', async () => {
       state.close();
       const db = new DatabaseSync(file);

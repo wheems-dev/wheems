@@ -2,7 +2,12 @@ import { createHash, randomBytes } from 'node:crypto';
 import { holdsCredential } from '../knowledge/notes.js';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { NOTE_REQUEST, withBuiltins, type SessionBuiltins } from '../agents/builtin.js';
+import {
+  HANDOVER_REQUEST,
+  NOTE_REQUEST,
+  withBuiltins,
+  type SessionBuiltins,
+} from '../agents/builtin.js';
 import type { LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import {
@@ -142,6 +147,8 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
+  /** Conversations whose agent was asked for a handover, and the handover once it came. */
+  private readonly handingOver = new Map<string, string | null>();
   /** The latest `wheems chat reply` in each conversation. */
   private readonly lastReply = new Map<string, { at: number; text: string }>();
   private readonly watchers = new Set<Promise<void>>();
@@ -276,6 +283,267 @@ export class ConversationManager {
     return file;
   }
 
+  /**
+   * Keeps a handover an agent wrote (`wheems session handover`) for its conversation, during the
+   * handover turn Wheems asked it for. A handover outside one is refused: it would have nothing to
+   * start.
+   */
+  handover(key: string, text: string): Promise<void> {
+    if (!this.handingOver.has(key)) {
+      return Promise.reject(
+        new Error(
+          "Wheems hasn't asked this conversation for a handover, so there's nothing to hand over to.",
+        ),
+      );
+    }
+    this.handingOver.set(key, text);
+    this.options.log(`Handover from ${key}: ${String(text.length)} characters`);
+    return Promise.resolve();
+  }
+
+  /**
+   * The workspace's chat threads, newest first, with what each would need to start afresh: for
+   * choosing, when its chief's settings change, what happens to each.
+   */
+  async openConversations(workspace: string): Promise<OpenConversation[]> {
+    const open: OpenConversation[] = [];
+    for (const [key, conversation] of await this.options.store.all()) {
+      if (conversation.workspace !== workspace) continue;
+      const session = await this.options.runtime.get(conversation.sessionName).catch(() => null);
+      const { ask } = await this.options.store.record(key, 0);
+      open.push({
+        key,
+        session: conversation.sessionId,
+        ask,
+        lastActiveAt: conversation.lastActiveAt,
+        running: session?.state === 'live',
+        busy:
+          (conversation.pending ?? 0) > 0 ||
+          session?.status === 'working' ||
+          session?.status === 'blocked',
+        startsAfresh: conversation.handover !== undefined,
+      });
+    }
+    return open.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
+  }
+
+  /**
+   * Restarts a conversation, as the person chose, when its chief's settings changed or it should
+   * start over. Waits its turn in the conversation's queue, so no message slips in between.
+   *
+   * - `carry-on`: stops its session; the next message resumes it, on the settings then.
+   * - `hand-over`: asks the agent for a handover, or writes one from the thread when it can't;
+   *   the next message starts a new session from it.
+   * - `fresh`: the next message starts a new session with only the thread's ask.
+   */
+  restart(key: string, choice: RestartChoice): Promise<RestartOutcome> {
+    let outcome: RestartOutcome = { key, done: false, text: 'It could not be restarted.' };
+    return this.enqueue(key, async () => {
+      outcome = await this.restartNow(key, choice).catch((error: unknown) => {
+        this.options.log(`Conversation ${key}: not restarted: ${describe(error)}`);
+        return { key, done: false, text: `It was left as it is: ${describe(error)}` };
+      });
+    }).then(() => outcome);
+  }
+
+  private async restartNow(key: string, choice: RestartChoice): Promise<RestartOutcome> {
+    const conversation = await this.options.store.get(key);
+    if (!conversation) return { key, done: false, text: `There's no conversation ${key}.` };
+    const binding = this.bindingFor(conversation);
+    if (!binding) {
+      return { key, done: false, text: "Its workspace or chat connection isn't running." };
+    }
+    // Whether its session runs must be known: a restart that couldn't stop it would leave its
+    // messages going to the old session while answers are read from the new one.
+    const session = await this.sessionState(conversation.sessionName);
+    const live = session?.state === 'live' ? session : null;
+    const watch = this.watches.get(key);
+    if (
+      (conversation.pending ?? 0) > 0 ||
+      (watch !== undefined && !watch.closed) ||
+      live?.status === 'working' ||
+      live?.status === 'blocked'
+    ) {
+      return {
+        key,
+        done: false,
+        text: "It's working on a message, so it was left as it is. Try again once it has answered.",
+      };
+    }
+    if (choice === 'carry-on') {
+      if (live && !(await this.stopSession(live))) {
+        return {
+          key,
+          done: false,
+          text: "Its session couldn't be stopped, so it carries on as it was.",
+        };
+      }
+      return {
+        key,
+        done: true,
+        text: 'Its next message resumes it, with the settings then.',
+      };
+    }
+    let handover: {
+      text: string;
+      author: 'agent' | 'wheems';
+      fromEngine: string | null;
+      fromModel: string | null;
+      at: Date;
+    } | null = null;
+    if (choice === 'hand-over') {
+      const chief = this.chiefOfStaff(binding).definition;
+      const written = live ? await this.askForHandover(key, binding, live) : null;
+      handover = {
+        text: written ?? (await this.handoverFromThread(key)),
+        author: written !== null ? 'agent' : 'wheems',
+        fromEngine: chief.engine,
+        fromModel: chief.model,
+        at: new Date(),
+      };
+    }
+    const still = await this.sessionState(conversation.sessionName);
+    if (still?.state === 'live' && !(await this.stopSession(still))) {
+      return {
+        key,
+        done: false,
+        text: "Its session couldn't be stopped, so it was left as it is.",
+      };
+    }
+    await this.options.store.restart(key, handover);
+    this.options.log(
+      `Conversation ${key}: ${handover === null ? 'starts afresh' : `handed over (${handover.author === 'agent' ? 'its agent' : 'Wheems'} wrote it)`} at its next message`,
+    );
+    return {
+      key,
+      done: true,
+      text:
+        handover === null
+          ? "Its next message starts a new session, with only the thread's ask."
+          : handover.author === 'agent'
+            ? 'Handed over: its next message starts a new session from the handover.'
+            : "Its chief couldn't write a handover, so Wheems wrote one from the thread. Its next message starts a new session from that.",
+    };
+  }
+
+  /** A session as the runtime has it, or null when there's none; throws when it can't tell. */
+  private async sessionState(name: string): Promise<SessionInfo | null> {
+    try {
+      return (await this.options.runtime.get(name)) ?? null;
+    } catch (error) {
+      throw new Error(`Herdr couldn't say whether its session is running (${describe(error)})`, {
+        cause: error,
+      });
+    }
+  }
+
+  /**
+   * Asks a conversation's agent for its handover, as a turn of its own whose answer is never
+   * posted, as a note turn is. Returns the handover, or null when none came in time.
+   */
+  private async askForHandover(
+    key: string,
+    binding: Binding,
+    session: SessionInfo,
+  ): Promise<string | null> {
+    const engine = this.options.engine(this.chiefOfStaff(binding).definition.engine);
+    // Without its answers, the turn's answer couldn't be kept out of the thread.
+    if (!engine.answers) return null;
+    this.handingOver.set(key, null);
+    try {
+      await this.options.store.setNoting(key, true);
+      this.options.log(`Asking ${session.name ?? session.id} for a handover on ${key}`);
+      let fromTurn: number;
+      try {
+        fromTurn = (await this.options.runtime.send(session.id, HANDOVER_REQUEST)).turn;
+      } catch (error) {
+        await this.options.store.setNoting(key, false);
+        this.options.log(`Conversation ${key}: couldn't ask for a handover: ${describe(error)}`);
+        return null;
+      }
+      const target = await this.conversationFor(key, binding);
+      if (await this.untilTurnEnds(key, session.id, fromTurn, target)) {
+        await this.skipNoteAnswers(key, binding);
+      } else {
+        this.options.log(`${session.name ?? session.id} did not finish its handover in time`);
+      }
+      return this.handingOver.get(key) ?? null;
+    } finally {
+      this.handingOver.delete(key);
+    }
+  }
+
+  /** A handover Wheems writes from what it keeps, when the agent couldn't write one. */
+  private async handoverFromThread(key: string): Promise<string> {
+    const { ask, chat } = await this.options.store.record(key, HANDOVER_TURNS);
+    const who = { person: 'The person', agent: 'Chief of staff', wheems: 'Wheems' } as const;
+    const lines = [
+      'The chief of staff before you could not write a handover, so Wheems wrote this from what it keeps of the thread. It has no record of work done outside the thread: check before relying on it.',
+      '',
+      `**What the person asked:** ${ask ?? 'not recorded'}`,
+    ];
+    if (chat.length > 0) {
+      lines.push('', `**The thread's latest messages, oldest first:**`);
+      for (const turn of chat) {
+        const text =
+          turn.text.length > HANDOVER_TURN_CHARS
+            ? `${turn.text.slice(0, HANDOVER_TURN_CHARS)}…`
+            : turn.text;
+        lines.push('', `${who[turn.author]}, ${turn.at}:`, text);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * What a thread's next session starts from: its handover, or just the thread's ask, and the
+   * line Wheems posts in the thread once it has started.
+   */
+  private async startingFrom(
+    key: string,
+    afresh: string,
+  ): Promise<{ brief: string; line: (engine: string, model: string) => string }> {
+    const handover = afresh === 'fresh' ? undefined : await this.options.store.handover(afresh);
+    if (handover === undefined) {
+      const { ask } = await this.options.store.record(key, 0);
+      return {
+        brief: [
+          '<wheems-start-afresh>',
+          'This conversation starts afresh: you have none of its history, and should say so if the person refers to it.',
+          ...(ask !== null ? [`The person first asked: ${ask}`] : []),
+          '</wheems-start-afresh>',
+        ].join('\n'),
+        line: () => "This conversation starts afresh: your chief of staff doesn't remember it.",
+      };
+    }
+    const from =
+      handover.fromEngine !== null
+        ? ` It ran on ${handover.fromEngine}${handover.fromModel !== null ? ` (${handover.fromModel})` : ''}.`
+        : '';
+    return {
+      brief: [
+        '<wheems-handover>',
+        `You're taking over this conversation from an earlier session of its chief of staff, which won't answer any more.${from} ${
+          handover.author === 'agent'
+            ? 'Below is the handover it wrote for you.'
+            : "It couldn't write a handover, so Wheems wrote one from the thread."
+        } Treat it as context, and check anything that matters before you act on it. Then answer the message after it, in the thread as usual.`,
+        '',
+        handover.text,
+        '</wheems-handover>',
+      ].join('\n'),
+      line: (engine, model) => {
+        const moved =
+          engine !== handover.fromEngine || model !== handover.fromModel
+            ? `Your chief of staff now runs on ${engine} (${model}).`
+            : 'Your chief of staff started a new session for this conversation.';
+        return handover.author === 'agent'
+          ? `${moved} It has a handover of this conversation so far.`
+          : `${moved} It couldn't get a handover from the last one, so it has a summary of this thread from Wheems.`;
+      },
+    };
+  }
+
   /** The workspace and agent a conversation belongs to, as Wheems knows them. */
   async owner(key: string): Promise<{ workspace: string; agent: string }> {
     const conversation = await this.options.store.get(key);
@@ -373,7 +641,7 @@ export class ConversationManager {
         conversation.sessionName,
         Math.max(0, session.turn - 1),
         null,
-        this.conversationFor(key, binding),
+        await this.conversationFor(key, binding),
         true,
       );
       // The others still waiting follow the first, as messages queued during its turn.
@@ -495,7 +763,7 @@ export class ConversationManager {
           sessionName,
           sent.turn,
           seen,
-          this.conversationFor(key, binding),
+          await this.conversationFor(key, binding),
           false,
           sentAt,
         );
@@ -526,10 +794,17 @@ export class ConversationManager {
     this.solved(binding.workspace.id, 'signed-out');
     if (session) await this.options.runtime.remove(session.id).catch(() => undefined);
     const engine = this.options.engine(engineName);
-    // An engine that chooses its own ids can only resume once its id has been found.
-    const engineId = engine.findSession ? (existing?.engineSessionId ?? null) : uuidFor(key);
-    const resume = existing !== undefined && engineId !== null;
-    if (existing !== undefined && !resume) {
+    // Handed over, or set to start afresh: a new engine session, not the old one resumed.
+    const afresh = existing?.handover;
+    // An engine that chooses its own ids can only resume once its id has been found; one that
+    // takes Wheems's gets an id of its own for each fresh start.
+    const engineId = engine.findSession
+      ? afresh !== undefined
+        ? null
+        : (existing?.engineSessionId ?? null)
+      : engineIdFor(key, existing?.generation ?? 0);
+    const resume = existing !== undefined && afresh === undefined && engineId !== null;
+    if (existing !== undefined && !resume && afresh === undefined) {
       this.options.log(
         `Conversation ${key}: the engine's session id was never found, so it starts afresh`,
       );
@@ -539,10 +814,11 @@ export class ConversationManager {
       engine.findSession && !resume
         ? conversationTag(uuidFor(key), randomBytes(8).toString('hex'))
         : undefined;
+    const start = afresh !== undefined ? await this.startingFrom(key, afresh) : null;
     const started = await this.startSession(
       key,
       binding,
-      event,
+      start === null ? event.text : `${start.brief}\n\n${event.text}`,
       sessionName,
       resume,
       engineId,
@@ -573,6 +849,14 @@ export class ConversationManager {
       ...(launchTag !== undefined && { launchTag }),
       pending: 1,
     });
+    const chief = this.chiefOfStaff(binding).definition;
+    if (start !== null) {
+      await this.options.store.startedAfresh(key, {
+        engine: chief.engine,
+        model: chief.model,
+        at: launchedAt,
+      });
+    }
     // A new thread's first message is the person's ask, which every session started for it keeps.
     const ask = askFrom(event.text);
     if (existing === undefined && ask !== '') await this.options.store.recordAsk(uuidFor(key), ask);
@@ -585,11 +869,23 @@ export class ConversationManager {
       sessionName,
       0,
       seen,
-      this.conversationFor(key, binding),
+      await this.conversationFor(key, binding),
       false,
       now.getTime(),
     );
     this.options.log(`Started ${started.id} (${sessionName}) for ${key}`);
+    if (start !== null) {
+      // After its answer is being followed: the line is worth saying, never worth losing the
+      // answer over, so a failure to post it is only logged.
+      await this.notice(
+        key,
+        binding,
+        replyThread(event),
+        start.line(chief.engine, chief.model),
+      ).catch((error: unknown) => {
+        this.options.log(`Conversation ${key}: couldn't say it started afresh: ${describe(error)}`);
+      });
+    }
     this.trimLater(binding.workspace.id, sessionName);
   }
 
@@ -628,9 +924,14 @@ export class ConversationManager {
     return agent;
   }
 
-  private conversationFor(key: string, binding: Binding): Pick<Watch, 'conversation' | 'engine'> {
+  /** The engine conversation to read a thread's answers from: its current generation's. */
+  private async conversationFor(
+    key: string,
+    binding: Binding,
+  ): Promise<Pick<Watch, 'conversation' | 'engine'>> {
+    const generation = (await this.options.store.get(key))?.generation ?? 0;
     return {
-      conversation: { id: uuidFor(key), dir: binding.workspace.dir },
+      conversation: { id: engineIdFor(key, generation), dir: binding.workspace.dir },
       engine: this.options.engine(this.chiefOfStaff(binding).definition.engine),
     };
   }
@@ -638,7 +939,8 @@ export class ConversationManager {
   private async startSession(
     key: string,
     binding: Binding,
-    event: InboundEvent & { type: 'message' },
+    /** The session's first message: the person's, after a handover when there is one. */
+    task: string,
     sessionName: string,
     resume: boolean,
     engineId: string | null,
@@ -673,10 +975,11 @@ export class ConversationManager {
       sessionDir: workspace.dir,
       account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
       session: {
-        id: uuidFor(key),
+        // The engine's name for this generation of the thread; Wheems's id for the session stays.
+        id: engineIdFor(key, (await this.options.store.get(key))?.generation ?? 0),
         name: sessionName,
         resume,
-        task: launchTag !== undefined ? `${event.text}\n\n${launchTag}` : event.text,
+        task: launchTag !== undefined ? `${task}\n\n${launchTag}` : task,
         engineId,
       },
       env: {
@@ -1023,7 +1326,7 @@ export class ConversationManager {
       if (isDriverError(error, 'blocked')) return;
       throw error;
     }
-    const target = this.conversationFor(key, binding);
+    const target = await this.conversationFor(key, binding);
     if (await this.untilTurnEnds(key, session.id, fromTurn, target)) {
       // Its answer may not be written yet; then the next message settles it first.
       await this.skipNoteAnswers(key, binding);
@@ -1052,7 +1355,7 @@ export class ConversationManager {
     const conversation = await this.options.store.get(key);
     const session = conversation ? await this.options.runtime.get(conversation.sessionName) : null;
     if (session?.state === 'live') {
-      await this.untilSettled(key, session.id, this.conversationFor(key, binding));
+      await this.untilSettled(key, session.id, await this.conversationFor(key, binding));
       if (await this.skipNoteAnswers(key, binding)) return;
       this.options.log(`${session.name ?? session.id}'s note turn gave no answer; stopping it`);
       if (!(await this.endNoteTurn(key, binding, session))) {
@@ -1143,7 +1446,7 @@ export class ConversationManager {
    * leaving the conversation marked as noting, when no answer is there yet.
    */
   private async skipNoteAnswers(key: string, binding: Binding, attempts = 5): Promise<boolean> {
-    const target = this.conversationFor(key, binding);
+    const target = await this.conversationFor(key, binding);
     const engine = target.engine;
     const cursor = (await this.options.store.get(key))?.lastAnswerId;
     for (let attempt = 0; attempt < attempts; attempt++) {
@@ -1254,6 +1557,42 @@ export function conversationKey(
 }
 
 /** A stable UUID for a conversation (version 5 style, from SHA-1), so its engine session can be resumed. */
+/**
+ * The engine's id for a thread's session, for engines that take Wheems's: the thread's own at
+ * first, and a new one each time it starts afresh, so the old session is never resumed.
+ */
+export function engineIdFor(key: string, generation: number): string {
+  return generation === 0 ? uuidFor(key) : uuidFor(`${key}#${String(generation)}`);
+}
+
+/** How a conversation restarts: see `ConversationManager.restart`. */
+export type RestartChoice = 'carry-on' | 'hand-over' | 'fresh';
+
+export interface RestartOutcome {
+  key: string;
+  /** Whether it was restarted as chosen; when not, it's left as it was. */
+  done: boolean;
+  text: string;
+}
+
+/** A chat thread, as the person sees it when choosing how it restarts. */
+export interface OpenConversation {
+  key: string;
+  session: string;
+  ask: string | null;
+  lastActiveAt: string;
+  /** Its session is running in Herdr now, so a handover can come from its agent. */
+  running: boolean;
+  /** It's answering a message, so it can't be restarted just now. */
+  busy: boolean;
+  /** It's already set to start afresh at its next message. */
+  startsAfresh: boolean;
+}
+
+/** How many of a thread's latest turns a handover Wheems writes includes, and how much of each. */
+const HANDOVER_TURNS = 20;
+const HANDOVER_TURN_CHARS = 2000;
+
 export function uuidFor(key: string): string {
   const hash = createHash('sha1').update(`wheems:${key}`).digest();
   hash[6] = ((hash[6] ?? 0) & 0x0f) | 0x50;

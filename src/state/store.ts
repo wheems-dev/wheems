@@ -53,6 +53,16 @@ export const conversationSchema = z.object({
   notedAt: z.string().optional(),
   /** Wheems asked for a note and its answer, which is never posted, may not be skipped yet. */
   noting: z.boolean().optional(),
+  /**
+   * How many times the thread has started afresh, handed over or not: each start has an engine
+   * session id of its own. Missing for 0.
+   */
+  generation: z.number().int().nonnegative().optional(),
+  /**
+   * What the thread's next session starts from, when it doesn't resume: a handover's id, or
+   * 'fresh' for nothing but the thread's ask.
+   */
+  handover: z.string().optional(),
 });
 
 /** A chat thread and the session it talks to, as the conversation manager sees them. */
@@ -141,6 +151,31 @@ export interface ChatTurn {
 
 /** The most of one chat turn kept in the store; the chat app keeps the whole of it. */
 export const CHAT_TURN_MAX = 20_000;
+
+/** Who wrote a handover: the agent handing over, or Wheems, from what it keeps, when it couldn't. */
+export type HandoverAuthor = 'agent' | 'wheems';
+
+/** What a thread's next session starts from, written when its last one was handed over. */
+export interface Handover {
+  id: string;
+  workspace: string;
+  session: string;
+  text: string;
+  author: HandoverAuthor;
+  fromEngine: string | null;
+  fromModel: string | null;
+  writtenAt: string;
+  toEngine: string | null;
+  toModel: string | null;
+  usedAt: string | null;
+}
+
+/** The longest handover kept; anything longer is cut short. */
+export const HANDOVER_MAX = 40_000;
+
+function capText(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
 
 export type MessageState = 'sent' | 'answered' | 'failed';
 /** A message sent (or a session's purpose), or an answer handed back to its sender. */
@@ -244,6 +279,15 @@ export class StateStore {
               'CREATE TEMP VIEW chat AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS author, NULL AS text, NULL AS at WHERE 0',
             );
           }
+          if (version < 5) {
+            // No thread was handed over before version 5.
+            db.exec(
+              'CREATE TEMP VIEW threads AS SELECT *, 0 AS generation, NULL AS handover FROM main.threads',
+            );
+            db.exec(
+              'CREATE TEMP VIEW handovers AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS text, NULL AS author, NULL AS from_engine, NULL AS from_model, NULL AS written_at, NULL AS to_engine, NULL AS to_model, NULL AS used_at WHERE 0',
+            );
+          }
         } else if (version !== SCHEMA_VERSION) {
           throw new Error(
             `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
@@ -333,7 +377,7 @@ export class StateStore {
    */
   forgetWorkspace(workspace: string): void {
     this.transaction(() => {
-      for (const table of ['chat', 'messages', 'threads', 'sessions', 'agents']) {
+      for (const table of ['chat', 'handovers', 'messages', 'threads', 'sessions', 'agents']) {
         this.db.prepare(`DELETE FROM ${table} WHERE workspace = ?`).run(workspace);
       }
     });
@@ -572,6 +616,81 @@ export class StateStore {
       .run(...values, key);
   }
 
+  /**
+   * Sets a thread up to start afresh at its next message, in one write: its generation goes up,
+   * so the next session has an engine id of its own, the engine's id for the old one is
+   * forgotten, and what the next one starts from is kept. With a handover, it is saved and
+   * becomes that start; without, the thread starts with only its ask. Returns the handover's id.
+   */
+  restartThread(
+    key: string,
+    handover: {
+      text: string;
+      author: HandoverAuthor;
+      fromEngine: string | null;
+      fromModel: string | null;
+      at: string;
+    } | null,
+  ): string | null {
+    const thread = this.conversation(key);
+    if (!thread) throw new Error(`No conversation ${key}`);
+    const id = handover === null ? null : randomUUID();
+    this.transaction(() => {
+      if (handover !== null && id !== null) {
+        this.db
+          .prepare(
+            `INSERT INTO handovers (id, workspace, session, text, author, from_engine, from_model,
+               written_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            id,
+            thread.workspace,
+            thread.sessionId,
+            capText(handover.text, HANDOVER_MAX),
+            handover.author,
+            handover.fromEngine,
+            handover.fromModel,
+            handover.at,
+          );
+      }
+      this.db
+        .prepare(
+          'UPDATE threads SET generation = generation + 1, handover = ?, noting = 0 WHERE key = ?',
+        )
+        .run(id ?? 'fresh', key);
+      this.db
+        .prepare(
+          `UPDATE sessions SET engine_session_id = NULL, launch_tag = NULL, launch_started_at = NULL
+           WHERE id = ?`,
+        )
+        .run(thread.sessionId);
+    });
+    return id;
+  }
+
+  /** A handover's text, or undefined when there's no such handover. */
+  handover(id: string): Handover | undefined {
+    const row = this.db.prepare(`${HANDOVER_SELECT} WHERE id = ?`).get(id);
+    return row === undefined ? undefined : toHandover(row);
+  }
+
+  /**
+   * A thread's next session has started from what it was set to: the handover, if any, is
+   * marked used, with the engine and model that took it over.
+   */
+  startedAfresh(key: string, to: { engine: string; model: string; at: string }): void {
+    const thread = this.conversation(key);
+    if (thread?.handover === undefined) return;
+    this.transaction(() => {
+      if (thread.handover !== 'fresh') {
+        this.db
+          .prepare('UPDATE handovers SET to_engine = ?, to_model = ?, used_at = ? WHERE id = ?')
+          .run(to.engine, to.model, to.at, thread.handover ?? '');
+      }
+      this.db.prepare('UPDATE threads SET handover = NULL WHERE key = ?').run(key);
+    });
+  }
+
   private threadRow(key: string): Row | undefined {
     return this.db.prepare(`${THREAD_SELECT} WHERE t.key = ?`).get(key);
   }
@@ -587,6 +706,16 @@ export class WorkspaceSessions {
     private readonly db: DatabaseSync,
     readonly workspace: string,
   ) {}
+
+  /** A session's handovers, newest first: what each of its fresh starts began from. */
+  handovers(session: string, limit = 10): Handover[] {
+    return this.db
+      .prepare(
+        `${HANDOVER_SELECT} WHERE workspace = ? AND session = ? ORDER BY written_at DESC, id DESC LIMIT ?`,
+      )
+      .all(this.workspace, session, limit)
+      .map(toHandover);
+  }
 
   agents(): StandingAgent[] {
     return (
@@ -860,7 +989,8 @@ export async function readConversationsFile(
 }
 
 const THREAD_SELECT = `SELECT t.key, t.workspace, t.connection, t.channel, t.thread, t.session,
-  t.last_answer_id, t.pending, t.noted_at, t.noting, s.herdr_name, s.engine_session_id,
+  t.last_answer_id, t.pending, t.noted_at, t.noting, t.generation, t.handover, s.herdr_name,
+  s.engine_session_id,
   s.launch_started_at, s.launch_tag, s.launched_at, s.created_at, s.last_active_at
   FROM threads t JOIN sessions s ON s.id = t.session`;
 
@@ -894,7 +1024,32 @@ function toConversation(row: Row): Conversation {
   }
   conversation.pending = Number(row.pending);
   if (Number(row.noting) === 1) conversation.noting = true;
+  const generation = Number(row.generation ?? 0);
+  if (generation > 0) conversation.generation = generation;
+  const handover = optional(row.handover);
+  if (handover !== undefined) conversation.handover = handover;
   return conversation;
+}
+
+const HANDOVER_SELECT = `SELECT id, workspace, session, text, author, from_engine, from_model,
+  written_at, to_engine, to_model, used_at FROM handovers`;
+
+function toHandover(row: Row): Handover {
+  const text = (value: SQLOutputValue | undefined) =>
+    value === null || value === undefined ? null : String(value);
+  return {
+    id: String(row.id),
+    workspace: String(row.workspace),
+    session: String(row.session),
+    text: String(row.text),
+    author: String(row.author) as HandoverAuthor,
+    fromEngine: text(row.from_engine),
+    fromModel: text(row.from_model),
+    writtenAt: String(row.written_at),
+    toEngine: text(row.to_engine),
+    toModel: text(row.to_model),
+    usedAt: text(row.used_at),
+  };
 }
 
 const MESSAGE_SELECT = `SELECT id, workspace, kind, sender, receiver, message_file, answer_file,
