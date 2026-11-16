@@ -3,7 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.4
+
+Released 16 November 2026. The web app's Review, Settings, Connections and About you pages, and
+acting from it: approve or decline what your agents propose, and send a message to a session or
+end it. Still an early preview.
 
 **Added**
 
