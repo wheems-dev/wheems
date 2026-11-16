@@ -71,8 +71,11 @@ and the workspace's skills.
 ### Sessions
 
 The same tree on the left, and the chosen session on the right: its state, its id in Herdr, **your
-original ask** (the message that started the chain), its purpose, who started it, and its
-messages. You can send it a message, watch it in Herdr or end it. Sessions you started yourself
+original ask** (the message that started the chain), its purpose, who started it, and its latest
+messages: what was said in its chat thread (your messages, its answers and Wheems's notices, kept
+in the session store as they're posted) and messages sent to it through Wheems. A message that
+seems to hold a password, token or key is kept only as a line saying so. You can send it a
+message, watch it in Herdr or end it. Sessions you started yourself
 with `wheems session create` are a group of their own.
 
 Showing the original ask on every session follows a lesson from running many agents: work drifts

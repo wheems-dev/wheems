@@ -3,6 +3,19 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+When the service first starts, it moves the session store to schema version 4; an older Wheems
+won't open the store after that.
+
+**Fixed**
+
+- The web app's Sessions page shows what was said in a chat thread: your messages, the agent's
+  answers and Wheems's notices, which the service now keeps in the session store as they're
+  posted. Before, it showed only messages sent through Wheems. Chat from before this is only in
+  the chat app. A message that seems to hold a password, token or key is kept only as a line
+  saying so.
+
 ## 0.1.5
 
 Released 16 November 2026. The web app is now a React app: Overview and Sessions update as you

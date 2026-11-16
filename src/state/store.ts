@@ -7,6 +7,7 @@
  * for the service itself: writing agents from config, importing `conversations.json`, matching
  * the store against Herdr at start, and routing chat threads, whose keys carry their workspace.
  */
+import { randomUUID } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { DatabaseSync, SQLInputValue, SQLOutputValue } from 'node:sqlite';
@@ -126,6 +127,21 @@ export interface SessionChange {
   endedAt?: string;
 }
 
+/** Who said a turn in a chat thread: the person, the agent, or Wheems itself. */
+export type ChatAuthor = 'person' | 'agent' | 'wheems';
+
+/** One turn in a chat thread, as said in chat. */
+export interface ChatTurn {
+  id: string;
+  session: string;
+  author: ChatAuthor;
+  text: string;
+  at: string;
+}
+
+/** The most of one chat turn kept in the store; the chat app keeps the whole of it. */
+export const CHAT_TURN_MAX = 20_000;
+
 export type MessageState = 'sent' | 'answered' | 'failed';
 /** A message sent (or a session's purpose), or an answer handed back to its sender. */
 export type MessageKind = 'message' | 'handback';
@@ -222,6 +238,12 @@ export class StateStore {
           if (version < 3) {
             db.exec('CREATE TEMP VIEW sessions AS SELECT *, NULL AS ask FROM main.sessions');
           }
+          if (version < 4) {
+            // No chat was recorded before version 4: an empty view stands in for the table.
+            db.exec(
+              'CREATE TEMP VIEW chat AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS author, NULL AS text, NULL AS at WHERE 0',
+            );
+          }
         } else if (version !== SCHEMA_VERSION) {
           throw new Error(
             `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
@@ -311,7 +333,7 @@ export class StateStore {
    */
   forgetWorkspace(workspace: string): void {
     this.transaction(() => {
-      for (const table of ['messages', 'threads', 'sessions', 'agents']) {
+      for (const table of ['chat', 'messages', 'threads', 'sessions', 'agents']) {
         this.db.prepare(`DELETE FROM ${table} WHERE workspace = ?`).run(workspace);
       }
     });
@@ -753,6 +775,35 @@ export class WorkspaceSessions {
         "UPDATE messages SET state = ?, answer_file = ?, answered_at = ? WHERE workspace = ? AND id = ? AND state = 'sent'",
       )
       .run(state, answerFile, at, this.workspace, id);
+  }
+
+  /** Records a turn said in a thread session's chat. Very long text is cut short. */
+  addChat(turn: { session: string; author: ChatAuthor; text: string; at: string }): void {
+    const text =
+      turn.text.length > CHAT_TURN_MAX ? `${turn.text.slice(0, CHAT_TURN_MAX)}…` : turn.text;
+    this.db
+      .prepare(
+        'INSERT INTO chat (id, workspace, session, author, text, at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
+      .run(randomUUID(), this.workspace, turn.session, turn.author, text, turn.at);
+  }
+
+  /** A thread session's latest chat turns, newest first. */
+  chat(sessionId: string, limit = 10): ChatTurn[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT id, session, author, text, at FROM chat WHERE workspace = ? AND session = ?
+           ORDER BY at DESC, id DESC LIMIT ?`,
+        )
+        .all(this.workspace, sessionId, limit) as Row[]
+    ).map((row) => ({
+      id: String(row.id),
+      session: String(row.session),
+      author: String(row.author) as ChatAuthor,
+      text: String(row.text),
+      at: String(row.at),
+    }));
   }
 
   /** A session's latest messages, sent or received, newest first. */

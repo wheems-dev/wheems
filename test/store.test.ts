@@ -15,7 +15,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SessionInfo } from '../src/contracts/runtime.js';
 import { ConversationStore, type Conversation } from '../src/service/store.js';
 import { MIGRATIONS, SCHEMA_VERSION } from '../src/state/schema.js';
-import { StateStore, sessionLabels, type StandingAgent } from '../src/state/store.js';
+import {
+  CHAT_TURN_MAX,
+  StateStore,
+  sessionLabels,
+  type StandingAgent,
+} from '../src/state/store.js';
 
 const conversation = (thread: string, workspace = 'personal'): Conversation => ({
   workspace,
@@ -442,6 +447,34 @@ describe('session store', () => {
       ).rejects.toThrow(/another workspace/);
       expect(state.conversation('x')).toBeUndefined();
     });
+  });
+
+  it("keeps a thread's chat, cuts very long turns short, and forgets it with its workspace", async () => {
+    const threads = new ConversationStore(state);
+    await threads.set('a', conversation('a'));
+    await threads.set('b', conversation('b', 'acme'));
+    await threads.recordChat('a', 'person', 'hello', new Date('2026-11-16T10:00:00Z'));
+    await threads.recordChat(
+      'a',
+      'agent',
+      'x'.repeat(CHAT_TURN_MAX + 5),
+      new Date('2026-11-16T10:01:00Z'),
+    );
+    await threads.recordChat('b', 'person', 'other', new Date('2026-11-16T10:00:00Z'));
+    // A thread the store doesn't know has nowhere to keep its chat.
+    await threads.recordChat('nope', 'person', 'lost', new Date());
+    const chat = state.workspace('personal').chat('id-personal-a');
+    expect(chat.map((t) => t.author)).toEqual(['agent', 'person']);
+    expect(chat[0]?.text).toHaveLength(CHAT_TURN_MAX + 1);
+    expect(state.workspace('personal').chat('id-acme-b')).toEqual([]);
+    state.forgetWorkspace('personal');
+    expect(state.workspace('personal').chat('id-personal-a')).toEqual([]);
+    expect(
+      state
+        .workspace('acme')
+        .chat('id-acme-b')
+        .map((t) => t.text),
+    ).toEqual(['other']);
   });
 
   it('opens read-only for doctor without writing', async () => {

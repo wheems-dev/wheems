@@ -1,4 +1,4 @@
-import type { Conversation, StateStore } from '../state/store.js';
+import type { ChatAuthor, Conversation, StateStore } from '../state/store.js';
 
 export type { Conversation } from '../state/store.js';
 
@@ -27,6 +27,15 @@ export class ConversationStore {
   /** Records the person's first message as what the thread session was asked. */
   async recordAsk(sessionId: string, ask: string): Promise<void> {
     this.state.recordAsk(sessionId, ask);
+  }
+
+  /** Records a turn said in a conversation's thread, when its session is known. */
+  async recordChat(key: string, author: ChatAuthor, text: string, at: Date): Promise<void> {
+    const conversation = this.state.conversation(key);
+    if (!conversation) return;
+    this.state
+      .workspace(conversation.workspace)
+      .addChat({ session: conversation.sessionId, author, text, at: at.toISOString() });
   }
 
   async setEngineSession(key: string, id: string): Promise<void> {

@@ -636,7 +636,8 @@ built-in SQLite: each workspace's chief, written from config every time the serv
 each chat thread with the session it talks to, where the answers have got to and its notes.
 Herdr says whether a session is running; the store says what it's for, including **what you
 asked**: a thread's first message, which every session started for it inherits and is reminded
-of, so work handed down stays tied to it (`wheems session show` prints it as "Asked"). Every session Wheems
+of, so work handed down stays tied to it (`wheems session show` prints it as "Asked"). It also
+keeps what's said in each chat thread, for the web app to show. Every session Wheems
 starts is labelled `wheems=<session id>` in Herdr, and when the service starts it matches the
 store against Herdr: a session whose Herdr session has gone is marked stopped, and resumes when
 it's next needed.
@@ -652,7 +653,7 @@ file, or remove it to start its threads afresh, then run `wheems restart`.
 A page in your browser for seeing what Wheems is doing: pick a workspace at the top of the
 sidebar, then its **Overview** (its chief of staff with the sessions working for it as a tree,
 the knowledge base and skills), its **Sessions** (each one's state, what you originally asked,
-its purpose and latest messages), its **Review** (skills its agents proposed) and its
+its purpose and latest messages, including its chat thread's), its **Review** (skills its agents proposed) and its
 **Settings**. For the whole install there are **Connections** (chat channels, integrations and
 engine accounts, and which workspaces use each), **About you** (`about-you.md` and the changes
 suggested for it) and **Setup and health** (doctor's checks). It follows your computer's light or
