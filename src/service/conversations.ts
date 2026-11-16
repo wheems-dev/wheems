@@ -148,8 +148,8 @@ export class ConversationManager {
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
   /**
-   * Conversations set up to start afresh after a restart that's coming: their next session must
-   * start on the new settings, so the old service mustn't start it. A message for one waits.
+   * Workspaces whose conversations are being set up for a restart that's coming: until it, the
+   * old service starts no session in them, new or resumed, so none starts on the old settings.
    */
   private readonly held = new Set<string>();
   /** Conversations whose agent was asked for a handover, and the handover once it came. */
@@ -333,22 +333,21 @@ export class ConversationManager {
   }
 
   /**
-   * Holds conversations about to start afresh until the coming restart: the old service starts no
-   * session for them meanwhile. `release` lets them go, when the restart doesn't happen.
+   * Holds a workspace's conversations until the coming restart: the old service starts no session
+   * in it meanwhile, for a new thread or an old one. `release` lets them go, when the restart
+   * doesn't happen.
    */
-  hold(keys: string[]): void {
-    for (const key of keys) this.held.add(key);
+  async hold(workspace: string, settleMs = 30_000): Promise<void> {
+    this.held.add(workspace);
+    // Work already under way in it, such as a session starting for a message that came just
+    // before, finishes first, so what's listed next is what will be. A message from Wheems that
+    // came meanwhile waits for the hold in its queue, so this waits only so long.
+    const pending = [...this.queues].filter(([key]) => key.startsWith(`${workspace}:`));
+    await Promise.race([Promise.allSettled(pending.map(([, work]) => work)), sleep(settleMs)]);
   }
 
-  release(keys: string[]): void {
-    for (const key of keys) this.held.delete(key);
-  }
-
-  /** The workspace's conversations already set to start afresh at their next message. */
-  async startingAfresh(workspace: string): Promise<string[]> {
-    return (await this.options.store.all())
-      .filter(([, c]) => c.workspace === workspace && c.handover !== undefined)
-      .map(([key]) => key);
+  release(workspace: string): void {
+    this.held.delete(workspace);
   }
 
   /**
@@ -746,11 +745,11 @@ export class ConversationManager {
       this.options.log(`Conversation ${key}: its workspace is no longer served`);
       return;
     }
-    if (this.held.has(key)) {
+    if (this.held.has(binding.workspace.id)) {
       if (seen === null) {
         // From Wheems, such as a session's answer: it waits, kept in the store, and is delivered
         // after the restart, or here if the restart doesn't happen.
-        while (this.held.has(key) && !this.stopped) await sleep(500);
+        while (this.held.has(binding.workspace.id) && !this.stopped) await sleep(500);
         if (this.stopped) return;
       } else {
         this.options.log(`Conversation ${key}: a message came while it waits for the restart`);

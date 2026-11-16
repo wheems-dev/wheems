@@ -107,7 +107,7 @@ export const requestSchema = z.discriminatedUnion('op', [
           choice: z.enum(['carry-on', 'hand-over', 'fresh']),
         }),
       )
-      .min(1)
+      // None, with a restart: every conversation is set up already, or there are none.
       .max(200),
   }),
   /** Restarts the service with the latest config, once it has answered (the web app's Restart). */
@@ -144,6 +144,11 @@ export type ControlResponse =
       restarted?: RestartOutcome[];
       /** For `conversations-restart` with `restart`: whether the service is restarting. */
       restarting?: boolean;
+      /**
+       * For `conversations-restart` with `restart`: the workspace's conversations changed since
+       * the choices were made (one opened, or one set up started), so nothing was done.
+       */
+      stale?: boolean;
       /** The answer to a `session send --wait`. */
       answer?: string;
       sent?: MessageRecord;

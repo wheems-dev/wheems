@@ -302,6 +302,14 @@ export async function restartConversations(
     const left = outcomes.filter((o) => !o.done).length;
     const set = `${String(outcomes.length - left)} ${outcomes.length - left === 1 ? 'conversation' : 'conversations'} set up`;
     if (thenRestart) {
+      if (answer.stale === true) {
+        return {
+          ok: false,
+          text: answer.message ?? 'The conversations changed: look again.',
+          outcomes,
+          restarting: false,
+        };
+      }
       if (answer.restarting === true) {
         return {
           ok: true,

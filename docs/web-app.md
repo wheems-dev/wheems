@@ -128,9 +128,10 @@ the ask, the default for older threads then. **Apply and restart** sets each up 
 service still runs, so the old chiefs can write their handovers, and says how each went. The
 service restarts itself in the same step, and only once every conversation is set up: one left
 as it was (answering a message, say) would run on with its old session, so then nothing restarts
-and **Try again** sets up the rest. Meanwhile a message to a thread set to start afresh is
-answered with a line asking to send it again in a moment, so no new session starts on the old
-settings. Still commands: the chat channel, accounts, archive and remove.
+and **Try again** sets up the rest. While it works, the old service starts no session in the
+workspace: a message, in a new thread or an old one, is answered with a line asking to send it
+again in a moment. If a conversation opened after the page listed them, nothing is done and the
+page lists them again. Still commands: the chat channel, accounts, archive and remove.
 
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because

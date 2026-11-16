@@ -487,6 +487,57 @@ describe('the service', () => {
     });
     await waitFor(() => channel.sent.length > before);
     expect(channel.sent.at(-1)?.text).toContain('restarting with new settings. Send that again');
+    // The whole workspace is held: a new thread too.
+    const sent = channel.sent.length;
+    await channel.receive({ channel: 'D1', text: 'a new thing', userId: 'UME', direct: true });
+    await waitFor(() => channel.sent.length > sent);
+    expect(channel.sent.at(-1)?.text).toContain('restarting with new settings. Send that again');
+  });
+
+  it('refuses a restart whose choices leave a conversation out, and takes one with none left', async () => {
+    const socket = paths(home, env).socket;
+    const open = async (text: string) => {
+      const before = channel.sent.length;
+      await channel.receive({ channel: 'D1', text, userId: 'UME', direct: true });
+      await waitFor(() => channel.sent.length > before);
+    };
+    const list = async () => {
+      const listed = await request(socket, {
+        op: 'conversations',
+        caller: { workspace: 'personal' },
+      });
+      return listed.ok ? (listed.conversations ?? []) : [];
+    };
+    await open('first thing');
+    const [a] = await list();
+    // A thread opens after the page listed the conversations.
+    await open('second thing');
+    const ask = (choices: { session: string; choice: 'fresh' }[]) =>
+      request(socket, {
+        op: 'conversations-restart',
+        caller: { workspace: 'personal' },
+        choices,
+        restart: true,
+      });
+    const stale = await ask([{ session: a!.session, choice: 'fresh' }]);
+    expect(stale).toMatchObject({ ok: true, stale: true, restarting: false, restarted: [] });
+    expect((await list()).every((c) => !c.startsAfresh)).toBe(true);
+
+    const both = (await list()).map((c) => ({ session: c.session, choice: 'fresh' as const }));
+    // Both set up; this test's service can't restart itself, so it says so and lets them go.
+    expect(await ask(both)).toMatchObject({ ok: true, restarting: false });
+    expect((await list()).every((c) => c.startsAfresh)).toBe(true);
+    // Everything set up already: none to choose, and it goes straight to the restart.
+    const none = await ask([]);
+    expect(none).toMatchObject({ ok: true, restarting: false, restarted: [] });
+    expect(none.ok ? none.message : '').toContain("can't restart itself");
+    // Without a restart, choices are needed.
+    const empty = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [],
+    });
+    expect(empty).toMatchObject({ ok: false });
   });
 
   it('takes a skill proposal from an agent, for the person to review', async () => {

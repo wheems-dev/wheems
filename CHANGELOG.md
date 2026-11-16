@@ -19,9 +19,11 @@ change anything, including commands and config formats, without a migration path
   **Carry on** (the default when the engine stays the same), **Hand over** (the default for a
   thread active in the last week when it changes) or **Start fresh** (for older ones). **Apply and
   restart** sets each up, asking each chief for its handover while the old one still runs, then
-  restarts the service in the same step, only once every conversation is set up. Until then, a
-  message to a thread set to start afresh asks to be sent again in a moment. A chat thread's session on the Sessions page has **Hand over** and **Start
-  fresh**, each asking first, and lists its handovers.
+  restarts the service in the same step, only once every conversation is set up. Meanwhile a
+  message in the workspace asks to be sent again in a moment, and if a conversation opened after
+  the page listed them, nothing is done and they're listed again.
+- A chat thread's session on the Sessions page has **Hand over** and **Start fresh**, each asking
+  first, and lists its handovers.
 
 ## 0.1.7
 
