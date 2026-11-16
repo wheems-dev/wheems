@@ -1072,8 +1072,18 @@ describe('askFrom', () => {
       'Log in to the router, password=[removed] and restart it',
     );
     expect(askFrom('Call it with Authorization: Bearer abc.def.ghi1234567')).toBe(
-      'Call it with Authorization: Bearer [removed]',
+      'Call it with Authorization: [removed]',
     );
+    expect(askFrom('Send Authorization: Basic dTpw to it')).toBe(
+      'Send Authorization: [removed] to it',
+    );
+    expect(askFrom('Use token: Bearer abc.def.ghi1234567 there')).toBe(
+      'Use token: [removed] there',
+    );
+    expect(askFrom('Post {"password": "a quoted secret", "user": "me"}')).toBe(
+      'Post {"password": [removed], "user": "me"}',
+    );
+    expect(askFrom('curl -H "Authorization: Bearer abcdefgh12345678"')).not.toContain('abcdefgh');
     expect(askFrom('my password is hunter2 so book it')).toBe(
       'my password is [removed] so book it',
     );

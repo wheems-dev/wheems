@@ -52,11 +52,13 @@ export function looksLikeSecret(text: string): boolean {
 
 /**
  * A credential given in words or as a header, which SECRET_PATTERNS can't recognise by its
- * shape: `password=…`, `token: …`, "my password is …", `Authorization: Bearer …`.
+ * shape, in the order they're removed: an Authorization header's whole value, scheme and all;
+ * `password=…`, `"token": "…"`, `token: Bearer …` or "my password is …"; and a bare bearer token.
  */
 const CREDENTIAL_VALUES = [
-  /\b((?:pass(?:word|wd|phrase|code)?|pwd|pin|secret|api[ _-]?key|access[ _-]?key|token)s?)(\s*[:=]\s*|\s+is\s+)("[^"]*"|'[^']*'|\S+)/gi,
-  /\b(bearer|basic)(\s+)([A-Za-z0-9._~+/=-]{8,})/gi,
+  /(["']?\b(?:proxy-)?authori[sz]ation["']?)(\s*[:=]\s*)((?:bearer|basic|digest|token)\s+)?("[^"]*"|'[^']*'|\S+)/gi,
+  /(["']?\b(?:pass(?:word|wd|phrase|code)?|pwd|pin|secret|api[ _-]?key|access[ _-]?key|token|auth)s?["']?)(\s*[:=]\s*|\s+is\s+)((?:bearer|basic|token)\s+)?("[^"]*"|'[^']*'|\S+)/gi,
+  /(\bbearer)(\s+)()([A-Za-z0-9._~+/=-]{8,})/gi,
 ];
 
 /**
