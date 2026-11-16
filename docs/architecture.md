@@ -798,15 +798,15 @@ step that started it. Rubrics live in files, so the same rubric judges every run
 **Recorded outcomes.** Every task keeps a run record: its brief, result, each check and whether it
 passed, the judge's scores and reasons, your feedback and edits, any outcome measure (the reply
 was sent, the ticket closed, the customer answered), the time and turns it took, and the agent,
-engine, model and skill versions it ran with. `wheems eval report` shows quality per agent, kind
-of task and engine over time.
+engine, model and skill versions it ran with. `wheems evaluation report` shows quality per agent,
+kind of task and engine over time.
 
 **Evals catch regressions.** An eval is a golden set: saved tasks with known-good outcomes
 (`evals/<name>/`, each case an input and what must be true of the result). The set re-runs
 whenever something it depends on changes (an agent's instructions, a skill's version, the model,
-the engine, a prompt or a label set) and on demand with `wheems eval run`. When scores drop below
-the last accepted baseline, Wheems posts to `updates`; a new baseline needs your approval. Your
-"not right" answers and corrected results are offered as new cases.
+the engine, a prompt or a label set) and on demand with `wheems evaluation run`. When scores drop
+below the last accepted baseline, Wheems posts to `updates`; a new baseline needs your approval.
+Your "not right" answers and corrected results are offered as new cases.
 
 **Business tasks are evaluated on business terms.**
 
