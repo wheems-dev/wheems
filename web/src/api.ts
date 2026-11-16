@@ -32,6 +32,10 @@ export function token(): string | null {
   }
 }
 
+/** What the page says when nothing answers: the service, or `wheems web run`, has stopped. */
+export const UNREACHABLE =
+  "Can't reach Wheems: it may have stopped. Check with wheems status, and start it with wheems start.";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -45,7 +49,10 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set('Authorization', `Bearer ${token() ?? ''}`);
   if (init.body !== undefined) headers.set('Content-Type', 'application/json');
-  const response = await fetch(`/api${path}`, { ...init, headers });
+  const response = await fetch(`/api${path}`, { ...init, headers }).catch(() => {
+    // The browser got no answer at all: what serves this page has stopped.
+    throw new ApiError(0, UNREACHABLE);
+  });
   const body = (await response.json().catch(() => ({}))) as T & { error?: string };
   if (!response.ok) throw new ApiError(response.status, body.error ?? response.statusText);
   return body;
@@ -58,7 +65,7 @@ export function useView<T>(path: string | null, every?: number) {
     queryFn: () => call<T>(path ?? ''),
     enabled: path !== null,
     ...(every !== undefined && { refetchInterval: every }),
-    retry: (count, error) => error.status >= 500 && count < 2,
+    retry: (count, error) => (error.status === 0 || error.status >= 500) && count < 2,
   });
 }
 

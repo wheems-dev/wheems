@@ -8,7 +8,8 @@ your chiefs: the web app is for looking things over and changing settings, the w
 **Built so far (stage 1):** the workspace switcher; each workspace's Overview, Sessions, Review and
 Settings; and the install's Connections, About you, and Setup and health; in light and dark. From
 the page you can approve or decline skills (choosing which agents get each, and editing it first)
-and changes to `about-you.md`, and send a message to a session or end it. Editing settings,
+and changes to `about-you.md`, and send a message to a session or end it (ending and declining ask
+first). When nothing answers, the page and its sidebar say Wheems can't be reached. Editing settings,
 connecting and granting, and setup steps still use the commands each page names.
 
 ## How it runs
@@ -75,8 +76,10 @@ original ask** (the message that started the chain), its purpose, who started it
 messages: what was said in its chat thread (your messages, its answers and Wheems's notices, kept
 in the session store as they're posted) and messages sent to it through Wheems. A message that
 seems to hold a password, token or key is kept only as a line saying so. You can send it a
-message, watch it in Herdr or end it. Sessions you started yourself
-with `wheems session create` are a group of their own.
+message, watch it in Herdr or end it; ending asks first, in the page, since it can't be undone.
+A chat thread's session hears you in its thread, so the page says to reply there rather than
+offering to send. Sessions you started yourself with `wheems session create` are a group of their
+own. A session you end stays in view, with how it went, even while ended sessions are hidden.
 
 Showing the original ask on every session follows a lesson from running many agents: work drifts
 from what was asked one sensible step at a time, so the ask stays visible all the way down.
@@ -84,8 +87,8 @@ from what was asked one sensible step at a time, so the ask stays visible all th
 ### Review
 
 What the workspace's agents propose, waiting for your yes: new skills and new versions of skills,
-each with why it's proposed and the text itself. Approve, decline or ask the chief why; a decision
-can be undone until you leave the page.
+each with why it's proposed and the text itself. Approve or decline; declining asks first, in the
+page. Asking the chief why, and undoing a decision, are still to come.
 
 When agents ask before acting (milestone 3), each request and your answer are kept here as the
 approvals history, with what the agent knew when it asked.

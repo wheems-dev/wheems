@@ -11,7 +11,7 @@ import {
 } from '../review/review.js';
 import { request } from '../service/control.js';
 import { listProposals } from '../skills/proposals.js';
-import { fingerprint, type WebContext } from './data.js';
+import { findSession, fingerprint, type WebContext } from './data.js';
 
 /** What came of an action, shown once at the top of the page it returns to. */
 export interface Flash {
@@ -174,6 +174,14 @@ export async function actOnSession(
   if (action === 'send') {
     const text = (field(form, 'text') ?? '').replace(/\r\n/g, '\n').trim();
     if (text === '') return { ok: false, text: 'Write a message to send.' };
+    // A chat thread's session hears the person in its thread; the service refuses the rest.
+    const record = await findSession(context, workspace, id);
+    if (record?.kind === 'thread') {
+      return {
+        ok: false,
+        text: "Not sent: it's a conversation in chat. Reply in its chat thread, and it hears you there.",
+      };
+    }
     const sending = request(where.socket, { op: 'session-send', caller, id, text }, 180_000);
     const outcome = await Promise.race([
       sending.then(

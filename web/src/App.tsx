@@ -126,7 +126,14 @@ function Layout() {
           </NavLink>
         </nav>
         <div className="foot">
-          {install.data?.service.running === true ? (
+          {install.error?.status === 0 ? (
+            <>
+              <span className="badge no">● Can&apos;t reach Wheems</span>
+              <span className="soft small">
+                Check with <span className="mono">wheems status</span>
+              </span>
+            </>
+          ) : install.data?.service.running === true ? (
             <>
               <span className="badge ok">● Service running</span>
               <span className="soft small">Wheems {install.data.service.report?.version}</span>

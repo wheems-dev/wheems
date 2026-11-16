@@ -643,6 +643,15 @@ p {
 .btn.primary:hover {
   background: #23409a;
 }
+.btn.danger {
+  border-color: var(--no);
+  color: var(--no);
+  background: var(--no-bg);
+}
+.confirm {
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .field {
   width: 100%;
   padding: 10px 12px;

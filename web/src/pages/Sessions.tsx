@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import type { Flash } from '../../../src/web/actions.js';
 import type { SessionMessage, TreeItem, WorkspacePage } from '../../../src/web/data.js';
 import { useAction, useView } from '../api.js';
-import { FlashBanner, Loading, Problem, SessionBadge, ago } from '../ui.js';
+import { ConfirmButton, FlashBanner, Loading, Problem, SessionBadge, ago } from '../ui.js';
 import { TreeLinks } from './Overview.js';
 
 interface SessionView {
@@ -78,28 +78,22 @@ export function Sessions() {
             <p className="muted">No sessions yet.</p>
           </section>
         ) : (
-          <Detail key={chosen} workspace={w.id} session={chosen} ended={ended} />
+          <Detail key={chosen} workspace={w.id} session={chosen} />
         )}
       </div>
     </>
   );
 }
 
-function Detail({
-  workspace,
-  session,
-  ended,
-}: {
-  workspace: string;
-  session: string;
-  ended: boolean;
-}) {
-  const path = `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}${ended ? '?ended=1' : ''}`;
+function Detail({ workspace, session }: { workspace: string; session: string }) {
+  // Always with ended sessions, so one you've just ended stays in view, with how it went.
+  const path = `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}?ended=1`;
   const view = useView<SessionView>(path, 3000);
   const [text, setText] = useState('');
   const [flash, setFlash] = useState<Flash | null>(null);
   // The draft that was sent, cleared once it's delivered, unless you've written another since.
   const sent = useRef<string | null>(null);
+  const [doing, setDoing] = useState<string | null>(null);
   const act = useAction(
     `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}`,
     (result) => {
@@ -130,6 +124,7 @@ function Detail({
   const s = item.session;
   const run = (fields: Record<string, string>) => {
     sent.current = fields.action === 'send' ? (fields.text ?? null) : null;
+    setDoing(fields.action ?? null);
     act.mutate(fields);
   };
   return (
@@ -189,6 +184,20 @@ function Detail({
       </div>
       {s.state === 'ended' ? (
         <p className="muted small">It has ended; it stays as a record.</p>
+      ) : s.kind === 'thread' ? (
+        <div className="stack" style={{ gap: 8 }}>
+          <p className="muted small">
+            It&apos;s a conversation in chat: to talk to it, reply in its chat thread.
+          </p>
+          <div className="row">
+            <EndButton
+              disabled={act.isPending}
+              onEnd={() => {
+                run({ action: 'end' });
+              }}
+            />
+          </div>
+        </div>
       ) : (
         <form
           className="stack"
@@ -217,24 +226,35 @@ function Detail({
               type="submit"
               disabled={act.isPending || text.trim() === ''}
             >
-              {act.isPending ? 'Sending…' : 'Send'}
+              {act.isPending && doing === 'send' ? 'Sending…' : 'Send'}
             </button>
-            <button
-              className="btn"
-              type="button"
+            <EndButton
               disabled={act.isPending}
-              onClick={() => {
+              onEnd={() => {
                 run({ action: 'end' });
               }}
-            >
-              End this session
-            </button>
+            />
           </div>
         </form>
       )}
-      <p className="muted small">
-        Watch it work with <span className="mono">hc attach {s.herdrName ?? s.id}</span>.
-      </p>
+      {s.state !== 'ended' && (
+        <p className="muted small">
+          Watch it work with <span className="mono">hc attach {s.herdrName ?? s.id}</span>.
+        </p>
+      )}
     </section>
+  );
+}
+
+/** Ending can't be undone, so it asks first. */
+function EndButton({ disabled, onEnd }: { disabled: boolean; onEnd: () => void }) {
+  return (
+    <ConfirmButton
+      label="End this session"
+      question="End it? It writes its note, then stops for good."
+      yes="Yes, end it"
+      disabled={disabled}
+      onConfirm={onEnd}
+    />
   );
 }
