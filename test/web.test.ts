@@ -21,6 +21,7 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
 import { withReviewLock } from '../src/review/review.js';
 import { MIGRATIONS } from '../src/state/schema.js';
+import { ConversationStore } from '../src/service/store.js';
 import { StateStore } from '../src/state/store.js';
 import { fingerprint } from '../src/web/data.js';
 import { startWeb, webToken, webUrl, type RunningWeb } from '../src/web/server.js';
@@ -407,6 +408,29 @@ describe('the web app', () => {
     ).json();
     expect(sent).toMatchObject({ ok: false });
     expect(sent.text).toContain("The service isn't running");
+  });
+
+  it("won't send to a chat thread's session, and says to reply in the thread", async () => {
+    const state = await StateStore.open(paths(home, env).store);
+    await new ConversationStore(state).set('default:slack:D1:1', {
+      workspace: 'default',
+      connection: 'slack',
+      channel: 'D1',
+      thread: '1',
+      sessionId: 'thread-id',
+      sessionName: 'default-thread',
+      createdAt: '2026-11-16T10:00:00.000Z',
+      lastActiveAt: '2026-11-16T10:00:00.000Z',
+    });
+    expect(state.workspace('default').session('thread-id')).toMatchObject({ kind: 'thread' });
+    state.close();
+    const sent = (
+      await post('/w/default/sessions/thread-id', { action: 'send', text: 'Any news?' })
+    ).json();
+    expect(sent).toEqual({
+      ok: false,
+      text: "Not sent: it's a conversation in chat. Reply in its chat thread, and it hears you there.",
+    });
   });
 
   it('gives how a slow send turned out, even a failure, once', async () => {

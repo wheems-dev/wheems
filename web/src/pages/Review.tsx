@@ -3,7 +3,7 @@ import { useParams } from 'react-router';
 import type { Flash } from '../../../src/web/actions.js';
 import type { ProposalView, ReviewView } from '../../../src/web/data.js';
 import { useAction, useView } from '../api.js';
-import { Badge, FlashBanner, Loading, Problem, ago } from '../ui.js';
+import { Badge, FlashBanner, Loading, Problem, ago, ConfirmButton } from '../ui.js';
 
 export function Review() {
   const id = useParams().id ?? '';
@@ -126,16 +126,15 @@ function Proposal({
         >
           Approve
         </button>
-        <button
-          className="btn"
-          type="button"
+        <ConfirmButton
+          label="Decline"
+          question="Decline it? The proposal is removed, and no agent gets it."
+          yes="Yes, decline"
           disabled={act.isPending}
-          onClick={() => {
+          onConfirm={() => {
             decide('decline');
           }}
-        >
-          Decline
-        </button>
+        />
       </div>
     </article>
   );

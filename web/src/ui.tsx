@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Flash } from '../../src/web/actions.js';
 import type { SessionRecord } from '../../src/state/store.js';
@@ -111,6 +112,66 @@ export function FlashBanner({ flash }: { flash: Flash | null | undefined }) {
     <p className={`card pad flash ${flash.ok ? 'ok' : 'no'}`} role="status">
       {flash.text}
     </p>
+  );
+}
+
+/**
+ * A button for something that can't be undone: the first click asks, in the page, and only
+ * "yes" acts. No browser dialog, so nothing blocks the page.
+ */
+export function ConfirmButton({
+  label,
+  question,
+  yes,
+  disabled = false,
+  onConfirm,
+}: {
+  label: string;
+  question: string;
+  yes: string;
+  disabled?: boolean;
+  onConfirm: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) {
+    return (
+      <button
+        className="btn"
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setAsking(true);
+        }}
+      >
+        {label}
+      </button>
+    );
+  }
+  return (
+    <span className="row confirm" role="group" aria-label={question}>
+      <span className="small">{question}</span>
+      <button
+        className="btn danger"
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setAsking(false);
+          onConfirm();
+        }}
+      >
+        {yes}
+      </button>
+      <button
+        className="btn"
+        type="button"
+        autoFocus
+        onClick={() => {
+          setAsking(false);
+        }}
+      >
+        Cancel
+      </button>
+    </span>
   );
 }
 

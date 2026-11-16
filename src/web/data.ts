@@ -214,6 +214,21 @@ export async function sessionMessages(
   return out.sort((a, b) => a.when.localeCompare(b.when)).slice(-LATEST_MESSAGES);
 }
 
+/** One session's record, or null when the store doesn't have it. */
+export async function findSession(
+  context: WebContext,
+  workspace: string,
+  id: string,
+): Promise<SessionRecord | null> {
+  const store = await openStore(paths(context.home, context.env)).catch(() => null);
+  if (!store) return null;
+  try {
+    return store.workspace(workspace).session(id) ?? null;
+  } finally {
+    store.close();
+  }
+}
+
 export function doctorReport(context: WebContext): Promise<DoctorReport> {
   return runDoctor({
     home: context.home,

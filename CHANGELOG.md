@@ -7,6 +7,13 @@ change anything, including commands and config formats, without a migration path
 
 **Fixed**
 
+- The web app's Sessions page no longer offers to send to or end a chat thread's session, which
+  the service refused with a message meant for agents; it says to reply in the thread. Ending a
+  session and declining a proposal or a change about you now ask first, in the page. A session
+  you've just ended stays in view with how it went, and no longer says to attach to it in Herdr.
+  When the service has stopped, the page and its sidebar say Wheems can't be reached, rather than
+  "Failed to fetch".
+
 - When this Mac can't reach Slack, `wheems doctor` and `wheems setup` say so in a few seconds,
   as "Couldn't reach Slack", rather than blaming the tokens, retrying for up to half an hour and
   printing the Slack library's warnings. When Slack is limiting requests, they say that rather

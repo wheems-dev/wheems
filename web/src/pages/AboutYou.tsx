@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Flash } from '../../../src/web/actions.js';
 import type { AboutYouView } from '../../../src/web/data.js';
 import { useAction, useView } from '../api.js';
-import { Badge, FlashBanner, Loading, Problem } from '../ui.js';
+import { Badge, FlashBanner, Loading, Problem, ConfirmButton } from '../ui.js';
 
 export function AboutYou() {
   const view = useView<AboutYouView>('/about-you', 10_000);
@@ -66,16 +66,15 @@ function Suggestion({
         >
           Approve
         </button>
-        <button
-          className="btn"
-          type="button"
+        <ConfirmButton
+          label="Decline"
+          question="Decline it? about-you.md stays as it is, and the suggestion is removed."
+          yes="Yes, decline"
           disabled={act.isPending}
-          onClick={() => {
+          onConfirm={() => {
             decide('decline');
           }}
-        >
-          Decline
-        </button>
+        />
       </div>
     </article>
   );

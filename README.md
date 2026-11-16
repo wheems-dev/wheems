@@ -683,7 +683,9 @@ wheems web run            # serve it on its own in this terminal, until Ctrl+C
 
 The service serves it whenever it runs, so `wheems start` starts it too, on `127.0.0.1` port 4317
 (`$WHEEMS_WEB_PORT` or `--port` to change it). From it you can approve or decline what your agents
-propose, and send a message to a session or end it; for anything else, use the commands it
+propose, and send a message to a session or end it; ending and declining ask first. A chat
+thread's session hears you in its thread, so for those the page says to reply there. When the
+service stops, the page says it can't reach Wheems. For anything else, use the commands it
 names. Only this computer can reach it, and only with the link `wheems web open`
 gives, which carries a token kept in `.wheems/web-token`. What comes next is in
 [docs/web-app.md](docs/web-app.md).
