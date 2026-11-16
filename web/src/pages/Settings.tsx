@@ -74,7 +74,12 @@ function SettingsForm({
   const [flash, setFlash] = useState<Flash | null>(null);
   const [saved, setSaved] = useState(false);
   // A saved change to the chief: open conversations need a choice before the restart.
-  const [chiefChange, setChiefChange] = useState<{ engine: boolean } | null>(null);
+  const [chiefChange, setChiefChange] = useState<{
+    engine: boolean;
+    /** Counts saves after a restart: each starts a new choice of what happens to the threads. */
+    round: number;
+    restarted: boolean;
+  } | null>(null);
   // Only the fields you've edited, over what the file says now, so a refresh (after a save, or
   // a save refused because the file changed) never loses them, and never undoes a field you
   // didn't touch.
@@ -90,7 +95,11 @@ function SettingsForm({
     // What was saved is in the file now; keep anything typed since.
     const sent = submitted.current;
     if (result.text.startsWith('Saved') && CHIEF.some((key) => key in sent)) {
-      setChiefChange((was) => ({ engine: (was?.engine ?? false) || 'engine' in sent }));
+      setChiefChange((was) =>
+        was !== null && !was.restarted
+          ? { ...was, engine: was.engine || 'engine' in sent }
+          : { engine: 'engine' in sent, round: (was?.round ?? 0) + 1, restarted: false },
+      );
     }
     setEdits((now) =>
       Object.fromEntries(
@@ -102,7 +111,8 @@ function SettingsForm({
     setFlash(result);
     if (result.ok) {
       setSaved(false);
-      setChiefChange(null);
+      // The choices stay in view, with how each went.
+      setChiefChange((was) => (was === null ? null : { ...was, restarted: true }));
     }
   });
   const changed = (Object.keys(start) as (keyof Values)[]).filter(
@@ -114,7 +124,8 @@ function SettingsForm({
       setEdits((now) => ({ ...now, [key]: next }));
     };
   const submit = () => {
-    submitted.current = { ...edits };
+    // What actually changed, not every field touched: an edit put back isn't a change.
+    submitted.current = Object.fromEntries(changed.map((key) => [key, values[key]]));
     const fields: Record<string, string> = { seen: v.seen };
     for (const key of changed) {
       if (key === 'tidy' || key === 'tidyAt') fields.tidyAt = values.tidy ? values.tidyAt : 'off';
@@ -149,13 +160,15 @@ function SettingsForm({
         </p>
       )}
       <FlashBanner flash={flash} />
-      {saved && chiefChange !== null && running && (
+      {chiefChange !== null && running && (
         <OpenConversations
+          key={chiefChange.round}
           id={id}
           engineChanged={chiefChange.engine}
           restarting={restart.isPending}
-          onApplied={(result) => {
-            setFlash(result);
+          restarted={chiefChange.restarted}
+          onResult={setFlash}
+          onAllSet={() => {
             restart.mutate({});
           }}
         />
@@ -485,21 +498,34 @@ function OpenConversations({
   id,
   engineChanged,
   restarting,
-  onApplied,
+  restarted,
+  onResult,
+  onAllSet,
 }: {
   id: string;
   engineChanged: boolean;
   restarting: boolean;
-  onApplied: (result: Flash) => void;
+  /** The service has restarted with the new settings: only how each went is left to show. */
+  restarted: boolean;
+  onResult: (result: Flash) => void;
+  /** Every conversation is set up: the service may restart. */
+  onAllSet: () => void;
 }) {
   const view = useView<{ conversations: OpenConversation[]; problem: string | null }>(
     `/w/${encodeURIComponent(id)}/conversations`,
   );
   const [picked, setPicked] = useState<Record<string, Choice>>({});
-  const [outcomes, setOutcomes] = useState<RestartOutcome[]>([]);
+  // How each conversation went, by key, kept across tries: a retry only updates the ones it tried.
+  const [outcomes, setOutcomes] = useState<Record<string, RestartOutcome>>({});
+  const tried = useRef<string[]>([]);
   const apply = useAction(`/w/${encodeURIComponent(id)}/conversations`, (result) => {
-    setOutcomes('outcomes' in result ? (result as ConversationsFlash).outcomes : []);
-    onApplied(result);
+    const came = 'outcomes' in result ? (result as ConversationsFlash).outcomes : [];
+    const next = { ...outcomes, ...Object.fromEntries(came.map((o) => [o.key, o])) };
+    setOutcomes(next);
+    onResult(result);
+    // Only when every conversation is set up: one left as it was would otherwise run on, after
+    // the restart, with its old session and the new settings.
+    if (tried.current.every((key) => next[key]?.done === true)) onAllSet();
   });
   if (view.isPending) return <Loading />;
   const conversations = view.data?.conversations ?? [];
@@ -509,10 +535,17 @@ function OpenConversations({
       : Date.now() - Date.parse(c.lastActiveAt) < RECENT_MS
         ? 'hand-over'
         : 'fresh';
-  const choiceOf = (c: OpenConversation) => picked[c.session] ?? fallback(c);
   const choices: Choice[] = engineChanged
     ? ['hand-over', 'fresh']
     : ['carry-on', 'hand-over', 'fresh'];
+  // A choice made before the engine changed may no longer be offered: it falls back.
+  const choiceOf = (c: OpenConversation): Choice => {
+    const chosen = picked[c.session];
+    return chosen !== undefined && choices.includes(chosen) ? chosen : fallback(c);
+  };
+  const isSet = (c: OpenConversation) => outcomes[c.key]?.done === true;
+  const left = conversations.filter((c) => !isSet(c));
+  const triedOnce = Object.keys(outcomes).length > 0;
   const busy = apply.isPending || restarting;
   return (
     <section className="card pad stack" aria-labelledby="open-conversations">
@@ -530,7 +563,7 @@ function OpenConversations({
       ) : (
         <div className="stack" style={{ gap: 4 }}>
           {conversations.map((c) => {
-            const outcome = outcomes.find((o) => o.key === c.key);
+            const outcome = outcomes[c.key];
             return (
               <div key={c.session} className="kv">
                 <span className="stack" style={{ gap: 2 }}>
@@ -547,7 +580,7 @@ function OpenConversations({
                   style={{ width: 'auto' }}
                   aria-label={`What happens to ${c.ask ?? 'this conversation'}`}
                   value={choiceOf(c)}
-                  disabled={busy || outcomes.length > 0}
+                  disabled={busy || restarted || isSet(c)}
                   onChange={(e) => {
                     setPicked((now) => ({ ...now, [c.session]: e.target.value as Choice }));
                   }}
@@ -563,37 +596,41 @@ function OpenConversations({
           })}
         </div>
       )}
-      <div className="row">
-        <button
-          className="btn primary"
-          type="button"
-          disabled={busy || view.data?.problem !== null}
-          onClick={() => {
-            // Applied already: only the restart is left, so nothing is handed over twice.
-            if (conversations.length === 0 || outcomes.length > 0) {
-              onApplied({
-                ok: true,
-                text: outcomes.length > 0 ? 'Restarting.' : 'No conversations to set up.',
-              });
-              return;
-            }
-            apply.mutate(
-              Object.fromEntries(conversations.map((c) => [`s:${c.session}`, choiceOf(c)])),
-            );
-          }}
-        >
-          {apply.isPending
-            ? 'Asking for handovers…'
-            : restarting
-              ? 'Restarting…'
-              : outcomes.length > 0
-                ? 'Restart now'
-                : 'Apply and restart'}
-        </button>
-        <span className="muted small">
-          A handover can take a few minutes: each chief writes its own.
-        </span>
-      </div>
+      {restarted ? (
+        <p className="muted small">Restarted with the new settings.</p>
+      ) : (
+        <div className="row">
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || view.data?.problem !== null}
+            onClick={() => {
+              // Set up already: only the restart is left, so nothing is handed over twice.
+              if (left.length === 0) {
+                onAllSet();
+                return;
+              }
+              tried.current = left.map((c) => c.key);
+              apply.mutate(Object.fromEntries(left.map((c) => [`s:${c.session}`, choiceOf(c)])));
+            }}
+          >
+            {apply.isPending
+              ? 'Asking for handovers…'
+              : restarting
+                ? 'Restarting…'
+                : left.length === 0
+                  ? 'Restart now'
+                  : triedOnce
+                    ? 'Try again for the rest, and restart'
+                    : 'Apply and restart'}
+          </button>
+          <span className="muted small">
+            {triedOnce && left.length > 0
+              ? "The service restarts only once every conversation is set up: one left as it was would run on with its old session. Try again once they've answered."
+              : 'A handover can take a few minutes: each chief writes its own.'}
+          </span>
+        </div>
+      )}
     </section>
   );
 }
