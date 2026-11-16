@@ -86,6 +86,7 @@ export function Sessions() {
 }
 
 function Detail({ workspace, session }: { workspace: string; session: string }) {
+  const [, setSearch] = useSearchParams();
   // Always with ended sessions, so one you've just ended stays in view, with how it went.
   const path = `/w/${encodeURIComponent(workspace)}/sessions/${encodeURIComponent(session)}?ended=1`;
   const view = useView<SessionView>(path, 3000);
@@ -125,6 +126,16 @@ function Detail({ workspace, session }: { workspace: string; session: string }) 
   const run = (fields: Record<string, string>) => {
     sent.current = fields.action === 'send' ? (fields.text ?? null) : null;
     setDoing(fields.action ?? null);
+    // Keep this session chosen in the address, so it stays in view once the list changes,
+    // as it does when an ended session drops out of it.
+    setSearch(
+      (now) => {
+        const next = new URLSearchParams(now);
+        next.set('s', session);
+        return next;
+      },
+      { replace: true },
+    );
     act.mutate(fields);
   };
   return (
@@ -185,19 +196,11 @@ function Detail({ workspace, session }: { workspace: string; session: string }) 
       {s.state === 'ended' ? (
         <p className="muted small">It has ended; it stays as a record.</p>
       ) : s.kind === 'thread' ? (
-        <div className="stack" style={{ gap: 8 }}>
-          <p className="muted small">
-            It&apos;s a conversation in chat: to talk to it, reply in its chat thread.
-          </p>
-          <div className="row">
-            <EndButton
-              disabled={act.isPending}
-              onEnd={() => {
-                run({ action: 'end' });
-              }}
-            />
-          </div>
-        </div>
+        <p className="muted small">
+          It&apos;s a conversation in chat: to talk to it, reply in its chat thread.
+        </p>
+      ) : s.kind !== 'adhoc' ? (
+        <p className="muted small">It runs a task, and stops when the task is done.</p>
       ) : (
         <form
           className="stack"

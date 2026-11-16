@@ -77,8 +77,8 @@ messages: what was said in its chat thread (your messages, its answers and Wheem
 in the session store as they're posted) and messages sent to it through Wheems. A message that
 seems to hold a password, token or key is kept only as a line saying so. You can send it a
 message, watch it in Herdr or end it; ending asks first, in the page, since it can't be undone.
-A chat thread's session hears you in its thread, so the page says to reply there rather than
-offering to send. Sessions you started yourself with `wheems session create` are a group of their
+Only sessions started on purpose (by you, the chief or another session) take messages and can be
+ended here. A chat thread's session hears you in its thread, so the page says to reply there. Sessions you started yourself with `wheems session create` are a group of their
 own. A session you end stays in view, with how it went, even while ended sessions are hidden.
 
 Showing the original ask on every session follows a lesson from running many agents: work drifts
