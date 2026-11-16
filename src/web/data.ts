@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
@@ -340,6 +341,8 @@ export interface ProposalView {
   basedOn: number | null;
   similar: string[];
   text: string;
+  /** A fingerprint of the text shown, so approving applies only to that version. */
+  seen: string;
   /** The workspace's agents, and whether each would get it: whoever proposed it, and any that has it. */
   agents: { name: string; checked: boolean }[];
 }
@@ -370,6 +373,7 @@ export async function reviewData(context: WebContext, id: string): Promise<Revie
           `${s.kind === 'skill' ? 'skill' : 'proposal'} ${s.name}${s.version !== undefined ? ` v${String(s.version)}` : ''}`,
       ),
       text: p.text,
+      seen: fingerprint(p.text),
       agents: agents.map((a) => ({
         name: a.definition.name,
         checked:
@@ -515,7 +519,7 @@ export interface AboutYouView {
   /** about-you.md as it is, or null when it's empty or missing. */
   current: string | null;
   /** Each suggestion's file name, which the page's buttons name it by. */
-  suggestions: { name: string; workspace: string | null; text: string }[];
+  suggestions: { name: string; workspace: string | null; text: string; seen: string }[];
 }
 
 /** `about-you.md`, read by every agent in every workspace, and the changes waiting for it. */
@@ -539,9 +543,15 @@ export async function aboutYouData(context: WebContext): Promise<AboutYouView> {
         s.workspace === null
           ? null
           : (summary.workspaces.find((w) => w.id === s.workspace)?.name ?? s.workspace),
-      text: cap(s.text, TEXT_LIMIT),
+      text: s.text,
+      seen: fingerprint(s.text),
     })),
   };
+}
+
+/** A short fingerprint of text, so an action applies only to the version the person saw. */
+export function fingerprint(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 32);
 }
 
 function cap(text: string, limit: number): string {

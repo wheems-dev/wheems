@@ -10,7 +10,7 @@ import {
 } from '../review/review.js';
 import { request } from '../service/control.js';
 import { listProposals } from '../skills/proposals.js';
-import type { WebContext } from './data.js';
+import { fingerprint, type WebContext } from './data.js';
 
 /** What came of an action, shown once at the top of the page it returns to. */
 export interface Flash {
@@ -29,6 +29,18 @@ export function parseForm(body: string): Form {
   return form;
 }
 
+/**
+ * Review changes rewrite shared files (the library, skills.yaml, agent files, about-you.md), so
+ * one runs at a time, each reading what the one before left.
+ */
+let reviewing: Promise<unknown> = Promise.resolve();
+
+function oneAtATime<T>(work: () => Promise<T>): Promise<T> {
+  const next = reviewing.then(work, work);
+  reviewing = next.catch(() => undefined);
+  return next;
+}
+
 function field(form: Form, name: string): string | undefined {
   return form.get(name)?.[0];
 }
@@ -37,7 +49,16 @@ function field(form: Form, name: string): string | undefined {
  * Approves or declines a skill proposal from a workspace, as `wheems review` does: approving
  * adds it to the library, pins it in the workspace and gives it to the agents chosen.
  */
-export async function decideProposal(
+export function decideProposal(
+  context: WebContext,
+  workspace: string,
+  id: string,
+  form: Form,
+): Promise<Flash> {
+  return oneAtATime(() => decideProposalNow(context, workspace, id, form));
+}
+
+async function decideProposalNow(
   context: WebContext,
   workspace: string,
   id: string,
@@ -49,6 +70,9 @@ export async function decideProposal(
   );
   if (!waiting) return { ok: false, text: 'That proposal has already been dealt with.' };
   const name = waiting.proposal.name;
+  if (field(form, 'seen') !== fingerprint(waiting.text)) {
+    return { ok: false, text: `${name} changed since the page showed it. Look at it again.` };
+  }
   if (field(form, 'decision') === 'decline') {
     await declineSkill(waiting);
     return { ok: true, text: `Declined ${name}.` };
@@ -77,11 +101,11 @@ export async function decideProposal(
 }
 
 /** Approves or declines a suggested change to `about-you.md`, as `wheems review` does. */
-export async function decideAboutYou(
-  context: WebContext,
-  name: string,
-  form: Form,
-): Promise<Flash> {
+export function decideAboutYou(context: WebContext, name: string, form: Form): Promise<Flash> {
+  return oneAtATime(() => decideAboutYouNow(context, name, form));
+}
+
+async function decideAboutYouNow(context: WebContext, name: string, form: Form): Promise<Flash> {
   const where = paths(context.home, context.env);
   const install = await loadInstall(context.home);
   const suggestion = (
@@ -91,6 +115,13 @@ export async function decideAboutYou(
     )
   ).find((s) => basename(s.file) === name);
   if (!suggestion) return { ok: false, text: 'That suggestion has already been dealt with.' };
+  // Only the version the page showed, in full, is approved.
+  if (field(form, 'seen') !== fingerprint(suggestion.text)) {
+    return {
+      ok: false,
+      text: 'The suggestion changed since the page showed it. Look at it again.',
+    };
+  }
   if (field(form, 'decision') === 'decline') {
     await declineAboutYou(suggestion);
     return { ok: true, text: 'Declined the change to about-you.md.' };
@@ -126,6 +157,10 @@ export async function actOnSession(
   id: string,
   form: Form,
   log: (message: string) => void,
+  /** Records how a slow send or end turned out, for the session's page to show next. */
+  later: (flash: Flash) => void,
+  /** How long a send waits before the page moves on; tests shorten it. */
+  waitMs = SEND_WAIT_MS,
 ): Promise<Flash> {
   const where = paths(context.home, context.env);
   const caller = { workspace };
@@ -139,13 +174,26 @@ export async function actOnSession(
         (answer) => answer,
         (error: unknown) => error as Error,
       ),
-      after(SEND_WAIT_MS),
+      after(waitMs),
     ]);
     if (outcome === 'slow') {
-      sending.catch((error: unknown) => {
-        log(`Sending to ${id}: ${describe(error)}`);
-      });
-      return { ok: true, text: "Sent. It's starting up, so its answer may take a minute." };
+      sending.then(
+        (answer) => {
+          if (answer.ok) later({ ok: true, text: 'Your message was delivered.' });
+          else {
+            log(`Sending to ${id}: ${answer.error}`);
+            later({ ok: false, text: `Your message wasn't sent: ${answer.error}` });
+          }
+        },
+        (error: unknown) => {
+          log(`Sending to ${id}: ${describe(error)}`);
+          later({ ok: false, text: notReached(error as Error) });
+        },
+      );
+      return {
+        ok: true,
+        text: "Sending: it's starting up first. Reload this page to see whether it was delivered.",
+      };
     }
     if (outcome instanceof Error) return { ok: false, text: notReached(outcome) };
     return outcome.ok
@@ -160,17 +208,26 @@ export async function actOnSession(
         (answer) => answer,
         (error: unknown) => error as Error,
       ),
-      after(3000),
+      after(Math.min(waitMs, 3000)),
     ]);
     if (quick === 'slow') {
-      ending
-        .then((answer) => {
-          if (!answer.ok) log(`Ending ${id}: ${answer.error}`);
-        })
-        .catch((error: unknown) => {
+      ending.then(
+        (answer) => {
+          if (answer.ok) later({ ok: true, text: 'It has ended.' });
+          else {
+            log(`Ending ${id}: ${answer.error}`);
+            later({ ok: false, text: `It wasn't ended: ${answer.error}` });
+          }
+        },
+        (error: unknown) => {
           log(`Ending ${id}: ${describe(error)}`);
-        });
-      return { ok: true, text: 'Ending it. It writes its note first, then stops.' };
+          later({ ok: false, text: notReached(error as Error) });
+        },
+      );
+      return {
+        ok: true,
+        text: 'Ending it: it writes its note first, then stops. Reload this page to see when it has.',
+      };
     }
     if (quick instanceof Error) return { ok: false, text: notReached(quick) };
     return quick.ok

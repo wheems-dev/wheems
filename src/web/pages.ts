@@ -341,6 +341,7 @@ export function reviewPage(view: ReviewView): string {
   <h2><span class="mono">${esc(p.name)}</span></h2>
   ${p.similar.length > 0 ? `<p class="soft small">Close to: ${esc(p.similar.join(', '))}</p>` : ''}
   <form method="post" action="/w/${encodeURIComponent(w.id)}/review/${encodeURIComponent(p.id)}" class="stack" style="gap:12px">
+    <input type="hidden" name="seen" value="${esc(p.seen)}">
     <details><summary class="small" style="cursor:pointer">Read or edit SKILL.md before approving</summary>
       <label class="stack small" style="margin-top:8px">The skill as it will be added
         <textarea class="field mono" name="text" rows="14">${esc(p.text)}</textarea>
@@ -456,7 +457,7 @@ export function connectionsPage(view: ConnectionsView, workspace: WorkspaceSumma
 export function aboutYouPage(view: AboutYouView, workspace: WorkspaceSummary | null): string {
   const body = `
 <header class="stack"><h1>About you</h1><p class="muted">What every agent in every workspace knows about you, from <span class="mono">about-you.md</span> in the install folder. The nightly tidy suggests changes from what you tell your chiefs; none is made until you approve it.</p></header>
-${view.suggestions.length > 0 ? view.suggestions.map((s) => `<article class="card pad stack" style="gap:12px"><div class="row"><span class="badge info">Suggested new version</span>${s.workspace !== null ? `<span class="muted small">From ${esc(s.workspace)}</span>` : ''}</div><pre class="preview">${esc(s.text)}</pre><form method="post" action="/about-you/${encodeURIComponent(s.name)}${workspace ? `?w=${encodeURIComponent(workspace.id)}` : ''}" class="row"><button class="btn primary" type="submit" name="decision" value="approve">Approve</button><button class="btn" type="submit" name="decision" value="decline">Decline</button></form></article>`).join('\n') : ''}
+${view.suggestions.length > 0 ? view.suggestions.map((s) => `<article class="card pad stack" style="gap:12px"><div class="row"><span class="badge info">Suggested new version</span>${s.workspace !== null ? `<span class="muted small">From ${esc(s.workspace)}</span>` : ''}</div><pre class="preview">${esc(s.text)}</pre><form method="post" action="/about-you/${encodeURIComponent(s.name)}${workspace ? `?w=${encodeURIComponent(workspace.id)}` : ''}" class="row"><input type="hidden" name="seen" value="${esc(s.seen)}"><button class="btn primary" type="submit" name="decision" value="approve">Approve</button><button class="btn" type="submit" name="decision" value="decline">Decline</button></form></article>`).join('\n') : ''}
 <section class="card pad stack" style="gap:12px"><h2>about-you.md now</h2>${view.current === null ? '<p class="muted">Empty so far. Your chiefs fill it in as they learn about you, with your approval.</p>' : `<pre class="preview">${esc(view.current)}</pre>`}</section>`;
   return layout({ title: 'About you', install: view.install, workspace, current: 'about', body });
 }

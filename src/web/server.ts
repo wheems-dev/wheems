@@ -96,6 +96,7 @@ export async function startWeb(options: WebOptions): Promise<RunningWeb> {
     context,
     flashes: new Flashes(),
     log: options.log ?? (() => undefined),
+    outcomes: new Map<string, Flash>(),
   };
   const server = createServer((req, res) => {
     handle(req, res, web).catch((error: unknown) => {
@@ -147,6 +148,8 @@ async function handle(
     context: WebContext;
     flashes: Flashes;
     log: (message: string) => void;
+    /** How a slow send or end turned out, by workspace/session, until its page shows it. */
+    outcomes: Map<string, Flash>;
   },
 ): Promise<void> {
   const allowedHosts = [`127.0.0.1:${String(web.port)}`, `localhost:${String(web.port)}`];
@@ -204,9 +207,9 @@ async function handle(
     return;
   }
   const base = `/k/${web.token}`;
-  const page = (status: number, html: string) => {
+  const page = (status: number, html: string, eventual?: Flash) => {
     // Every link and form on the page stays under the token, and an action's outcome shows once.
-    const flash = web.flashes.take(url.searchParams.get('flash'));
+    const flash = web.flashes.take(url.searchParams.get('flash')) ?? eventual;
     const shown = flash
       ? html.replace(
           '<div class="wrap">',
@@ -235,7 +238,11 @@ async function handle(
       return;
     }
     if (area === 'w' && id !== undefined && sub === 'sessions' && item !== undefined) {
-      const flash = await actOnSession(web.context, id, item, form, web.log);
+      const key = `${id}/${item}`;
+      web.outcomes.delete(key);
+      const flash = await actOnSession(web.context, id, item, form, web.log, (later) => {
+        web.outcomes.set(key, later);
+      });
       done(flash, `/w/${encodeURIComponent(id)}/sessions?s=${encodeURIComponent(item)}`);
       return;
     }
@@ -323,7 +330,12 @@ async function handle(
       const selected =
         (wanted !== null ? sessions.find((s) => s.id === wanted) : sessions[0]) ?? null;
       const messages = selected ? await sessionMessages(web.context, id, selected) : [];
-      page(200, sessionsPage(data, selected, messages, includeEnded));
+      // How a slow send or end turned out, once it has.
+      const key = selected ? `${id}/${selected.id}` : '';
+      // Kept for later when this visit already has a message to show.
+      const eventual = url.searchParams.has('flash') ? undefined : web.outcomes.get(key);
+      if (eventual) web.outcomes.delete(key);
+      page(200, sessionsPage(data, selected, messages, includeEnded), eventual);
       return;
     }
   }
@@ -340,7 +352,9 @@ function send(
     'Content-Type': type,
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
-    'Referrer-Policy': 'no-referrer',
+    // same-origin: the token in the address never reaches another site, and the page's own
+    // forms still carry their Origin (no-referrer makes browsers send Origin: null).
+    'Referrer-Policy': 'same-origin',
     'X-Frame-Options': 'DENY',
     'Content-Security-Policy':
       "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",

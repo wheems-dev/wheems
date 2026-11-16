@@ -9,7 +9,8 @@ import {
 } from 'node:fs';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { createServer } from 'node:net';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { initWorkspace } from '../src/cli/commands/init.js';
@@ -18,6 +19,8 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
 import { MIGRATIONS } from '../src/state/schema.js';
 import { StateStore } from '../src/state/store.js';
+import { actOnSession, parseForm, type Flash } from '../src/web/actions.js';
+import { fingerprint } from '../src/web/data.js';
 import { esc } from '../src/web/pages.js';
 import { startWeb, webToken, type RunningWeb } from '../src/web/server.js';
 
@@ -158,6 +161,8 @@ describe('the web app', () => {
     expect((await get('/w/default', { method: 'POST' })).status).toBe(403);
     const page = await get('/w/default');
     expect(String(page.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
+    // same-origin, never no-referrer: with no-referrer a browser sends its forms with Origin: null.
+    expect(page.headers['referrer-policy']).toBe('same-origin');
   });
 
   it("shows a workspace's sessions as a tree, with what was asked, escaping what it shows", async () => {
@@ -284,8 +289,15 @@ describe('the web app', () => {
     expect(review.body).toContain(`action="/k/${token}/w/default/review/p2"`);
     expect(review.body).toMatch(/name="agents" value="chief-of-staff" checked/);
 
+    const seen = /name="seen" value="(\w+)"/.exec(review.body)?.[1] ?? '';
+    // What the page showed is what's approved: a stale page is refused.
+    const stale = await post('/w/default/review/p2', { decision: 'approve', seen: 'old' });
+    expect((await follow(stale.headers.location)).body).toContain(
+      'changed since the page showed it',
+    );
     const approved = await post('/w/default/review/p2', {
       decision: 'approve',
+      seen,
       agents: ['chief-of-staff', 'not-an-agent'],
     });
     expect(approved.status).toBe(303);
@@ -308,11 +320,85 @@ describe('the web app', () => {
     mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
     const suggestion = join(home, '.wheems', 'review', 'about-you', 'n9-default.md');
     writeFileSync(suggestion, 'Prefers tea.');
-    const declined = await post('/about-you/n9-default.md', { decision: 'decline' });
+    const declined = await post('/about-you/n9-default.md', {
+      decision: 'decline',
+      seen: fingerprint('Prefers tea.'),
+    });
     expect((await follow(declined.headers.location)).body).toContain(
       'Declined the change to about-you.md.',
     );
     expect(existsSync(suggestion)).toBe(false);
+  });
+
+  it('applies two approvals at once one after the other, losing neither', async () => {
+    const propose = (id: string, name: string) => {
+      const dir = join(home, '.wheems', 'review', 'skills', id);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, 'proposal.json'),
+        JSON.stringify({
+          id,
+          name,
+          workspace: 'default',
+          agent: 'chief-of-staff',
+          conversation: null,
+          created: new Date().toISOString(),
+          basedOn: null,
+          similar: [],
+        }),
+      );
+      const text = `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`;
+      writeFileSync(join(dir, 'SKILL.md'), text);
+      return fingerprint(text);
+    };
+    const a = propose('pa', 'tide-tables');
+    const b = propose('pb', 'mooring-fees');
+    await Promise.all([
+      post('/w/default/review/pa', { decision: 'approve', seen: a, agents: 'chief-of-staff' }),
+      post('/w/default/review/pb', { decision: 'approve', seen: b, agents: 'chief-of-staff' }),
+    ]);
+    const pinned = readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8');
+    expect(pinned).toContain('tide-tables: 1');
+    expect(pinned).toContain('mooring-fees: 1');
+  });
+
+  it('shows a long change about you in full before it can be approved', async () => {
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    const long = `${'Likes sailing. '.repeat(700)}The end.`;
+    writeFileSync(join(home, '.wheems', 'review', 'about-you', 'n8-default.md'), long);
+    const page = await get('/about-you');
+    expect(page.body).toContain('The end.');
+    expect(page.body).toContain(`value="${fingerprint(long)}"`);
+  });
+
+  it('tells the session page how a slow send turned out, even a failure', async () => {
+    const socket = paths(home, env).socket;
+    mkdirSync(dirname(socket), { recursive: true });
+    const slowService = createServer((conn) => {
+      conn.on('data', () => {
+        setTimeout(() => conn.end('{"ok":false,"error":"it could not be resumed"}\n'), 100);
+      });
+    });
+    await new Promise<void>((done) => slowService.listen(socket, done));
+    try {
+      const outcomes: Flash[] = [];
+      const first = await actOnSession(
+        { home, env, registry: new DriverRegistry() },
+        'default',
+        'child',
+        parseForm('action=send&text=Any+news%3F'),
+        () => undefined,
+        (flash) => outcomes.push(flash),
+        20,
+      );
+      expect(first.text).toMatch(/^Sending: it's starting up first/);
+      await new Promise((done) => setTimeout(done, 300));
+      expect(outcomes).toEqual([
+        { ok: false, text: "Your message wasn't sent: it could not be resumed" },
+      ]);
+    } finally {
+      await new Promise((done) => slowService.close(done));
+    }
   });
 
   it("says so when the service isn't there to send to", async () => {
