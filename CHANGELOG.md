@@ -3,6 +3,14 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- The web app is now a React app, built with Vite into the npm package, so Overview and
+  Sessions update as you watch. The service serves it with a JSON API. The address
+  `wheems web open` gives carries its token after the `#`; links from before still work.
+
 ## 0.1.4
 
 Released 16 November 2026. The web app's Review, Settings, Connections and About you pages, and

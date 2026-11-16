@@ -23,16 +23,23 @@ connecting and granting, and setup steps still use the commands each page names.
   control socket, and doctor's quick checks.
 - **What it does:** approving and declining run the same code as `wheems review`; sending to a
   session and ending one go through the service's control socket, as `wheems session send` and
-  `end` do, as you, in that session's workspace. Each action's outcome shows once at the top of
-  the page it returns to.
-- **Only you can use it.** It's local only, and every request needs a token that Wheems keeps in
-  `.wheems/web-token` (readable only by you). Pages live under it (`/k/<token>/…`), so every
-  address `wheems web open` gives and every link carries it. It's never a cookie: a browser sends
-  cookies for `127.0.0.1` to every port, so other local servers could read one. The server also
-  checks the `Host` header, and takes a form only when the browser says it came from this page
-  (its `Origin`), so another site open in your browser can't reach it or act through it, and a strict
-  Content-Security-Policy keeps the page to its own script and styles. It loads nothing from the
-  internet.
+  `end` do, as you, in that session's workspace. Each action says how it went; a slow send's or
+  end's result shows on the session when the service has it.
+- **Built with React and Vite** (`web/`), as a single-page app. `npm run build` builds it into
+  `dist/web/app`, so the npm package ships only the built files and installing Wheems builds
+  nothing. The service serves those files and a JSON API under `/api` that reads through
+  `data.ts` and acts through `actions.ts`. Pages that change while you watch (Overview,
+  Sessions) refresh every few seconds. `npm run dev:web` serves the app with live reload,
+  passing `/api` to a running Wheems.
+- **Only you can use it.** It's local only, and the API needs a token that Wheems keeps in
+  `.wheems/web-token` (readable only by you). `wheems web open` gives it after the `#` in the
+  address, which no browser sends to a server; the app keeps it in this origin's own storage and
+  sends it in a header with every request, which a link or form on another site can't. It's never
+  a cookie: a browser sends cookies for `127.0.0.1` to every port, so other local servers could
+  read one. The server also checks the `Host` header, and takes a change only when the browser
+  says it came from this page (its `Origin`). A strict Content-Security-Policy keeps the page to
+  its own script and styles, and it loads nothing from the internet. The app's own files hold no
+  data, so they're served without the token.
 - **One set of code paths.** Every change goes through the code the CLI uses: config edits through
   the same loaders and validators, service actions through the same requests the control socket
   takes (`session-send`, `session-end`, `reindex`, `workspace-retire` and the rest). The web app

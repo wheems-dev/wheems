@@ -61,7 +61,7 @@ describe('wheems status', () => {
       workspaces: [],
       web: { port: 4317 },
     };
-    const url = 'http://127.0.0.1:4317/k/abc/';
+    const url = 'http://127.0.0.1:4317/#token=abc';
     const plain = formatStatus(facts({ answering: true, report, webUrl: url }), false).text;
     expect(plain).toContain(`✓ Web app: ${url}\n`);
     // In a terminal it's a link (OSC 8) whose text is the address itself.

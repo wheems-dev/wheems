@@ -613,7 +613,7 @@ the app hasn't been invited to, and the web app's address, which you can click t
 ✓ Connected to slack
 ✓ default: direct messages on slack
 ! marketing: the app can't see #marketing-chat on slack. Invite the app to the channel, and the chief of staff answers there at once; or check the name in workspace.yaml.
-✓ Web app: http://127.0.0.1:4317/k/…/
+✓ Web app: http://127.0.0.1:4317/#token=…
 Log: ~/wheems/.wheems/logs/service.log
 ```
 
@@ -1032,6 +1032,7 @@ npm run check              # lint, typecheck, test and build, as CI does
 npm test                   # tests only
 npm run schemas            # regenerate schemas/*.schema.json after changing src/config/schemas.ts
 npm run wheems -- doctor   # run the CLI from source
+npm run dev:web            # the web app with live reload, using the Wheems running on port 4317
 ```
 
 The tests run the runtime contract suite against the real `hc` when it's installed, in a Herdr
@@ -1050,6 +1051,8 @@ also run it against a fake `hc`, which is what CI uses. Set `WHEEMS_TEST_OLLAMA_
 | `src/knowledge/`    | Notes, filing checks, the nightly tidy and search                                |
 | `src/skills/`       | The skill library and proposals                                                  |
 | `src/review/`       | Approving and turning down what waits for review                                 |
+| `src/web/`          | The web app's server: its JSON API, what it reads, and its actions               |
+| `web/`              | The web app itself: React, built with Vite into `dist/web/app`                   |
 | `src/agents/`       | Built-in instructions, and the filer                                             |
 | `src/doctor/`       | `wheems doctor`                                                                  |
 | `src/testing/`      | Contract test suites and in-memory drivers, published as `wheems/testing`        |
