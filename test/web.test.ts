@@ -397,7 +397,7 @@ describe('the web app', () => {
     }
   });
 
-  it('holds one review change at a time across processes, and takes over an abandoned lock', async () => {
+  it('holds one review change at a time across processes, and never takes over an abandoned lock', async () => {
     const state = paths(home, env).state;
     const file = join(home, 'shared.txt');
     writeFileSync(file, '');
@@ -410,13 +410,25 @@ describe('the web app', () => {
       });
     await Promise.all([append('one'), append('two')]);
     expect(readFileSync(file, 'utf8').split('\n').filter(Boolean).sort()).toEqual(['one', 'two']);
-    // A lock left by a process that died long ago doesn't block forever.
+    // A lock left by a process that died is never taken over, since two processes could both
+    // take it: both contenders are told how to clear it, and neither runs.
     const lock = join(state, 'review', '.lock');
     mkdirSync(lock, { recursive: true });
     const old = new Date(Date.now() - 10 * 60_000);
     utimesSync(lock, old, old);
-    expect(await withReviewLock(state, () => Promise.resolve('taken'))).toBe('taken');
-    expect(existsSync(lock)).toBe(false);
+    let ran = 0;
+    const contend = () =>
+      withReviewLock(state, () => {
+        ran += 1;
+        return Promise.resolve();
+      });
+    const results = await Promise.allSettled([contend(), contend()]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(String((results[0] as PromiseRejectedResult).reason)).toContain(
+      'Another review seems stuck',
+    );
+    expect(ran).toBe(0);
+    expect(existsSync(lock)).toBe(true);
   });
 
   it("says so when the service isn't there to send to", async () => {

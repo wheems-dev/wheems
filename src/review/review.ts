@@ -13,15 +13,17 @@ import { removeProposal, type WaitingProposal } from '../skills/proposals.js';
  * down. Nothing here runs without them.
  */
 
-/** How long a review lock may be held before another process takes it over as abandoned. */
+/** How long a review lock may be held before Wheems says it looks abandoned. */
 const REVIEW_LOCK_STALE_MS = 120_000;
 
 /**
  * Runs a review change holding the install-wide review lock. Approving and declining rewrite
  * shared files (the library, skills.yaml, agent files, about-you.md), and `wheems review`, the
  * service's web app and a web app run on its own may each be doing it at once. Making the lock
- * folder is the lock; one left behind by a process that died is taken over after two minutes.
- * Read what the change needs inside `work`, so it sees what the change before it left.
+ * folder is the lock, so only one process ever holds it. A lock is held only for the moment a
+ * change takes; one left by a process that died is never taken over (two processes could both
+ * take it), but reported, with how to remove it. Read what the change needs inside `work`, so it
+ * sees what the change before it left.
  */
 export async function withReviewLock<T>(
   stateDir: string,
@@ -40,8 +42,9 @@ export async function withReviewLock<T>(
     }
     const held = await stat(lock).catch(() => null);
     if (held !== null && held.mtimeMs < Date.now() - REVIEW_LOCK_STALE_MS) {
-      await rmdir(lock).catch(() => undefined);
-      continue;
+      throw new Error(
+        `Another review seems stuck: ${lock} has been there since ${held.mtime.toISOString()}. If no review is running, remove that folder and try again.`,
+      );
     }
     if (Date.now() > deadline) {
       throw new Error('Another review is being saved just now. Try again in a moment.');
