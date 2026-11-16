@@ -7,6 +7,12 @@ change anything, including commands and config formats, without a migration path
 
 **Added**
 
+- The web app's first pages: `wheems web open` opens a page in your browser with a workspace
+  switcher, each workspace's Overview (its chief of staff and the sessions working for it, as a
+  tree) and Sessions (state, your original ask, purpose and latest messages), and Setup and
+  health (doctor's checks), in light and dark. It only reads for now. The service serves it on
+  `127.0.0.1:4317` whenever it runs, so `wheems start` starts it too; `wheems web run` serves it
+  on its own. Only this computer can reach it, with a token kept in `.wheems/web-token`.
 - Sessions keep what you asked: a chat thread's first message is recorded as its session's ask,
   and every session started for it, at any depth, inherits it. Their instructions quote it, so
   work handed down stays tied to what you asked, and `wheems session show` prints it. A session

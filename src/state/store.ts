@@ -196,7 +196,16 @@ export class StateStore {
    * Opens the store, creating it and bringing its schema up to date unless `readOnly`. A
    * read-only store must already be at this Wheems's schema version.
    */
-  static async open(file: string, options: { readOnly?: boolean } = {}): Promise<StateStore> {
+  /**
+   * Opens the store. Read-only, it refuses a store at another schema version, unless
+   * `olderSchema` is set: then a store from an older Wheems (version 2 or later) is read as if
+   * it were current, its missing columns empty, for readers such as the web app that run beside
+   * an older service.
+   */
+  static async open(
+    file: string,
+    options: { readOnly?: boolean; olderSchema?: boolean } = {},
+  ): Promise<StateStore> {
     const readOnly = options.readOnly === true;
     if (!readOnly) {
       await mkdir(dirname(file), { recursive: true });
@@ -208,7 +217,12 @@ export class StateStore {
     try {
       if (readOnly) {
         const version = schemaVersion(db);
-        if (version !== SCHEMA_VERSION) {
+        if (options.olderSchema === true && version >= 2 && version < SCHEMA_VERSION) {
+          // Temporary views take the tables' place for this connection only; nothing is written.
+          if (version < 3) {
+            db.exec('CREATE TEMP VIEW sessions AS SELECT *, NULL AS ask FROM main.sessions');
+          }
+        } else if (version !== SCHEMA_VERSION) {
           throw new Error(
             `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
           );

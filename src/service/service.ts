@@ -31,6 +31,7 @@ import { SessionService } from './sessions.js';
 import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
+import { startWeb, type RunningWeb } from '../web/server.js';
 
 export interface ServiceOptions {
   home: string;
@@ -52,6 +53,8 @@ export interface ServiceOptions {
   indexSyncMs?: number;
   /** How often to see whether a workspace's nightly tidy is due; 0 turns it off. */
   tidyCheckMs?: number;
+  /** The web app's port; null serves no web app (tests). Default: WHEEMS_WEB_PORT or 4317. */
+  webPort?: number | null;
 }
 
 export interface RunningService {
@@ -505,6 +508,23 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   }
   const listening = server;
   log(`Wheems ${options.version} is running from ${options.home}`);
+  // The web app, read-only for now. Wheems runs without it if its port is taken.
+  let web: RunningWeb | null = null;
+  if (options.webPort !== null) {
+    web = await startWeb({
+      home: options.home,
+      env,
+      registry: options.registry,
+      ...(options.webPort !== undefined && { port: options.webPort }),
+      log,
+    }).catch((error: unknown) => {
+      log(
+        `The web app isn't served: ${error instanceof Error ? error.message : String(error)}. Wheems runs without it.`,
+      );
+      return null;
+    });
+    if (web) log(`Serving the web app at ${web.url} (open it with wheems web open)`);
+  }
   await manager.recover();
   // Senders of messages lost in the restart hear so, now the chats are connected.
   void sessions.recoverLost(lost);
@@ -533,6 +553,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
 
   return {
     async stop() {
+      await web?.close();
       await new Promise<void>((resolve) =>
         listening.close(() => {
           resolve();
