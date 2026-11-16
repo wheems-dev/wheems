@@ -1,15 +1,20 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
-import type { Flash } from '../../../src/web/actions.js';
+import type { ConversationsFlash, Flash } from '../../../src/web/actions.js';
+import type { OpenConversation, RestartOutcome } from '../../../src/service/conversations.js';
 import type { SettingsView } from '../../../src/web/data.js';
 import { useAction, useView } from '../api.js';
-import { FlashBanner, Kv, Loading, Problem } from '../ui.js';
+import { FlashBanner, Kv, Loading, Problem, ago } from '../ui.js';
 
 /** The values the form edits, as the page sends them. */
 interface Values {
   name: string;
   description: string;
   postsAs: string;
+  engine: string;
+  model: string;
+  account: string;
+  permissions: string;
   maxOpenPerOwner: string;
   maxDepth: string;
   noteAfterIdle: string;
@@ -23,6 +28,10 @@ function valuesOf(v: SettingsView): Values {
     name: v.workspace.name,
     description: v.description ?? '',
     postsAs: v.postsAs ?? '',
+    engine: v.chief?.engine ?? '',
+    model: v.chief?.model ?? '',
+    account: v.chief?.account ?? '',
+    permissions: v.chief?.permissions ?? 'ask',
     maxOpenPerOwner: String(v.sessions.maxOpenPerOwner),
     maxDepth: String(v.sessions.maxDepth),
     noteAfterIdle: String(v.knowledge.noteAfterIdle),
@@ -31,6 +40,10 @@ function valuesOf(v: SettingsView): Values {
     skillBudget: String(v.skillBudget),
   };
 }
+
+/** The chief of staff's own settings, in its agent file: a change reaches open conversations
+ * only as the person chooses for each. */
+const CHIEF: (keyof Values)[] = ['engine', 'model', 'account', 'permissions'];
 
 const PERMISSIONS: Record<string, string> = {
   ask: "Ask: the engine's normal prompts",
@@ -60,6 +73,8 @@ function SettingsForm({
 }) {
   const [flash, setFlash] = useState<Flash | null>(null);
   const [saved, setSaved] = useState(false);
+  // A saved change to the chief: open conversations need a choice before the restart.
+  const [chiefChange, setChiefChange] = useState<{ engine: boolean } | null>(null);
   // Only the fields you've edited, over what the file says now, so a refresh (after a save, or
   // a save refused because the file changed) never loses them, and never undoes a field you
   // didn't touch.
@@ -74,6 +89,9 @@ function SettingsForm({
     setSaved((was) => was || result.text.startsWith('Saved'));
     // What was saved is in the file now; keep anything typed since.
     const sent = submitted.current;
+    if (result.text.startsWith('Saved') && CHIEF.some((key) => key in sent)) {
+      setChiefChange((was) => ({ engine: (was?.engine ?? false) || 'engine' in sent }));
+    }
     setEdits((now) =>
       Object.fromEntries(
         Object.entries(now).filter(([key, typed]) => sent[key as keyof Values] !== typed),
@@ -82,7 +100,10 @@ function SettingsForm({
   });
   const restart = useAction('/restart', (result) => {
     setFlash(result);
-    if (result.ok) setSaved(false);
+    if (result.ok) {
+      setSaved(false);
+      setChiefChange(null);
+    }
   });
   const changed = (Object.keys(start) as (keyof Values)[]).filter(
     (key) => values[key] !== start[key],
@@ -117,8 +138,9 @@ function SettingsForm({
       <header className="stack">
         <h1>{w.name} settings</h1>
         <p className="muted">
-          Saved to <span className="mono">workspaces/{w.id}/workspace.yaml</span>, keeping your
-          comments, so you can still edit the file. The service uses a change once it restarts.
+          Saved to <span className="mono">workspaces/{w.id}/workspace.yaml</span> and the chief of
+          staff&apos;s agent file, keeping your comments, so you can still edit the files. The
+          service uses a change once it restarts.
         </p>
       </header>
       {refreshError !== null && (
@@ -127,7 +149,18 @@ function SettingsForm({
         </p>
       )}
       <FlashBanner flash={flash} />
-      {saved && (
+      {saved && chiefChange !== null && running && (
+        <OpenConversations
+          id={id}
+          engineChanged={chiefChange.engine}
+          restarting={restart.isPending}
+          onApplied={(result) => {
+            setFlash(result);
+            restart.mutate({});
+          }}
+        />
+      )}
+      {saved && (chiefChange === null || !running) && (
         <div className="card pad row between">
           <span>
             {running
@@ -175,17 +208,69 @@ function SettingsForm({
           {v.chief ? (
             <>
               <Kv label="Agent file" value={v.chief.file} mono />
-              <Kv label="Engine" value={v.chief.engine} />
-              <Kv label="Model" value={v.chief.model} mono />
-              <Kv label="Account" value={v.chief.account} mono />
-              <Kv
-                label="Permissions"
-                value={PERMISSIONS[v.chief.permissions] ?? v.chief.permissions}
-              />
+              <Field label="Engine">
+                <select
+                  className="field"
+                  value={values.engine}
+                  onChange={(e) => {
+                    set('engine')(e.target.value);
+                  }}
+                >
+                  {[...new Set([values.engine, ...v.engines])].map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Model" hint="The engine's model id">
+                <input
+                  className="field mono"
+                  value={values.model}
+                  onChange={(e) => {
+                    set('model')(e.target.value);
+                  }}
+                />
+              </Field>
+              <Field label="Account" hint="Who pays, from this workspace's accounts">
+                <select
+                  className="field"
+                  value={values.account}
+                  onChange={(e) => {
+                    set('account')(e.target.value);
+                  }}
+                >
+                  {[...new Set([values.account, ...v.accounts])].map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Permissions">
+                <select
+                  className="field"
+                  value={values.permissions}
+                  onChange={(e) => {
+                    set('permissions')(e.target.value);
+                  }}
+                >
+                  {Object.entries(PERMISSIONS).map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <p className="muted small">
-                Change these in its agent file. A conversation that&apos;s already open keeps its
-                chief as it started, even after a restart; new ones use the change.
+                Saving a change here asks what happens to the conversations already open: carry on,
+                hand over to a new session, or start fresh.
               </p>
+              {values.permissions === 'skip' && (
+                <p className="small flash no card pad">
+                  With skip, the chief never asks before acting, even for risky actions.
+                </p>
+              )}
             </>
           ) : (
             <p className="muted">No chief of staff agent file found.</p>
@@ -376,5 +461,139 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       </span>
       {children}
     </label>
+  );
+}
+
+type Choice = 'carry-on' | 'hand-over' | 'fresh';
+
+const CHOICE_LABELS: Record<Choice, string> = {
+  'carry-on': 'Carry on',
+  'hand-over': 'Hand over',
+  fresh: 'Start fresh',
+};
+
+/** A week: threads quieter than this start fresh by default rather than hand over. */
+const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * After a change to the chief: what happens to each conversation already open, chosen before the
+ * restart, while the running service still has the old chief to write handovers. Carry on is the
+ * default unless the engine changed, when a thread can't carry on: then recent threads hand over
+ * and older ones start fresh (docs/session-handover.md).
+ */
+function OpenConversations({
+  id,
+  engineChanged,
+  restarting,
+  onApplied,
+}: {
+  id: string;
+  engineChanged: boolean;
+  restarting: boolean;
+  onApplied: (result: Flash) => void;
+}) {
+  const view = useView<{ conversations: OpenConversation[]; problem: string | null }>(
+    `/w/${encodeURIComponent(id)}/conversations`,
+  );
+  const [picked, setPicked] = useState<Record<string, Choice>>({});
+  const [outcomes, setOutcomes] = useState<RestartOutcome[]>([]);
+  const apply = useAction(`/w/${encodeURIComponent(id)}/conversations`, (result) => {
+    setOutcomes('outcomes' in result ? (result as ConversationsFlash).outcomes : []);
+    onApplied(result);
+  });
+  if (view.isPending) return <Loading />;
+  const conversations = view.data?.conversations ?? [];
+  const fallback = (c: OpenConversation): Choice =>
+    !engineChanged
+      ? 'carry-on'
+      : Date.now() - Date.parse(c.lastActiveAt) < RECENT_MS
+        ? 'hand-over'
+        : 'fresh';
+  const choiceOf = (c: OpenConversation) => picked[c.session] ?? fallback(c);
+  const choices: Choice[] = engineChanged
+    ? ['hand-over', 'fresh']
+    : ['carry-on', 'hand-over', 'fresh'];
+  const busy = apply.isPending || restarting;
+  return (
+    <section className="card pad stack" aria-labelledby="open-conversations">
+      <h2 id="open-conversations">Conversations already open</h2>
+      <p className="soft small">
+        {engineChanged
+          ? "The chief's engine changed, so an open conversation can't carry on: hand it over to a new session, from a handover its chief writes now, or start it fresh."
+          : 'Carry on resumes each with the new settings and everything it remembers. Hand over starts a new session from a handover its chief writes now; start fresh starts one with only the ask.'}
+      </p>
+      {view.data?.problem !== null && view.data?.problem !== undefined && (
+        <p className="flash no card pad small">{view.data.problem}</p>
+      )}
+      {conversations.length === 0 ? (
+        <p className="muted small">None are open.</p>
+      ) : (
+        <div className="stack" style={{ gap: 4 }}>
+          {conversations.map((c) => {
+            const outcome = outcomes.find((o) => o.key === c.key);
+            return (
+              <div key={c.session} className="kv">
+                <span className="stack" style={{ gap: 2 }}>
+                  <span>{c.ask ?? 'A conversation'}</span>
+                  <span className="muted small">
+                    {ago(c.lastActiveAt)} ago
+                    {c.running ? ' · running' : ''}
+                    {c.busy ? ' · answering a message, so it will be left as it is' : ''}
+                    {outcome !== undefined ? ` · ${outcome.text}` : ''}
+                  </span>
+                </span>
+                <select
+                  className="field"
+                  style={{ width: 'auto' }}
+                  aria-label={`What happens to ${c.ask ?? 'this conversation'}`}
+                  value={choiceOf(c)}
+                  disabled={busy || outcomes.length > 0}
+                  onChange={(e) => {
+                    setPicked((now) => ({ ...now, [c.session]: e.target.value as Choice }));
+                  }}
+                >
+                  {choices.map((choice) => (
+                    <option key={choice} value={choice}>
+                      {CHOICE_LABELS[choice]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="row">
+        <button
+          className="btn primary"
+          type="button"
+          disabled={busy || view.data?.problem !== null}
+          onClick={() => {
+            // Applied already: only the restart is left, so nothing is handed over twice.
+            if (conversations.length === 0 || outcomes.length > 0) {
+              onApplied({
+                ok: true,
+                text: outcomes.length > 0 ? 'Restarting.' : 'No conversations to set up.',
+              });
+              return;
+            }
+            apply.mutate(
+              Object.fromEntries(conversations.map((c) => [`s:${c.session}`, choiceOf(c)])),
+            );
+          }}
+        >
+          {apply.isPending
+            ? 'Asking for handovers…'
+            : restarting
+              ? 'Restarting…'
+              : outcomes.length > 0
+                ? 'Restart now'
+                : 'Apply and restart'}
+        </button>
+        <span className="muted small">
+          A handover can take a few minutes: each chief writes its own.
+        </span>
+      </div>
+    </section>
   );
 }

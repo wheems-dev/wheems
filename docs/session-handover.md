@@ -1,7 +1,7 @@
 # Session handover
 
-**Status: the service side is built (0.1.8): `wheems session restart` and `wheems session
-handover`, and the session store's handovers. The web app's choices come next.** What happens to
+**Status: built (0.1.8): `wheems session restart` and `wheems session handover`, the session
+store's handovers, and the web app's choices on Settings and Sessions.** What happens to
 a chat thread that's already open when its chief changes: a new engine, model, account or
 permissions. It's the question that kept those four settings read-only in the web app
 ([web-app.md](web-app.md#settings)). Mike's decisions are at the end.

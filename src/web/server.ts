@@ -9,6 +9,8 @@ import {
   actOnSession,
   decideAboutYou,
   decideProposal,
+  openConversations,
+  restartConversations,
   restartService,
   type Flash,
   type Form,
@@ -20,6 +22,7 @@ import {
   doctorReport,
   installSummary,
   reviewData,
+  sessionHandovers,
   sessionMessages,
   settingsData,
   workspacePage,
@@ -249,6 +252,10 @@ async function api(
       json(res, 200, await decideAboutYou(web.context, id, form));
       return;
     }
+    if (area === 'w' && id !== undefined && sub === 'conversations' && item === undefined) {
+      json(res, 200, await restartConversations(web.context, id, form));
+      return;
+    }
     if (area === 'restart' && id === undefined) {
       json(res, 200, await restartService(web.context));
       return;
@@ -291,6 +298,10 @@ async function api(
       found(await settingsData(web.context, id));
       return;
     }
+    if (sub === 'conversations' && item === undefined) {
+      json(res, 200, await openConversations(web.context, id));
+      return;
+    }
     if (sub === 'sessions') {
       const page = await workspacePage(web.context, id, {
         includeEnded: url.searchParams.get('ended') === '1',
@@ -316,6 +327,10 @@ async function api(
       json(res, 200, {
         item: chosen,
         messages: await sessionMessages(web.context, id, chosen.session),
+        handovers:
+          chosen.session.kind === 'thread'
+            ? await sessionHandovers(web.context, id, chosen.session.id)
+            : [],
         outcome,
       });
       return;

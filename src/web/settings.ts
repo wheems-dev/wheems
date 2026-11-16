@@ -1,23 +1,26 @@
 import { rename, writeFile } from 'node:fs/promises';
-import { relative } from 'node:path';
+import { basename, relative } from 'node:path';
 import { isMap, isScalar, parseDocument, type Document } from 'yaml';
 import { loadInstall } from '../config/load.js';
-import { workspaceSchema } from '../config/schemas.js';
+import { agentFrontMatterSchema, workspaceSchema } from '../config/schemas.js';
 import { paths } from '../home.js';
 import { commitFiling } from '../knowledge/filing.js';
 import { withReviewLock } from '../review/review.js';
 import type { Flash, Form } from './actions.js';
 import { settingsFiles, type WebContext } from './data.js';
 
+/** The front matter of an agent file: the YAML between the first two `---` lines. */
+const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/;
+
 /**
- * Saves a workspace's settings from the page: what `workspace.yaml` says, changing only the values
- * given and keeping comments and everything else. Nothing is written unless the file still reads as
- * the page showed it and still passes its checks after the change. The change is committed, and
- * the service uses it once it restarts.
+ * Saves a workspace's settings from the page: what `workspace.yaml` and the chief of staff's
+ * agent file say, changing only the values given and keeping comments and everything else.
+ * Nothing is written unless both files still read as the page showed them and both still pass
+ * their checks after the change. The change is committed, and the service uses it once it
+ * restarts.
  *
- * The chief's engine, model, account and permissions aren't changed here: a chat thread's chief
- * keeps running in Herdr across a restart, as it started, so a change there would apply only to
- * new conversations, and an engine change would break the open ones.
+ * A change to the chief reaches open chat threads only as the person chooses for each, on the
+ * page, before the restart: carry on, hand over or start fresh (docs/session-handover.md).
  */
 export async function saveSettings(context: WebContext, id: string, form: Form): Promise<Flash> {
   const state = paths(context.home, context.env).state;
@@ -39,7 +42,7 @@ async function saveNow(context: WebContext, id: string, form: Form): Promise<Fla
       text: "Its workspace.yaml has problems, so it can't be changed here. See them with: wheems doctor",
     };
   }
-  const files = await settingsFiles(workspace);
+  const files = await settingsFiles(context.home, workspace);
   if (value(form, 'seen') !== files.seen) {
     return {
       ok: false,
@@ -94,6 +97,53 @@ async function saveNow(context: WebContext, id: string, form: Form): Promise<Fla
     setIfChanged(doc, ['identity', 'name'], `${String(doc.get('name'))} chief of staff`);
   }
 
+  // The chief of staff's agent file: its engine, model, account and permissions.
+  let chiefOut: string | null = null;
+  const chiefFields = ['engine', 'model', 'account', 'permissions'].filter(
+    (name) => value(form, name) !== undefined,
+  );
+  if (chiefFields.length > 0) {
+    if (files.chiefFile === null || files.chiefText === null) {
+      problems.push(`There's no agent file for the chief of staff, ${config.chief_of_staff}.`);
+    } else {
+      const match = FRONT_MATTER.exec(files.chiefText);
+      const front = match ? parseDocument(match[1] ?? '') : null;
+      if (!match || !front || front.errors.length > 0) {
+        problems.push(`${basename(files.chiefFile)} has front matter that won't parse.`);
+      } else {
+        const engine = value(form, 'engine')?.trim();
+        if (engine !== undefined) {
+          if (!context.registry.has('engine', engine)) {
+            problems.push(`There's no engine called ${engine}.`);
+          } else setIfChanged(front, ['engine'], engine);
+        }
+        const model = value(form, 'model')?.trim();
+        if (model !== undefined) {
+          if (model === '' || model.includes('\n')) problems.push('Give a model, on one line.');
+          else setIfChanged(front, ['model'], model);
+        }
+        const account = value(form, 'account')?.trim();
+        if (account !== undefined) {
+          if (!config.accounts.includes(account)) {
+            problems.push(
+              `The account must be one this workspace may use: ${config.accounts.join(', ')}.`,
+            );
+          } else setIfChanged(front, ['account'], account);
+        }
+        const permissions = value(form, 'permissions')?.trim();
+        if (permissions !== undefined) {
+          if (!['ask', 'auto', 'skip'].includes(permissions)) {
+            problems.push('Permissions are ask, auto or skip.');
+          } else setIfChanged(front, ['permissions'], permissions);
+        }
+        const checked = agentFrontMatterSchema.safeParse(front.toJS() ?? {});
+        if (!checked.success) problems.push(...issues(basename(files.chiefFile), checked.error));
+        const rest = files.chiefText.slice(match[0].length);
+        chiefOut = `---\n${front.toString().trimEnd()}\n---${match[2] ?? '\n'}${rest}`;
+      }
+    }
+  }
+
   const checked = workspaceSchema.safeParse(doc.toJS() ?? {});
   if (!checked.success) problems.push(...issues('workspace.yaml', checked.error));
   if (problems.length > 0) return { ok: false, text: `Not saved. ${problems.join(' ')}` };
@@ -103,6 +153,10 @@ async function saveNow(context: WebContext, id: string, form: Form): Promise<Fla
   if (workspaceOut !== files.workspaceText) {
     await replace(files.workspaceFile, workspaceOut);
     changed.push(files.workspaceFile);
+  }
+  if (chiefOut !== null && files.chiefFile !== null && chiefOut !== files.chiefText) {
+    await replace(files.chiefFile, chiefOut);
+    changed.push(files.chiefFile);
   }
   if (changed.length === 0) return { ok: true, text: 'Nothing changed.' };
   const committed = await commitFiling(

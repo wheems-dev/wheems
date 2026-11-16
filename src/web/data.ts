@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { runDoctor, type DoctorReport } from '../doctor/doctor.js';
@@ -13,6 +13,7 @@ import { listProposals } from '../skills/proposals.js';
 import {
   StateStore,
   type ChatTurn,
+  type Handover,
   type MessageRecord,
   type SessionRecord,
 } from '../state/store.js';
@@ -224,6 +225,21 @@ export async function findSession(
   if (!store) return null;
   try {
     return store.workspace(workspace).session(id) ?? null;
+  } finally {
+    store.close();
+  }
+}
+
+/** A session's handovers, newest first: what each fresh start of its thread began from. */
+export async function sessionHandovers(
+  context: WebContext,
+  workspace: string,
+  session: string,
+): Promise<Handover[]> {
+  const store = await openStore(paths(context.home, context.env)).catch(() => null);
+  if (!store) return [];
+  try {
+    return store.workspace(workspace).handovers(session);
   } finally {
     store.close();
   }
@@ -450,7 +466,9 @@ export interface SettingsView {
   skillBudget: number;
   skills: { name: string; version: number }[];
   agents: { name: string; engine: string; model: string }[];
-  /** A fingerprint of workspace.yaml, so a save applies only to the file the page showed. */
+  /** The engines this install can run, to choose the chief's from. */
+  engines: string[];
+  /** A fingerprint of workspace.yaml and the chief's agent file, so a save applies only to them. */
   seen: string;
 }
 
@@ -463,8 +481,9 @@ export async function settingsData(context: WebContext, id: string): Promise<Set
   if (!workspace || !config || !listed) return null;
   const chief = chiefOf(workspace);
   const chiefAgent = workspace.agents.find((a) => a.definition.name === config.chief_of_staff);
-  const files = await settingsFiles(workspace);
+  const files = await settingsFiles(context.home, workspace);
   return {
+    engines: context.registry.names('engine'),
     seen: files.seen,
     install: summary,
     workspace: listed,
@@ -606,18 +625,34 @@ export async function aboutYouData(context: WebContext): Promise<AboutYouView> {
 }
 
 /** A short fingerprint of text, so an action applies only to the version the person saw. */
-/** The file a workspace's settings come from, and a fingerprint of it. */
+/** The files a workspace's settings come from, and a fingerprint of both together. */
 export interface SettingsFiles {
   workspaceFile: string;
   workspaceText: string;
-  /** Changes apply only to the file as the page showed it. */
+  chiefFile: string | null;
+  chiefText: string | null;
+  /** Changes apply only to the files as the page showed them. */
   seen: string;
 }
 
-export async function settingsFiles(workspace: LoadedWorkspace): Promise<SettingsFiles> {
+export async function settingsFiles(
+  home: string,
+  workspace: LoadedWorkspace,
+): Promise<SettingsFiles> {
   const workspaceFile = `${workspace.dir}/workspace.yaml`;
   const workspaceText = await readFile(workspaceFile, 'utf8');
-  return { workspaceFile, workspaceText, seen: fingerprint(workspaceText) };
+  const chiefName = workspace.config?.chief_of_staff;
+  const chief = workspace.agents.find((a) => a.definition.name === chiefName);
+  // Agent files are named relative to the install folder.
+  const chiefFile = chief ? resolve(home, chief.file) : null;
+  const chiefText = chiefFile === null ? null : await readFile(chiefFile, 'utf8');
+  return {
+    workspaceFile,
+    workspaceText,
+    chiefFile,
+    chiefText,
+    seen: fingerprint(`${workspaceText}\0${chiefText ?? ''}`),
+  };
 }
 
 export function fingerprint(text: string): string {

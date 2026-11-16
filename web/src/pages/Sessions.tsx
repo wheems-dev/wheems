@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import type { Flash } from '../../../src/web/actions.js';
+import type { ConversationsFlash, Flash } from '../../../src/web/actions.js';
 import type { SessionMessage, TreeItem, WorkspacePage } from '../../../src/web/data.js';
+import type { Handover } from '../../../src/state/store.js';
 import { useAction, useView } from '../api.js';
 import { ConfirmButton, FlashBanner, Loading, Problem, SessionBadge, ago } from '../ui.js';
 import { TreeLinks } from './Overview.js';
@@ -9,6 +10,8 @@ import { TreeLinks } from './Overview.js';
 interface SessionView {
   item: TreeItem;
   messages: SessionMessage[];
+  /** A chat thread's handovers, newest first. */
+  handovers: Handover[];
   /** How a slow send or end turned out, given once. */
   outcome: Flash | null;
 }
@@ -104,6 +107,12 @@ function Detail({ workspace, session }: { workspace: string; session: string }) 
       if (result.ok && draft !== null) setText((now) => (now === draft ? '' : now));
     },
   );
+  // Starting a chat thread over: hand over, or start fresh.
+  const restart = useAction(`/w/${encodeURIComponent(workspace)}/conversations`, (result) => {
+    // A failed request says only how it went, with no outcomes.
+    const outcome = 'outcomes' in result ? (result as ConversationsFlash).outcomes[0] : undefined;
+    setFlash(outcome ? { ok: outcome.done, text: outcome.text } : result);
+  });
   // A slow send's or end's result, once the service has it.
   useEffect(() => {
     if (view.data?.outcome) setFlash(view.data.outcome);
@@ -193,12 +202,57 @@ function Detail({ workspace, session }: { workspace: string; session: string }) 
           </div>
         )}
       </div>
+      {view.data.handovers.length > 0 && (
+        <div className="stack" style={{ gap: 8 }}>
+          <h3>Handovers</h3>
+          {view.data.handovers.map((h) => (
+            <details key={h.id} className="handover">
+              <summary className="small">
+                {h.author === 'agent'
+                  ? 'Written by its chief'
+                  : 'Written by Wheems from the thread'}
+                {h.fromEngine !== null &&
+                  ` · from ${h.fromEngine}${h.fromModel !== null ? ` (${h.fromModel})` : ''}`}
+                {` · ${ago(h.writtenAt)} ago`}
+                {h.usedAt !== null
+                  ? ` · taken over by ${h.toEngine ?? 'a new session'}${h.toModel !== null ? ` (${h.toModel})` : ''}`
+                  : ' · waiting for the next message'}
+              </summary>
+              <pre className="preview">{h.text}</pre>
+            </details>
+          ))}
+        </div>
+      )}
       {s.state === 'ended' ? (
         <p className="muted small">It has ended; it stays as a record.</p>
       ) : s.kind === 'thread' ? (
-        <p className="muted small">
-          It&apos;s a conversation in chat: to talk to it, reply in its chat thread.
-        </p>
+        <div className="stack" style={{ gap: 8 }}>
+          <p className="muted small">
+            It&apos;s a conversation in chat: to talk to it, reply in its chat thread. To start it
+            over, hand it over to a new session, or start fresh.
+          </p>
+          <div className="row">
+            <ConfirmButton
+              label="Hand over"
+              question="Hand over? Its chief writes a handover, and the thread's next message starts a new session from it."
+              yes="Yes, hand over"
+              disabled={restart.isPending || act.isPending}
+              onConfirm={() => {
+                restart.mutate({ [`s:${s.id}`]: 'hand-over' });
+              }}
+            />
+            <ConfirmButton
+              label="Start fresh"
+              question="Start fresh? The thread's next message starts a new session that doesn't remember this one."
+              yes="Yes, start fresh"
+              disabled={restart.isPending || act.isPending}
+              onConfirm={() => {
+                restart.mutate({ [`s:${s.id}`]: 'fresh' });
+              }}
+            />
+            {restart.isPending && <span className="muted small">Asking for its handover…</span>}
+          </div>
+        </div>
       ) : s.kind !== 'adhoc' ? (
         <p className="muted small">It runs a task, and stops when the task is done.</p>
       ) : (

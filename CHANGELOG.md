@@ -13,7 +13,14 @@ change anything, including commands and config formats, without a migration path
   it with only the thread's ask; `--carry-on` just stops its session, so the next message resumes
   it on the settings then. Wheems posts a line in the thread when a new session takes over. The
   session store moves to schema version 5, for handovers; an older Wheems won't open it after
-  that. The web app's choices come next. See `docs/session-handover.md`.
+  that. See `docs/session-handover.md`.
+- The web app's Settings page edits the chief of staff's engine, model, account and permissions
+  again. Saving a change to them lists the conversations already open, with a choice for each:
+  **Carry on** (the default when the engine stays the same), **Hand over** (the default for a
+  thread active in the last week when it changes) or **Start fresh** (for older ones). **Apply and
+  restart** sets each up, asking each chief for its handover while the old one still runs, then
+  restarts the service. A chat thread's session on the Sessions page has **Hand over** and **Start
+  fresh**, each asking first, and lists its handovers.
 
 ## 0.1.7
 
