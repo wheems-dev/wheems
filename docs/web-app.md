@@ -9,8 +9,10 @@ your chiefs: the web app is for looking things over and changing settings, the w
 Settings; and the install's Connections, About you, and Setup and health; in light and dark. From
 the page you can approve or decline skills (choosing which agents get each, and editing it first)
 and changes to `about-you.md`, and send a message to a session or end it (ending and declining ask
-first). When nothing answers, the page and its sidebar say Wheems can't be reached. Editing settings,
-connecting and granting, and setup steps still use the commands each page names.
+first), and edit a workspace's settings and restart the service to use them. When nothing
+answers, the page and its sidebar say Wheems can't be reached. The chat channel, accounts,
+connecting and granting, archiving and removing, and setup steps still use the commands each page
+names.
 
 ## How it runs
 
@@ -43,7 +45,7 @@ connecting and granting, and setup steps still use the commands each page names.
   data, so they're served without the token.
 - **One set of code paths.** Every change goes through the code the CLI uses: config edits through
   the same loaders and validators, service actions through the same requests the control socket
-  takes (`session-send`, `session-end`, `reindex`, `workspace-retire` and the rest). The web app
+  takes (`session-send`, `session-end`, `restart`, `workspace-retire` and the rest). The web app
   adds pages, not a second way of doing things.
 - **The workspace is in the address** (`/w/default/sessions`), so a link opens the right workspace
   and the switcher's choice survives moving between pages.
@@ -103,6 +105,17 @@ of staff (agent file, engine, model, account, the name it posts as), chat and se
 knowledge base (folder, search, rebuilding the index), the skills pinned in `skills.yaml`, and
 archive or remove.
 
+**Built:** editing the name and description; the chief's engine, model, account, permissions and
+the name it posts as; open sessions per owner and how deep sessions may start sessions; when a note
+is asked for and the nightly tidy; and the skill budget. A save changes only the values that
+changed, in `workspace.yaml` and the chief's agent file, keeping comments, and commits them as an
+approval does. Nothing is written if either file changed since the page showed it, or if a value
+fails the checks the files have; the page says which. Renaming moves the name it posts as along,
+when it was made from the old name, as `wheems workspace rename` does. The service uses a change once
+it restarts, so a save offers **Restart now**: the service answers, then has launchd restart it.
+A Wheems that launchd doesn't run (`wheems service run`) says to restart it where it runs. Still
+commands: the chat channel, accounts, archive and remove.
+
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because
 it's how you reach the chief. Agents get only what's switched on, through the broker.
@@ -136,7 +149,7 @@ then remembers it.
 | Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                            |
 | Sessions         | The session store: tree, detail, messages, send and end                         | Nothing: who started what, and the person's ask, are recorded |
 | Review           | Skill proposals, approve and decline                                            | Approvals history (milestone 3)                               |
-| Settings         | Everything in `workspace.yaml`, archive and remove                              | Connection switches (milestone 9)                             |
+| Settings         | Everything in `workspace.yaml`, archive and remove (most of it editable now)    | Connection switches (milestone 9)                             |
 | Connections      | Slack and engine accounts                                                       | Integrations and MCP servers (milestones 7 and 9)             |
 | Setup and health | Setup's steps and doctor's checks and fixes                                     |                                                               |
 

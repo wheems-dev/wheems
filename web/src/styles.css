@@ -751,3 +751,10 @@ button.tree {
 .switcher .menu {
   z-index: 5;
 }
+
+.save-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 2;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}

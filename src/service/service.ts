@@ -32,9 +32,12 @@ import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
 import { startWeb, type RunningWeb, type WebOptions } from '../web/server.js';
+import { restartSoon } from './launchd.js';
 
 export interface ServiceOptions {
   home: string;
+  /** Restarts the service once it has answered; returns why it can't, or null. Tests replace it. */
+  restart?: () => Promise<string | null>;
   registry: DriverRegistry;
   /** The Node.js and script that run the `wheems` command, for the command agents run. */
   node: string;
@@ -494,6 +497,12 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
               ok: true,
               message: `${String(stopped)} ${stopped === 1 ? 'session' : 'sessions'} stopped`,
             };
+          }
+          case 'restart': {
+            const why = await (options.restart ?? restartSoon)();
+            if (why !== null) throw new Error(why);
+            log('Restarting, as asked from the web app');
+            return { ok: true, message: 'Restarting' };
           }
           case 'greet': {
             const marker = join(where.state, 'greeted.json');

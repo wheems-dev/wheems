@@ -5,7 +5,15 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { paths } from '../home.js';
-import { actOnSession, decideAboutYou, decideProposal, type Flash, type Form } from './actions.js';
+import {
+  actOnSession,
+  decideAboutYou,
+  decideProposal,
+  restartService,
+  type Flash,
+  type Form,
+} from './actions.js';
+import { saveSettings } from './settings.js';
 import {
   aboutYouData,
   connectionsData,
@@ -239,6 +247,14 @@ async function api(
     }
     if (area === 'about-you' && id !== undefined && sub === undefined) {
       json(res, 200, await decideAboutYou(web.context, id, form));
+      return;
+    }
+    if (area === 'restart' && id === undefined) {
+      json(res, 200, await restartService(web.context));
+      return;
+    }
+    if (area === 'w' && id !== undefined && sub === 'settings' && item === undefined) {
+      json(res, 200, await saveSettings(web.context, id, form));
       return;
     }
     json(res, 404, { error: 'No such action' });

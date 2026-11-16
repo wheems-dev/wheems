@@ -123,6 +123,32 @@ describe('the service', () => {
     expect(channel.sent).toHaveLength(2);
   });
 
+  it('restarts only the copy launchd runs, and says so otherwise', async () => {
+    // This test's process isn't the launchd job, so the real guard refuses, and nothing restarts.
+    const refused = await request(paths(home, env).socket, { op: 'restart' });
+    expect(refused).toMatchObject({ ok: false });
+    expect(refused.ok ? '' : refused.error).toContain("can't restart itself");
+    await service?.stop();
+    let asked = 0;
+    service = await runService({
+      home,
+      registry,
+      node: '/usr/local/bin/node',
+      cli: '/opt/wheems/dist/cli/main.js',
+      version: '9.9.9',
+      env,
+      log: () => undefined,
+      pollMs: 5,
+      startupSeconds: 2,
+      restart: () => {
+        asked += 1;
+        return Promise.resolve(null);
+      },
+    });
+    expect(await request(paths(home, env).socket, { op: 'restart' })).toMatchObject({ ok: true });
+    expect(asked).toBe(1);
+  });
+
   it('keeps a session store: imports conversations.json, writes the chief, and matches Herdr', async () => {
     await service?.stop();
     const where = paths(home, env);

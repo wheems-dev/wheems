@@ -5,6 +5,15 @@ change anything, including commands and config formats, without a migration path
 
 ## Unreleased
 
+**Added**
+
+- The web app's Settings page edits a workspace's settings: its name and description; the chief of
+  staff's engine, model, account, permissions and the name it posts as; session limits; when a
+  note is asked for and the nightly tidy; and the skill budget. A save changes only what changed,
+  in `workspace.yaml` and the chief's agent file, keeping comments, and commits it. Nothing is
+  saved if a file changed since the page showed it or a value fails its check. **Restart now**
+  then restarts the service so it uses them.
+
 **Fixed**
 
 - The web app's Sessions page no longer offers to send to or end a chat thread's session, which

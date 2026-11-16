@@ -15,6 +15,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadInstall } from '../src/config/load.js';
+import { StubEngine } from '../src/testing/index.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { installYaml } from '../src/cli/templates.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
@@ -400,6 +402,91 @@ describe('the web app', () => {
     writeFileSync(join(home, '.wheems', 'review', 'about-you', 'n8-default.md'), long);
     const about = (await get('/about-you')).json();
     expect(about.suggestions[0]).toMatchObject({ text: long, seen: fingerprint(long) });
+  });
+
+  it('saves settings to workspace.yaml and the chief, keeping comments, only as seen', async () => {
+    await web.close();
+    const registry = new DriverRegistry()
+      .register('engine', 'claude-code', () => new StubEngine({ name: 'claude-code' }))
+      .register('engine', 'codex', () => new StubEngine({ name: 'codex' }));
+    web = await startWeb({ home, env, registry, port: 0, appDir });
+    const dir = join(home, 'workspaces', 'default');
+    const yamlFile = join(dir, 'workspace.yaml');
+    const chiefFile = join(dir, 'agents', 'chief-of-staff.md');
+    writeFileSync(yamlFile, `# Kept by hand.\n${readFileSync(yamlFile, 'utf8')}`);
+    const chiefBefore = readFileSync(chiefFile, 'utf8');
+
+    const view = (await get('/w/default/settings')).json();
+    expect(view.engines).toEqual(['claude-code', 'codex']);
+    const stale = (await post('/w/default/settings', { seen: 'old', name: 'Home' })).json();
+    expect(stale).toEqual({ ok: false, text: expect.stringContaining('changed since') });
+
+    const bad = (
+      await post('/w/default/settings', {
+        seen: view.seen,
+        maxDepth: '0',
+        noteAfterIdle: '',
+        engine: 'nope',
+        account: 'someone-else',
+        tidyAt: '25:00',
+      })
+    ).json();
+    expect(bad.ok).toBe(false);
+    expect(bad.text).toContain('How deep sessions may start sessions must be a whole number');
+    expect(bad.text).toContain('Minutes before a note must be a whole number, 0 or more.');
+    expect(bad.text).toContain("There's no engine called nope.");
+    expect(bad.text).toContain('The account must be one this workspace may use');
+    expect(bad.text).toContain('24-hour time');
+    expect(readFileSync(chiefFile, 'utf8')).toBe(chiefBefore);
+
+    const saved = (
+      await post('/w/default/settings', {
+        seen: view.seen,
+        name: 'Home',
+        description: 'Everything at home',
+        maxDepth: '3',
+        tidyAt: 'off',
+        postsAs: 'Home desk',
+        engine: 'codex',
+        model: 'gpt-6',
+        permissions: 'ask',
+      })
+    ).json();
+    expect(saved).toEqual({
+      ok: true,
+      text: 'Saved. Not committed to git. The service uses it once it restarts.',
+    });
+    const yaml = readFileSync(yamlFile, 'utf8');
+    expect(yaml).toContain('# Kept by hand.');
+    // A new description goes beside the name.
+    expect(yaml).toMatch(/^name: "Home"\ndescription: Everything at home\n/m);
+    const loaded = (await loadInstall(home)).workspaces.find((w) => w.id === 'default');
+    expect(loaded?.config).toMatchObject({
+      name: 'Home',
+      description: 'Everything at home',
+      sessions: { max_depth: 3 },
+      knowledge: { tidy_at: false },
+      identity: { name: 'Home desk' },
+    });
+    const chief = loaded?.agents.find((a) => a.definition.name === 'chief-of-staff');
+    expect(chief?.config).toMatchObject({ engine: 'codex', model: 'gpt-6', permissions: 'ask' });
+    // The agent file's instructions are kept as they were.
+    expect(readFileSync(chiefFile, 'utf8')).toContain(
+      chiefBefore.split('---').slice(2).join('---'),
+    );
+
+    const again = (await get('/w/default/settings')).json();
+    expect(again.seen).not.toBe(view.seen);
+    expect((await post('/w/default/settings', { seen: again.seen, name: 'Home' })).json()).toEqual({
+      ok: true,
+      text: 'Nothing changed.',
+    });
+  });
+
+  it("says so when there's no service to restart", async () => {
+    const restarted = (await post('/restart', {})).json();
+    expect(restarted).toMatchObject({ ok: false });
+    expect(restarted.text).toContain("The service isn't running");
   });
 
   it("says so when the service isn't there to send to", async () => {

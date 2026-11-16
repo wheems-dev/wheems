@@ -73,6 +73,8 @@ export const requestSchema = z.discriminatedUnion('op', [
    * its records in the session store. `wheems workspace archive` and `workspace remove` ask it first.
    */
   z.object({ op: z.literal('workspace-retire'), id: z.string().min(1), forget: z.boolean() }),
+  /** Restarts the service with the latest config, once it has answered (the web app's Restart). */
+  z.object({ op: z.literal('restart') }),
   /** The first chief greets the person in chat; with `once`, only if it never has. */
   z.object({ op: z.literal('greet'), once: z.boolean().optional() }),
   z.object({
