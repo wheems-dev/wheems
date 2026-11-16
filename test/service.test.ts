@@ -1,4 +1,6 @@
 import { startWeb } from '../src/web/server.js';
+import { settingsFiles } from '../src/web/data.js';
+import { loadInstall } from '../src/config/load.js';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -527,6 +529,26 @@ describe('the service', () => {
     // Both set up; this test's service can't restart itself, so it says so and lets them go.
     expect(await ask(both)).toMatchObject({ ok: true, restarting: false });
     expect((await list()).every((c) => c.startsAfresh)).toBe(true);
+    // Choices made for settings that have changed since are refused before anything restarts.
+    const changed = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [],
+      restart: true,
+      settings: 'an older version',
+    });
+    expect(changed).toMatchObject({ ok: true, stale: true, restarting: false });
+    expect(changed.ok ? changed.message : '').toContain("The chief's settings changed");
+    const loaded = (await loadInstall(home)).workspaces.find((w) => w.id === 'personal')!;
+    const current = (await settingsFiles(home, loaded)).seen;
+    const matching = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [],
+      restart: true,
+      settings: current,
+    });
+    expect(matching.ok ? matching.message : '').toContain("can't restart itself");
     // Everything set up already: none to choose, and it goes straight to the restart.
     const none = await ask([]);
     expect(none).toMatchObject({ ok: true, restarting: false, restarted: [] });

@@ -274,6 +274,7 @@ export async function restartConversations(
 ): Promise<ConversationsFlash> {
   const choices: { session: string; choice: 'carry-on' | 'hand-over' | 'fresh' }[] = [];
   const thenRestart = form.get('then')?.[0] === 'restart';
+  const settings = form.get('settings')?.[0];
   for (const [name, values] of form) {
     if (!name.startsWith('s:')) continue;
     const choice = values[0] ?? '';
@@ -294,6 +295,7 @@ export async function restartConversations(
         caller: { workspace },
         choices,
         ...(thenRestart && { restart: true }),
+        ...(thenRestart && settings !== undefined && settings !== '' && { settings }),
       },
       15 * 60_000,
     );

@@ -131,7 +131,9 @@ as it was (answering a message, say) would run on with its old session, so then 
 and **Try again** sets up the rest. While it works, the old service starts no session in the
 workspace: a message, in a new thread or an old one, is answered with a line asking to send it
 again in a moment. If a conversation opened after the page listed them, nothing is done and the
-page lists them again. Still commands: the chat channel, accounts, archive and remove.
+page lists them again. Saving waits while it works, and if the chief's settings change some other
+way meanwhile (another tab, or the file by hand), nothing restarts and the choices are asked
+again. Still commands: the chat channel, accounts, archive and remove.
 
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because

@@ -73,6 +73,8 @@ function SettingsForm({
 }) {
   const [flash, setFlash] = useState<Flash | null>(null);
   const [saved, setSaved] = useState(false);
+  // While choices are applied, the settings they were made for mustn't change.
+  const [applying, setApplying] = useState(false);
   // A saved change to the chief: open conversations need a choice before the restart.
   const [chiefChange, setChiefChange] = useState<{
     engine: boolean;
@@ -143,7 +145,7 @@ function SettingsForm({
       autoComplete="off"
       onSubmit={(event) => {
         event.preventDefault();
-        submit();
+        if (!applying) submit();
       }}
     >
       <header className="stack">
@@ -166,6 +168,8 @@ function SettingsForm({
           id={id}
           engineChanged={chiefChange.engine}
           restarted={chiefChange.restarted}
+          settings={v.seen}
+          onApplying={setApplying}
           onResult={setFlash}
           onRestarted={() => {
             setSaved(false);
@@ -418,15 +422,17 @@ function SettingsForm({
 
       <div className="card pad row between save-bar">
         <span className="muted small">
-          {changed.length === 0
-            ? 'No changes.'
-            : `${String(changed.length)} ${changed.length === 1 ? 'change' : 'changes'} not saved yet.`}
+          {applying
+            ? 'Saving waits until the conversations are set up and the service restarts.'
+            : changed.length === 0
+              ? 'No changes.'
+              : `${String(changed.length)} ${changed.length === 1 ? 'change' : 'changes'} not saved yet.`}
         </span>
         <div className="row">
           <button
             className="btn"
             type="button"
-            disabled={changed.length === 0 || save.isPending}
+            disabled={changed.length === 0 || save.isPending || applying}
             onClick={() => {
               setEdits({});
             }}
@@ -436,7 +442,7 @@ function SettingsForm({
           <button
             className="btn primary"
             type="submit"
-            disabled={changed.length === 0 || save.isPending}
+            disabled={changed.length === 0 || save.isPending || applying}
           >
             {save.isPending ? 'Saving…' : 'Save'}
           </button>
@@ -498,6 +504,8 @@ function OpenConversations({
   id,
   engineChanged,
   restarted,
+  settings,
+  onApplying,
   onResult,
   onRestarted,
 }: {
@@ -505,6 +513,9 @@ function OpenConversations({
   engineChanged: boolean;
   /** The service has restarted with the new settings: only how each went is left to show. */
   restarted: boolean;
+  /** The fingerprint of the settings these choices are for; the service checks it. */
+  settings: string;
+  onApplying: (applying: boolean) => void;
   onResult: (result: Flash) => void;
   onRestarted: () => void;
 }) {
@@ -521,6 +532,7 @@ function OpenConversations({
     const flash = result as ConversationsFlash;
     const came = 'outcomes' in result ? flash.outcomes : [];
     setOutcomes((now) => ({ ...now, ...Object.fromEntries(came.map((o) => [o.key, o])) }));
+    onApplying(false);
     onResult(result);
     if (flash.restarting === true) onRestarted();
   });
@@ -603,8 +615,10 @@ function OpenConversations({
             type="button"
             disabled={busy || view.data?.problem !== null}
             onClick={() => {
+              onApplying(true);
               apply.mutate({
                 then: 'restart',
+                settings,
                 ...Object.fromEntries(left.map((c) => [`s:${c.session}`, choiceOf(c)])),
               });
             }}

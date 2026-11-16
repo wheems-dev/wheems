@@ -31,6 +31,7 @@ import { SessionService } from './sessions.js';
 import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
+import { settingsFiles } from '../web/data.js';
 import { startWeb, type RunningWeb, type WebOptions } from '../web/server.js';
 import { restartSoon } from './launchd.js';
 
@@ -448,6 +449,25 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
                   'Something in the workspace was still starting, so nothing was done. Try again in a minute.',
               };
             }
+            // The settings the choices were made for, as the files say now.
+            const settingsNow = async () => {
+              const loaded = (await loadInstall(options.home)).workspaces.find(
+                (w) => w.id === workspace,
+              );
+              return loaded ? (await settingsFiles(options.home, loaded)).seen : null;
+            };
+            const changedSettings = {
+              ok: true as const,
+              restarted: [],
+              restarting: false,
+              stale: true,
+              message:
+                "The chief's settings changed after these choices were made, so the service wasn't restarted. Look at the choices again, then apply.",
+            };
+            if (request.settings !== undefined && (await settingsNow()) !== request.settings) {
+              manager.release(workspace);
+              return changedSettings;
+            }
             const chosen = new Set(request.choices.map((c) => c.session));
             const uncovered = (await manager.openConversations(workspace)).filter(
               (c) => !c.startsAfresh && !chosen.has(c.session),
@@ -466,6 +486,11 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             if (restarted.some((outcome) => !outcome.done)) {
               manager.release(workspace);
               return { ok: true, restarted, restarting: false };
+            }
+            // Saved again while the choices were applied, here or by hand: they may not fit.
+            if (request.settings !== undefined && (await settingsNow()) !== request.settings) {
+              manager.release(workspace);
+              return { ...changedSettings, restarted };
             }
             const why = await (options.restart ?? restartSoon)();
             if (why !== null) {

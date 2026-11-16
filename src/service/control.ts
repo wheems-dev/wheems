@@ -100,6 +100,12 @@ export const requestSchema = z.discriminatedUnion('op', [
      * for a conversation set to start afresh.
      */
     restart: z.boolean().optional(),
+    /**
+     * With `restart`: the fingerprint of the workspace's settings (workspace.yaml and the chief's
+     * agent file) the choices were made for. If they've changed since, nothing restarts: the
+     * choices may no longer fit them.
+     */
+    settings: z.string().min(1).optional(),
     choices: z
       .array(
         z.object({
