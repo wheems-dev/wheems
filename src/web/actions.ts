@@ -7,6 +7,7 @@ import {
   declineAboutYou,
   declineSkill,
   listAboutYou,
+  withReviewLock,
 } from '../review/review.js';
 import { request } from '../service/control.js';
 import { listProposals } from '../skills/proposals.js';
@@ -31,7 +32,8 @@ export function parseForm(body: string): Form {
 
 /**
  * Review changes rewrite shared files (the library, skills.yaml, agent files, about-you.md), so
- * one runs at a time, each reading what the one before left.
+ * one runs at a time: in this process by this queue, and across processes (wheems review, another
+ * web app) by the install-wide review lock. Each reads what the one before left.
  */
 let reviewing: Promise<unknown> = Promise.resolve();
 
@@ -55,7 +57,10 @@ export function decideProposal(
   id: string,
   form: Form,
 ): Promise<Flash> {
-  return oneAtATime(() => decideProposalNow(context, workspace, id, form));
+  const state = paths(context.home, context.env).state;
+  return oneAtATime(() =>
+    withReviewLock(state, () => decideProposalNow(context, workspace, id, form)),
+  );
 }
 
 async function decideProposalNow(
@@ -102,7 +107,8 @@ async function decideProposalNow(
 
 /** Approves or declines a suggested change to `about-you.md`, as `wheems review` does. */
 export function decideAboutYou(context: WebContext, name: string, form: Form): Promise<Flash> {
-  return oneAtATime(() => decideAboutYouNow(context, name, form));
+  const state = paths(context.home, context.env).state;
+  return oneAtATime(() => withReviewLock(state, () => decideAboutYouNow(context, name, form)));
 }
 
 async function decideAboutYouNow(context: WebContext, name: string, form: Form): Promise<Flash> {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import * as clack from '@clack/prompts';
 import type { Command } from 'commander';
@@ -14,6 +14,7 @@ import {
   listAboutYou,
   proposalBase,
   type AboutYouSuggestion,
+  withReviewLock,
 } from '../../review/review.js';
 import { checkSkillText, skillVersions } from '../../skills/library.js';
 import { listProposals, type WaitingProposal } from '../../skills/proposals.js';
@@ -161,7 +162,7 @@ async function reviewProposal(
     if (decision === 'stop') return 'stop';
     if (decision === 'later') return 'done';
     if (decision === 'decline') {
-      await declineSkill(waiting);
+      await withReviewLock(paths(home).state, () => declineSkill(waiting));
       ui.info(`Turned down ${proposal.name}.`);
       return 'done';
     }
@@ -207,13 +208,22 @@ async function reviewProposal(
       `The ${proposal.workspace} workspace isn't here any more, so the skill goes into the library only.`,
     );
   }
-  const result = await approveSkill({
-    install,
-    waiting,
-    text,
-    agents,
-    ...(now !== undefined && { now }),
+  // Under the review lock, with the install read again, so another review saved meanwhile
+  // (in the web app, say) is built on, not overwritten.
+  const result = await withReviewLock(paths(home).state, async () => {
+    if (!(await exists(waiting.dir))) return null;
+    return approveSkill({
+      install: await loadInstall(home),
+      waiting,
+      text,
+      agents,
+      ...(now !== undefined && { now }),
+    });
   });
+  if (result === null) {
+    ui.warn(`${proposal.name} was dealt with somewhere else meanwhile, so nothing changed.`);
+    return 'done';
+  }
   ui.success(
     `Added ${proposal.name} version ${String(result.version)} to the library${workspace ? `, pinned in ${proposal.workspace}` : ''}${agents.length > 0 ? `, for ${agents.join(', ')}` : ''}.`,
   );
@@ -238,13 +248,21 @@ async function reviewAboutYou(
     if (decision === 'stop') return 'stop';
     if (decision === 'later') return 'done';
     if (decision === 'decline') {
-      await declineAboutYou(suggestion);
+      await withReviewLock(paths(home).state, () => declineAboutYou(suggestion));
       ui.info('Turned it down; about-you.md is unchanged.');
       return 'done';
     }
     if (decision === 'edit') text = await ui.edit(text, 'about-you.md');
     try {
-      const result = await approveAboutYou({ home, aboutYouFile, suggestion, text });
+      const result = await withReviewLock(paths(home).state, async () =>
+        (await exists(suggestion.file))
+          ? approveAboutYou({ home, aboutYouFile, suggestion, text })
+          : null,
+      );
+      if (result === null) {
+        ui.warn('That change was dealt with somewhere else meanwhile, so nothing changed.');
+        return 'done';
+      }
       ui.success('Updated about-you.md. Agents read it when their next session starts.');
       if (!result.committed) ui.warn(`Not committed: ${result.reason ?? 'unknown reason'}`);
       return 'done';
@@ -322,4 +340,11 @@ export function clackReviewUi(stateDir: string, env: NodeJS.ProcessEnv): ReviewU
       return edited;
     },
   };
+}
+
+async function exists(path: string): Promise<boolean> {
+  return stat(path).then(
+    () => true,
+    () => false,
+  );
 }

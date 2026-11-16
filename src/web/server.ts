@@ -39,6 +39,8 @@ export interface WebOptions {
   registry: DriverRegistry;
   port?: number;
   log?: (message: string) => void;
+  /** How long a send waits before the page moves on; tests shorten it. */
+  sendWaitMs?: number;
 }
 
 export interface RunningWeb {
@@ -97,6 +99,7 @@ export async function startWeb(options: WebOptions): Promise<RunningWeb> {
     flashes: new Flashes(),
     log: options.log ?? (() => undefined),
     outcomes: new Map<string, Flash>(),
+    sendWaitMs: options.sendWaitMs,
   };
   const server = createServer((req, res) => {
     handle(req, res, web).catch((error: unknown) => {
@@ -150,6 +153,7 @@ async function handle(
     log: (message: string) => void;
     /** How a slow send or end turned out, by workspace/session, until its page shows it. */
     outcomes: Map<string, Flash>;
+    sendWaitMs: number | undefined;
   },
 ): Promise<void> {
   const allowedHosts = [`127.0.0.1:${String(web.port)}`, `localhost:${String(web.port)}`];
@@ -240,9 +244,17 @@ async function handle(
     if (area === 'w' && id !== undefined && sub === 'sessions' && item !== undefined) {
       const key = `${id}/${item}`;
       web.outcomes.delete(key);
-      const flash = await actOnSession(web.context, id, item, form, web.log, (later) => {
-        web.outcomes.set(key, later);
-      });
+      const flash = await actOnSession(
+        web.context,
+        id,
+        item,
+        form,
+        web.log,
+        (later) => {
+          web.outcomes.set(key, later);
+        },
+        web.sendWaitMs,
+      );
       done(flash, `/w/${encodeURIComponent(id)}/sessions?s=${encodeURIComponent(item)}`);
       return;
     }
@@ -332,8 +344,11 @@ async function handle(
       const messages = selected ? await sessionMessages(web.context, id, selected) : [];
       // How a slow send or end turned out, once it has.
       const key = selected ? `${id}/${selected.id}` : '';
-      // Kept for later when this visit already has a message to show.
-      const eventual = url.searchParams.has('flash') ? undefined : web.outcomes.get(key);
+      // Kept for later only when this visit has another message still to show; a reload of a
+      // page whose message was shown already shows it.
+      const flashId = url.searchParams.get('flash');
+      const eventual =
+        flashId !== null && web.flashes.has(flashId) ? undefined : web.outcomes.get(key);
       if (eventual) web.outcomes.delete(key);
       page(200, sessionsPage(data, selected, messages, includeEnded), eventual);
       return;
@@ -406,6 +421,12 @@ class Flashes {
     const id = randomBytes(9).toString('base64url');
     this.kept.set(id, { flash, until: now + 5 * 60_000 });
     return id;
+  }
+
+  /** Whether a message is still waiting to be shown. */
+  has(id: string): boolean {
+    const entry = this.kept.get(id);
+    return entry !== undefined && entry.until >= Date.now();
   }
 
   take(id: string | null): Flash | undefined {

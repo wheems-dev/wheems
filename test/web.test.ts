@@ -5,6 +5,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { request as httpRequest } from 'node:http';
@@ -19,7 +20,7 @@ import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
 import { MIGRATIONS } from '../src/state/schema.js';
 import { StateStore } from '../src/state/store.js';
-import { actOnSession, parseForm, type Flash } from '../src/web/actions.js';
+import { withReviewLock } from '../src/review/review.js';
 import { fingerprint } from '../src/web/data.js';
 import { esc } from '../src/web/pages.js';
 import { startWeb, webToken, type RunningWeb } from '../src/web/server.js';
@@ -371,34 +372,51 @@ describe('the web app', () => {
     expect(page.body).toContain(`value="${fingerprint(long)}"`);
   });
 
-  it('tells the session page how a slow send turned out, even a failure', async () => {
+  it('shows how a slow send turned out when the page is reloaded, even a failure', async () => {
+    await web.close();
+    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0, sendWaitMs: 20 });
     const socket = paths(home, env).socket;
     mkdirSync(dirname(socket), { recursive: true });
     const slowService = createServer((conn) => {
       conn.on('data', () => {
-        setTimeout(() => conn.end('{"ok":false,"error":"it could not be resumed"}\n'), 100);
+        setTimeout(() => conn.end('{"ok":false,"error":"it could not be resumed"}\n'), 150);
       });
     });
     await new Promise<void>((done) => slowService.listen(socket, done));
     try {
-      const outcomes: Flash[] = [];
-      const first = await actOnSession(
-        { home, env, registry: new DriverRegistry() },
-        'default',
-        'child',
-        parseForm('action=send&text=Any+news%3F'),
-        () => undefined,
-        (flash) => outcomes.push(flash),
-        20,
-      );
-      expect(first.text).toMatch(/^Sending: it's starting up first/);
-      await new Promise((done) => setTimeout(done, 300));
-      expect(outcomes).toEqual([
-        { ok: false, text: "Your message wasn't sent: it could not be resumed" },
-      ]);
+      const sent = await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' });
+      const first = await follow(sent.headers.location);
+      expect(first.body).toContain(esc("Sending: it's starting up first."));
+      await new Promise((done) => setTimeout(done, 400));
+      // A reload of the very same address, whose own message was shown already.
+      const reloaded = await follow(sent.headers.location);
+      expect(reloaded.body).toContain(esc("Your message wasn't sent: it could not be resumed"));
+      expect((await follow(sent.headers.location)).body).not.toContain('could not be resumed');
     } finally {
       await new Promise((done) => slowService.close(done));
     }
+  });
+
+  it('holds one review change at a time across processes, and takes over an abandoned lock', async () => {
+    const state = paths(home, env).state;
+    const file = join(home, 'shared.txt');
+    writeFileSync(file, '');
+    // Two writers that each read, wait, then write: without the lock one would lose the other's line.
+    const append = (line: string) =>
+      withReviewLock(state, async () => {
+        const before = readFileSync(file, 'utf8');
+        await new Promise((done) => setTimeout(done, 50));
+        writeFileSync(file, `${before}${line}\n`);
+      });
+    await Promise.all([append('one'), append('two')]);
+    expect(readFileSync(file, 'utf8').split('\n').filter(Boolean).sort()).toEqual(['one', 'two']);
+    // A lock left by a process that died long ago doesn't block forever.
+    const lock = join(state, 'review', '.lock');
+    mkdirSync(lock, { recursive: true });
+    const old = new Date(Date.now() - 10 * 60_000);
+    utimesSync(lock, old, old);
+    expect(await withReviewLock(state, () => Promise.resolve('taken'))).toBe('taken');
+    expect(existsSync(lock)).toBe(false);
   });
 
   it("says so when the service isn't there to send to", async () => {
