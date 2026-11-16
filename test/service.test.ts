@@ -1,3 +1,4 @@
+import { startWeb } from '../src/web/server.js';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -240,6 +241,37 @@ describe('the service', () => {
     expect(status.code).toBe(0);
     expect(status.out).toMatch(/^✓ Running: Wheems 9\.9\.9, pid \d+, up under a minute\n/);
     expect(status.out).toContain('✓ Connected to slack\n✓ personal: direct messages on slack\n');
+  });
+
+  it('serves the web app before it answers, so status never catches it starting', async () => {
+    await service?.stop();
+    service = undefined;
+    const where = paths(home, env);
+    const starting = runService({
+      home,
+      registry,
+      node: '/usr/local/bin/node',
+      cli: '/opt/wheems/dist/cli/main.js',
+      version: '9.9.9',
+      env,
+      log: () => undefined,
+      pollMs: 5,
+      startupSeconds: 2,
+      // A web app slow to start, as on a busy machine.
+      startWeb: async (options) => {
+        await new Promise((done) => setTimeout(done, 300));
+        return startWeb(options);
+      },
+    });
+    let answered: Awaited<ReturnType<typeof request>> | undefined;
+    while (answered === undefined) {
+      answered = await request(where.socket, { op: 'status' }, 200).catch(() => undefined);
+      if (answered === undefined) await new Promise((done) => setTimeout(done, 10));
+    }
+    service = await starting;
+    expect(answered.ok && answered.status?.web?.port).toBeGreaterThan(0);
+    const status = await cliReply('', ['--home', home], '', 'status');
+    expect(status.out).toMatch(/✓ Web app: http:\/\/127\.0\.0\.1:\d+\/k\/[\w-]+\/\n/);
   });
 
   it('gives the channel driver its secrets, and agents an wheems command pinned to its Node.js', () => {

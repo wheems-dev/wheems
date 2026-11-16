@@ -31,7 +31,7 @@ import { SessionService } from './sessions.js';
 import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
-import { startWeb, type RunningWeb } from '../web/server.js';
+import { startWeb, type RunningWeb, type WebOptions } from '../web/server.js';
 
 export interface ServiceOptions {
   home: string;
@@ -55,6 +55,8 @@ export interface ServiceOptions {
   tidyCheckMs?: number;
   /** The web app's port; null serves no web app (tests). Default: WHEEMS_WEB_PORT or 4317. */
   webPort?: number | null;
+  /** Starts the web app; a test can slow it down. */
+  startWeb?: (options: WebOptions) => Promise<RunningWeb>;
 }
 
 export interface RunningService {
@@ -330,6 +332,24 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       started.push(channel);
       log(`Connected ${connection}`);
     }
+    // The web app, read-only for now, before the control socket: once the service answers, the
+    // web app has started or failed, so status never reports one that is still starting.
+    // Wheems runs without it if its port is taken.
+    if (options.webPort !== null) {
+      web = await (options.startWeb ?? startWeb)({
+        home: options.home,
+        env,
+        registry: options.registry,
+        ...(options.webPort !== undefined && { port: options.webPort }),
+        log,
+      }).catch((error: unknown) => {
+        log(
+          `The web app isn't served: ${error instanceof Error ? error.message : String(error)}. Wheems runs without it.`,
+        );
+        return null;
+      });
+      if (web) log(`Serving the web app at ${web.url} (open it with wheems web open)`);
+    }
     server = await listen(
       where.socket,
       async (request: ControlRequest): Promise<ControlResponse> => {
@@ -502,6 +522,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       },
     );
   } catch (error) {
+    await web?.close().catch(() => undefined);
     for (const channel of started) await channel.stop().catch(() => undefined);
     await sessions.stop();
     await manager.stop();
@@ -511,22 +532,6 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   }
   const listening = server;
   log(`Wheems ${options.version} is running from ${options.home}`);
-  // The web app, read-only for now. Wheems runs without it if its port is taken.
-  if (options.webPort !== null) {
-    web = await startWeb({
-      home: options.home,
-      env,
-      registry: options.registry,
-      ...(options.webPort !== undefined && { port: options.webPort }),
-      log,
-    }).catch((error: unknown) => {
-      log(
-        `The web app isn't served: ${error instanceof Error ? error.message : String(error)}. Wheems runs without it.`,
-      );
-      return null;
-    });
-    if (web) log(`Serving the web app at ${web.url} (open it with wheems web open)`);
-  }
   await manager.recover();
   // Senders of messages lost in the restart hear so, now the chats are connected.
   void sessions.recoverLost(lost);
