@@ -1,5 +1,5 @@
-import { WebClient } from '@slack/web-api';
 import { slackError } from './slack-channel.js';
+import { noAnswer, quickClient } from './transport.js';
 
 /** The Slack app manifest: Socket Mode, so no public URL is needed. One app serves every workspace. */
 export function slackManifest(name = 'Wheems'): string {
@@ -56,14 +56,16 @@ export async function verifySlackTokens(
 ): Promise<SlackIdentity> {
   let identity: SlackIdentity;
   try {
-    const auth = await new WebClient(botToken).auth.test();
+    const auth = await quickClient(botToken).auth.test();
     identity = { team: String(auth.team), botUser: String(auth.user) };
   } catch (error) {
+    offline(error);
     throw new Error(`Slack refused the bot token: ${slackError(error)}`, { cause: error });
   }
   try {
-    await new WebClient(appToken).apps.connections.open();
+    await quickClient(appToken).apps.connections.open();
   } catch (error) {
+    offline(error);
     throw new Error(
       `Slack refused the app-level token: ${slackError(error)}. It needs the connections:write scope.`,
       { cause: error },
@@ -72,18 +74,27 @@ export async function verifySlackTokens(
   return identity;
 }
 
-/** The display name of a Slack member, to confirm the member id is right. */
 /**
  * The display name of a Slack member, or null when Slack says there is no such member.
  * Any other failure (network, rate limit, permissions) throws: it says nothing about the member.
  */
 export async function slackMemberName(botToken: string, userId: string): Promise<string | null> {
   try {
-    const info = await new WebClient(botToken).users.info({ user: userId });
+    const info = await quickClient(botToken).users.info({ user: userId });
     const user = info.user;
     return user?.real_name ?? user?.name ?? userId;
   } catch (error) {
     if (slackError(error) === 'user_not_found') return null;
+    offline(error);
     throw new Error(`Couldn't look up ${userId} in Slack: ${slackError(error)}`, { cause: error });
   }
+}
+
+/**
+ * Throws a plain error when Slack couldn't be reached or is limiting requests, so a token isn't
+ * blamed for the network.
+ */
+function offline(error: unknown): void {
+  const why = noAnswer(error);
+  if (why !== null) throw new Error(`${why.message}. ${why.hint}`, { cause: error });
 }

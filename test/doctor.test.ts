@@ -3,7 +3,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DriverRegistry } from '../src/contracts/registry.js';
-import { defaultHome, runDoctor, trustedIn, type DoctorReport } from '../src/doctor/doctor.js';
+import {
+  chatProblems,
+  defaultHome,
+  runDoctor,
+  trustedIn,
+  type DoctorReport,
+} from '../src/doctor/doctor.js';
+import { SlackChannel } from '../src/drivers/channel/slack/slack-channel.js';
+import { FakeSlack } from './helpers/fake-slack.js';
 import { shellPath, trustAdvice } from '../src/util/trust.js';
 import { HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
 import { formatReport } from '../src/cli/program.js';
@@ -242,6 +250,34 @@ describe('doctor', () => {
     ]);
     expect(statuses(after).Service).toEqual(['pass service', 'skip session store']);
     expect(after.ok).toBe(true);
+  });
+
+  it("tells wheems start which chat apps can't be reached", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
+    cleanups.push(() => {
+      rmSync(home, { recursive: true, force: true });
+    });
+    expect(await chatProblems({ home, registry: new DriverRegistry() })).toEqual([]);
+    writeFileSync(join(home, 'install.yaml'), installYaml());
+    await initWorkspace({ home, id: 'personal' });
+    const env = { WHEEMS_SECRETS: join(home, 'secrets.json') };
+    await writeSecret(env.WHEEMS_SECRETS, 'slack', { bot_token: 'xoxb-x', app_token: 'xapp-x' });
+    const slack = new FakeSlack();
+    const registry = new DriverRegistry().register(
+      'channel',
+      'slack',
+      () => new SlackChannel(slack),
+    );
+    // No allowed users is a warning, not a reason the service can't connect.
+    expect(await chatProblems({ home, registry, env })).toEqual([]);
+    slack.offline = true;
+    expect(await chatProblems({ home, registry, env })).toEqual([
+      expect.objectContaining({
+        name: 'slack: Slack',
+        status: 'fail',
+        message: "Couldn't reach Slack (fetch failed, ENOTFOUND)",
+      }),
+    ]);
   });
 
   it('reports Herdr sessions with a Wheems label the session store has no record of, and leaves them alone', async () => {

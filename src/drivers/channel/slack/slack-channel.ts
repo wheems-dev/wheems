@@ -1,4 +1,5 @@
 import type {
+  LookupOptions,
   ChannelCapabilities,
   ChannelDriver,
   InboundHandler,
@@ -7,7 +8,7 @@ import type {
   SentMessage,
 } from '../../../contracts/channel.js';
 import { DriverError, type HealthCheck } from '../../../contracts/driver.js';
-import type { SlackEvent, SlackResult, SlackTransport } from './transport.js';
+import { noAnswer, type SlackEvent, type SlackResult, type SlackTransport } from './transport.js';
 
 /** Slack's limit for one markdown block is 12,000 characters; stay under it. */
 const MAX_BLOCK = 11_000;
@@ -38,7 +39,7 @@ export class SlackChannel implements ChannelDriver {
 
   async check(): Promise<HealthCheck[]> {
     try {
-      const auth = await this.transport.call('auth.test', {});
+      const auth = await this.transport.call('auth.test', {}, { quick: true });
       return [
         {
           name: 'Slack',
@@ -47,6 +48,8 @@ export class SlackChannel implements ChannelDriver {
         },
       ];
     } catch (error) {
+      const why = noAnswer(error);
+      if (why !== null) return [{ name: 'Slack', status: 'fail', ...why }];
       return [
         {
           name: 'Slack',
@@ -132,19 +135,23 @@ export class SlackChannel implements ChannelDriver {
    * The id of a channel given by name (`acme-chat` or `#acme-chat`) or id.
    * Returns null when the bot cannot see a channel by that name.
    */
-  async resolveChannel(nameOrId: string): Promise<string | null> {
+  async resolveChannel(nameOrId: string, options?: LookupOptions): Promise<string | null> {
     const name = nameOrId.replace(/^#/, '');
     if (/^[CGD][A-Z0-9]{6,}$/.test(name)) return name;
     const known = this.channelIds.get(name);
     if (known !== undefined) return known;
     let cursor: string | undefined;
     do {
-      const page = await this.transport.call('conversations.list', {
-        types: 'public_channel,private_channel',
-        exclude_archived: true,
-        limit: 200,
-        ...(cursor !== undefined && { cursor }),
-      });
+      const page = await this.transport.call(
+        'conversations.list',
+        {
+          types: 'public_channel,private_channel',
+          exclude_archived: true,
+          limit: 200,
+          ...(cursor !== undefined && { cursor }),
+        },
+        options,
+      );
       for (const channel of (page.channels as { id: string; name: string }[] | undefined) ?? []) {
         this.channelIds.set(channel.name, channel.id);
       }
@@ -165,16 +172,20 @@ export class SlackChannel implements ChannelDriver {
     }
   }
 
-  async listChannels(): Promise<{ id: string; name: string }[]> {
+  async listChannels(options?: LookupOptions): Promise<{ id: string; name: string }[]> {
     const found: { id: string; name: string }[] = [];
     let cursor: string | undefined;
     do {
-      const page = await this.transport.call('conversations.list', {
-        types: 'public_channel,private_channel',
-        exclude_archived: true,
-        limit: 200,
-        ...(cursor !== undefined && { cursor }),
-      });
+      const page = await this.transport.call(
+        'conversations.list',
+        {
+          types: 'public_channel,private_channel',
+          exclude_archived: true,
+          limit: 200,
+          ...(cursor !== undefined && { cursor }),
+        },
+        options,
+      );
       for (const channel of (page.channels as { id: string; name: string }[] | undefined) ?? []) {
         this.channelIds.set(channel.name, channel.id);
         found.push({ id: channel.id, name: channel.name });
@@ -197,9 +208,9 @@ export class SlackChannel implements ChannelDriver {
     }
   }
 
-  async isMember(channelId: string): Promise<boolean | null> {
+  async isMember(channelId: string, options?: LookupOptions): Promise<boolean | null> {
     try {
-      const info = await this.transport.call('conversations.info', { channel: channelId });
+      const info = await this.transport.call('conversations.info', { channel: channelId }, options);
       const member = (info.channel as { is_member?: unknown } | undefined)?.is_member;
       return typeof member === 'boolean' ? member : null;
     } catch {

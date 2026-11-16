@@ -6,7 +6,13 @@ import type {
 
 /** A stand-in for Slack: records Web API calls and delivers events the test makes up. */
 export class FakeSlack implements SlackTransport {
-  readonly calls: { method: string; args: Record<string, unknown> }[] = [];
+  readonly calls: {
+    method: string;
+    args: Record<string, unknown>;
+    options?: { quick?: boolean };
+  }[] = [];
+  /** When true, every call fails as the SDK does when this Mac can't reach Slack. */
+  offline = false;
   readonly reactions = new Set<string>();
   channels: { id: string; name: string; member?: boolean }[] = [
     { id: 'C0GENERAL1', name: 'general' },
@@ -26,8 +32,23 @@ export class FakeSlack implements SlackTransport {
     return Promise.resolve();
   }
 
-  call(method: string, args: Record<string, unknown>): Promise<SlackResult> {
-    this.calls.push({ method, args });
+  call(
+    method: string,
+    args: Record<string, unknown>,
+    options?: { quick?: boolean },
+  ): Promise<SlackResult> {
+    this.calls.push({ method, args, ...(options && { options }) });
+    if (this.offline) {
+      const original = Object.assign(new Error('fetch failed'), {
+        cause: Object.assign(new Error('getaddrinfo ENOTFOUND slack.com'), { code: 'ENOTFOUND' }),
+      });
+      return Promise.reject(
+        Object.assign(new Error('A request error occurred: fetch failed'), {
+          code: 'slack_webapi_request_error',
+          original,
+        }),
+      );
+    }
     const failure = this.failures.get(method);
     if (failure !== undefined) {
       this.failures.delete(method);

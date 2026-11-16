@@ -1,5 +1,5 @@
 import { SocketModeClient } from '@slack/socket-mode';
-import { WebClient } from '@slack/web-api';
+import { ErrorCode, LogLevel, WebClient } from '@slack/web-api';
 
 /** A Slack Events API event, such as a `message`. */
 export type SlackEvent = Record<string, unknown> & { type: string };
@@ -15,8 +15,71 @@ export interface SlackTransport {
   /** Connects and delivers each event. Events are acknowledged before delivery. */
   start(onEvent: (event: SlackEvent) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
-  /** Calls a Web API method. Slack errors reject with an error whose `data.error` is Slack's code. */
-  call(method: string, args: Record<string, unknown>): Promise<SlackResult>;
+  /**
+   * Calls a Web API method. Slack errors reject with an error whose `data.error` is Slack's code.
+   * A `quick` call, for a check, gives up after a few seconds when Slack can't be reached, and
+   * logs nothing; other calls keep trying for half an hour, so a message survives an outage.
+   */
+  call(
+    method: string,
+    args: Record<string, unknown>,
+    options?: { quick?: boolean },
+  ): Promise<SlackResult>;
+}
+
+/**
+ * A Web API client for checks and setup: one retry, ten seconds a try, no waiting out Slack's
+ * rate limits, and none of the SDK's own warnings, so a Mac that is offline gets a plain answer
+ * in seconds rather than half an hour of retries.
+ */
+export function quickClient(token: string): WebClient {
+  return new WebClient(token, {
+    retryConfig: { retries: 1 },
+    timeout: 10_000,
+    rejectRateLimitedCalls: true,
+    logLevel: LogLevel.ERROR,
+  });
+}
+
+/** Why a call got no answer from Slack itself, as a check reports it. */
+export interface NoAnswer {
+  message: string;
+  hint: string;
+}
+
+/**
+ * Why a call got no answer from Slack: this Mac couldn't reach it, or Slack is limiting requests.
+ * Null when the error is Slack's own answer (a refused token, a missing channel).
+ */
+export function noAnswer(error: unknown): NoAnswer | null {
+  const e = error as
+    | {
+        code?: unknown;
+        original?: { message?: unknown; cause?: { code?: unknown } };
+        statusCode?: unknown;
+        retryAfter?: unknown;
+      }
+    | undefined;
+  const offline = (reason: string): NoAnswer => ({
+    message: `Couldn't reach Slack (${reason})`,
+    hint: "Check this Mac's internet connection. Wheems keeps trying on its own.",
+  });
+  if (e?.code === ErrorCode.RequestError) {
+    const cause = e.original?.cause?.code;
+    const message = typeof e.original?.message === 'string' ? e.original.message : 'no answer';
+    return offline(typeof cause === 'string' ? `${message}, ${cause}` : message);
+  }
+  if (e?.code === ErrorCode.HTTPError) {
+    return offline(`HTTP ${typeof e.statusCode === 'number' ? String(e.statusCode) : 'error'}`);
+  }
+  if (e?.code === ErrorCode.RateLimitedError) {
+    const after = typeof e.retryAfter === 'number' ? ` for ${String(e.retryAfter)} seconds` : '';
+    return {
+      message: `Slack is limiting requests${after}`,
+      hint: 'Wait, then try again. Wheems keeps trying on its own.',
+    };
+  }
+  return null;
 }
 
 export interface SlackTokens {
@@ -35,9 +98,12 @@ interface Envelope {
 /** The real transport: Socket Mode (no public URL needed) and the Web API. */
 export class SocketModeTransport implements SlackTransport {
   private readonly web: WebClient;
+  private quickWeb: WebClient | undefined;
   private readonly socket: SocketModeClient;
+  private readonly botToken: string;
 
   constructor(tokens: SlackTokens) {
+    this.botToken = tokens.botToken;
     this.web = new WebClient(tokens.botToken);
     this.socket = new SocketModeClient({ appToken: tokens.appToken });
   }
@@ -67,7 +133,12 @@ export class SocketModeTransport implements SlackTransport {
     await this.socket.disconnect();
   }
 
-  async call(method: string, args: Record<string, unknown>): Promise<SlackResult> {
-    return (await this.web.apiCall(method, args)) as SlackResult;
+  async call(
+    method: string,
+    args: Record<string, unknown>,
+    options: { quick?: boolean } = {},
+  ): Promise<SlackResult> {
+    const web = options.quick === true ? (this.quickWeb ??= quickClient(this.botToken)) : this.web;
+    return (await web.apiCall(method, args)) as SlackResult;
   }
 }

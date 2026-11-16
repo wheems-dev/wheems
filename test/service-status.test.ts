@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatStatus, since, type StatusFacts } from '../src/cli/commands/service.js';
+import {
+  formatStatus,
+  notAnswering,
+  since,
+  type StatusFacts,
+} from '../src/cli/commands/service.js';
 
 const stopped = { loaded: false, running: false, pid: null, lastExit: null };
 const facts = (over: Partial<StatusFacts>): StatusFacts => ({
@@ -102,5 +107,34 @@ describe('wheems status', () => {
     expect(since('2026-11-14T11:56:00Z', now)).toBe('4m');
     expect(since('2026-11-14T09:46:00Z', now)).toBe('2h 14m');
     expect(since('2026-11-11T10:00:00Z', now)).toBe('3d 2h');
+  });
+
+  it("says why start hasn't answered when a chat app can't be reached, or shows the log", () => {
+    const offline = notAnswering(
+      [
+        {
+          name: 'slack: Slack',
+          status: 'fail',
+          message: "Couldn't reach Slack (fetch failed)",
+          hint: "Check this Mac's internet connection. Wheems keeps trying on its own.",
+        },
+      ],
+      null,
+    );
+    expect(offline).toBe(
+      [
+        "It hasn't answered yet: it answers once it has connected to every chat app, and it can't yet.",
+        '',
+        "  ✗ slack: Slack: Couldn't reach Slack (fetch failed)",
+        "      Check this Mac's internet connection. Wheems keeps trying on its own.",
+        '',
+        'It keeps trying in the background. See when it connects with: wheems status',
+        '',
+      ].join('\n'),
+    );
+    expect(notAnswering([], 'a\nb\n')).toBe(
+      "It hasn't answered yet. The end of its log:\n\na\nb\n\nMore with: wheems logs\n",
+    );
+    expect(notAnswering([], null)).toContain('has written no log');
   });
 });

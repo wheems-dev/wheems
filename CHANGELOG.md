@@ -3,6 +3,18 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Fixed**
+
+- When this Mac can't reach Slack, `wheems doctor` and `wheems setup` say so in a few seconds,
+  as "Couldn't reach Slack", rather than blaming the tokens, retrying for up to half an hour and
+  printing the Slack library's warnings. When Slack is limiting requests, they say that rather
+  than waiting it out. Doctor's channel lookups give up as quickly.
+- When the service hasn't answered after `wheems start` because it can't reach a chat app yet,
+  `start` says which one and that it keeps trying, rather than printing the end of the log.
+  `wheems status` points at `wheems doctor` while the service is still connecting.
+
 ## 0.1.6
 
 Released 16 November 2026. The web app shows what was said in a chat thread. When the service
