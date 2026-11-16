@@ -918,6 +918,7 @@ skills:
 | `WHEEMS_WORKSPACE`    | The workspace `wheems knowledgebase search` searches. Wheems sets it in every agent session |
 | `WHEEMS_CONVERSATION` | The chat thread a thread session's commands belong to. Wheems sets it in those sessions     |
 | `WHEEMS_SESSION`      | The session an agent's commands come from. Wheems sets it in every agent session            |
+| `WHEEMS_WEB_PORT`     | The port on `127.0.0.1` the web app uses (default 4317)                                     |
 | `WHEEMS_NO_ANIMATION` | Set to anything to stop the cloud winking on the welcome screen and in `wheems setup`       |
 
 ### Config the schemas accept but nothing uses yet

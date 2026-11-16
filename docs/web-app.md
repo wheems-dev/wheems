@@ -125,7 +125,7 @@ then remembers it.
 
 ## What can be built when
 
-| Page             | Can show now (0.1.1)                                                            | Waits for                                                     |
+| Page             | Can show now (0.1.5)                                                            | Waits for                                                     |
 | ---------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                            |
 | Sessions         | The session store: tree, detail, messages, send and end                         | Nothing: who started what, and the person's ask, are recorded |
@@ -138,7 +138,5 @@ then remembers it.
 
 - **Per-agent connections.** The design lets each agent pick from its workspace's connections.
   The web app shows only the workspace level for now.
-- **What it's built with:** pages rendered by the service, or a small client app shipped in the
-  npm package. Either way, no build tools for the person installing Wheems.
 - **Reaching it from elsewhere** once the service runs on an always-on server (milestone 10):
   until then it's this computer only.
