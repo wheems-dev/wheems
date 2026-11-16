@@ -299,6 +299,7 @@ export function formatDetails(details: SessionDetails, now: number): string {
     `State: ${s.state}${details.status !== null ? ` (${details.status})` : ''}`,
     `Started ${since(s.createdAt, now)} ago, last active ${since(s.lastActiveAt, now)} ago${s.endedAt !== null ? `, ended ${since(s.endedAt, now)} ago` : ''}`,
   ];
+  if (s.ask !== null && s.ask !== s.purpose) lines.push('', 'Asked:', s.ask);
   if (s.purpose !== null) lines.push('', 'Purpose:', s.purpose);
   if (s.summary !== null && s.summary !== s.purpose) lines.push('', `Summary: ${s.summary}`);
   if (details.latestAnswer !== null) lines.push('', 'Latest answer:', details.latestAnswer.trim());

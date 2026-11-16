@@ -112,6 +112,8 @@ describe('session store', () => {
       db.close();
       state = await StateStore.open(old);
       expect(state.workspace('personal').message('m')).toMatchObject({ kind: 'message' });
+      // Sessions from before asks were kept have none.
+      expect(state.workspace('personal').session('s')?.ask).toBeNull();
     });
 
     it('refuses a store from a newer Wheems, and doctor refuses one at another version', async () => {
@@ -352,6 +354,14 @@ describe('session store', () => {
       expect(personal.session('id-personal-suppliers')?.state).toBe('ended');
       personal.update('id-personal-packaging', { state: 'working' }, 'idle');
       expect(personal.session('id-personal-packaging')?.state).toBe('working');
+    });
+
+    it("keeps a thread's first ask, and never a later message in its place", () => {
+      state.recordAsk('id-personal-packaging', 'Find us cheaper packaging');
+      state.recordAsk('id-personal-packaging', 'And the boxes too');
+      expect(state.workspace('personal').session('id-personal-packaging')?.ask).toBe(
+        'Find us cheaper packaging',
+      );
     });
 
     it('keeps messages in their workspace, finishes each once, and fails waiting ones at start', () => {

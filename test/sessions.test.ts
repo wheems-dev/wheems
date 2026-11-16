@@ -118,11 +118,11 @@ describe('wheems session', () => {
   };
 
   /** A chief's thread session, started by a message in Slack; returns its environment. */
-  const chiefThread = async (): Promise<Record<string, string>> => {
+  const chiefThread = async (text = 'hello'): Promise<Record<string, string>> => {
     const before = channel.sent.length;
     const thread = await channel.receive({
       channel: 'D1',
-      text: 'hello',
+      text,
       userId: 'UME',
       direct: true,
     });
@@ -252,6 +252,30 @@ describe('wheems session', () => {
     expect(instructions).toMatch(
       new RegExp(`\`${created.id}\` packaging \\((working|idle)\\): research packaging`),
     );
+  });
+
+  it("keeps the person's ask on the chief's thread, and passes it to every session started for it", async () => {
+    const ask = 'Can you find me cheaper boat insurance?';
+    const chief = await chiefThread(ask);
+    expect((await stored((s) => s.workspace('personal').session(chief.WHEEMS_SESSION!)))?.ask).toBe(
+      ask,
+    );
+    const quotes = await newSession('insurers', chief);
+    expect(quotes.ask).toBe(ask);
+    const wording = await newSession('policy wording', { WHEEMS_SESSION: quotes.id });
+    expect(wording.ask).toBe(ask);
+    // Each session started for it keeps the ask in view.
+    const folder = join(home, '.wheems', 'sessions', 'personal', 'adhoc', wording.id);
+    expect(readFileSync(join(folder, 'AGENTS.md'), 'utf8')).toContain(
+      `It all started with the person asking:\n\n> ${ask}\n\nKeep your work to what that needs`,
+    );
+    expect((await wheems(['session', 'show', quotes.id])).out).toContain(`Asked:\n${ask}\n`);
+    // A session the person starts has its purpose as its ask, so nothing is said twice.
+    const mine = await newSession('marinas');
+    expect(mine.ask).toBe('research marinas');
+    expect((await wheems(['session', 'show', mine.id])).out).not.toContain('Asked:');
+    const own = join(home, '.wheems', 'sessions', 'personal', 'adhoc', mine.id, 'AGENTS.md');
+    expect(readFileSync(own, 'utf8')).not.toContain('It all started with');
   });
 
   it('limits open sessions per owner and how deep sessions may start sessions', async () => {

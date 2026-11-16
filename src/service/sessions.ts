@@ -319,6 +319,9 @@ export class SessionService {
       parent: caller.session?.id ?? null,
       title,
       purpose,
+      // The person's ask carries down from the session that started this one. When the person
+      // starts it themselves, its purpose is their ask.
+      ask: caller.session ? caller.session.ask : purpose,
       herdrName: `${workspace.id.slice(0, 20)}-s${id.slice(0, 8)}`,
       folder,
       createdAt: now.toISOString(),
@@ -1184,6 +1187,7 @@ export class SessionService {
       adhoc: {
         title: session.title ?? '',
         purpose: session.purpose ?? '',
+        ask: session.ask,
         owner: ownerLabel(sessions, session),
       },
       ...(startsSessions && { sessions: startsSessions }),

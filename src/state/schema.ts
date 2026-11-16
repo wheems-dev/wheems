@@ -102,6 +102,11 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT 'message'
     CHECK (kind IN ('message', 'handback'));
   `,
+  // 3: the person's own words that started the work: a chat thread's first message, passed on
+  // to every session started for it, so each one can see what was asked. Null when unknown.
+  `
+  ALTER TABLE sessions ADD COLUMN ask TEXT;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

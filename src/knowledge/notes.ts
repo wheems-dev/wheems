@@ -50,6 +50,30 @@ export function looksLikeSecret(text: string): boolean {
   return SECRET_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+/**
+ * A credential given in words or as a header, which SECRET_PATTERNS can't recognise by its
+ * shape: an Authorization header, `password=…`, `"token": "…"`, `token: Bearer …`, "my password
+ * is …", and a bare bearer token.
+ */
+const CREDENTIAL_VALUES = [
+  /(["']?\b(?:proxy-)?authori[sz]ation["']?)(\s*[:=]\s*)((?:bearer|basic|digest|token)\s+)?("[^"]*"|'[^']*'|\S+)/gi,
+  /(["']?\b(?:pass(?:word|wd|phrase|code)?|pwd|pin|secret|api[ _-]?key|access[ _-]?key|token|auth)s?["']?)(\s*[:=]\s*|\s+is\s+)((?:bearer|basic|token)\s+)?("[^"]*"|'[^']*'|\S+)/gi,
+  /(\bbearer)(\s+)()([A-Za-z0-9._~+/=-]{8,})/gi,
+];
+
+/**
+ * Whether text seems to hold a credential of any kind: one SECRET_PATTERNS recognises, a private
+ * key, or a password, key or token given in words or as an Authorization header. Wider than
+ * looksLikeSecret, for text kept for its meaning, such as a session's ask, which is dropped
+ * rather than redacted: telling that a credential is there is reliable, cutting it out isn't.
+ */
+export function holdsCredential(text: string): boolean {
+  return (
+    looksLikeSecret(text) ||
+    CREDENTIAL_VALUES.some((pattern) => new RegExp(pattern.source, 'i').test(text))
+  );
+}
+
 /** A file's text, cut to a limit, or null when it is missing or holds nothing yet. */
 export async function readCapped(file: string, limit: number): Promise<string | null> {
   let text: string;

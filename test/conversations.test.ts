@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadInstall, type LoadedInstall } from '../src/config/load.js';
-import { ConversationManager, conversationKey, uuidFor } from '../src/service/conversations.js';
+import {
+  ConversationManager,
+  askFrom,
+  conversationKey,
+  uuidFor,
+} from '../src/service/conversations.js';
 import { ConversationStore } from '../src/service/store.js';
 import { StateStore } from '../src/state/store.js';
 import type { FinalMessage } from '../src/contracts/engine.js';
@@ -1050,5 +1055,32 @@ describe('conversations', () => {
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(uuidFor('personal:slack:D1:1.2')).toBe(id);
     expect(uuidFor('personal:slack:D1:1.3')).not.toBe(id);
+  });
+});
+
+describe('askFrom', () => {
+  it('keeps a first message as an ask, trimmed and cut short, and never a secret', () => {
+    expect(askFrom('  Find cheaper boat insurance  ')).toBe('Find cheaper boat insurance');
+    const long = askFrom('x'.repeat(3000));
+    expect(long).toHaveLength(2000);
+    expect(long.endsWith('…')).toBe(true);
+  });
+
+  it('keeps no ask from a message that seems to hold a credential', () => {
+    for (const message of [
+      'Use xoxb-1234567890-abcdefghij to post',
+      'Log in to the router, password=hunter22, and restart it',
+      'Call it with Authorization: Bearer abc.def.ghi1234567',
+      'Send Authorization: Basic dTpw to it',
+      'Use token: Bearer abc.def.ghi1234567 there',
+      'Post {"password": "a quoted secret", "user": "me"}',
+      'Post {"password":"prefix\\"sensitive-suffix"}',
+      'my password is hunter2 so book it',
+      '-----BEGIN RSA PRIVATE KEY-----\nabc',
+    ]) {
+      expect(askFrom(message)).toBe('');
+    }
+    // Words about passwords, with no value given, are kept.
+    expect(askFrom('Remind me to change my passwords')).toBe('Remind me to change my passwords');
   });
 });
