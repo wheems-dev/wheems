@@ -42,6 +42,11 @@ export default tseslint.config(
     },
   },
   {
+    // The web app runs in a browser.
+    files: ['web/**/*.ts', 'web/**/*.tsx'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     files: ['**/*.js', '**/*.mjs'],
     ...tseslint.configs.disableTypeChecked,
   },

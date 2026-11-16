@@ -271,7 +271,7 @@ describe('the service', () => {
     service = await starting;
     expect(answered.ok && answered.status?.web?.port).toBeGreaterThan(0);
     const status = await cliReply('', ['--home', home], '', 'status');
-    expect(status.out).toMatch(/✓ Web app: http:\/\/127\.0\.0\.1:\d+\/k\/[\w-]+\/\n/);
+    expect(status.out).toMatch(/✓ Web app: http:\/\/127\.0\.0\.1:\d+\/#token=[\w-]+\n/);
   });
 
   it('gives the channel driver its secrets, and agents an wheems command pinned to its Node.js', () => {

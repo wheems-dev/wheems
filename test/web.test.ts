@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- the API's JSON, checked by each assertion */
 import {
   existsSync,
   mkdirSync,
@@ -9,8 +10,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { request as httpRequest } from 'node:http';
-import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -18,85 +19,96 @@ import { initWorkspace } from '../src/cli/commands/init.js';
 import { installYaml } from '../src/cli/templates.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
 import { paths } from '../src/home.js';
+import { withReviewLock } from '../src/review/review.js';
 import { MIGRATIONS } from '../src/state/schema.js';
 import { StateStore } from '../src/state/store.js';
-import { withReviewLock } from '../src/review/review.js';
 import { fingerprint } from '../src/web/data.js';
-import { esc } from '../src/web/pages.js';
-import { startWeb, webToken, type RunningWeb } from '../src/web/server.js';
+import { startWeb, webToken, webUrl, type RunningWeb } from '../src/web/server.js';
+
+interface Answer {
+  status: number;
+  body: string;
+  headers: Record<string, unknown>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the API's answers, read in tests
+  json: () => any;
+}
 
 describe('the web app', () => {
   let home: string;
   let env: NodeJS.ProcessEnv;
   let web: RunningWeb;
   let token: string;
+  let appDir: string;
 
-  /** A GET of a page under the token, unless `bare`, with the Host header given. */
-  const get = (
+  /** A request, with the token in its Authorization header unless `token` says otherwise. */
+  const send = (
     path: string,
-    options: { bare?: boolean; host?: string; method?: string } = {},
-  ): Promise<{ status: number; body: string; headers: Record<string, unknown> }> =>
+    options: {
+      method?: string;
+      body?: unknown;
+      token?: string | null;
+      origin?: string | null;
+      host?: string;
+    } = {},
+  ): Promise<Answer> =>
     new Promise((resolve, reject) => {
-      const req = httpRequest(
-        {
-          host: '127.0.0.1',
-          port: web.port,
-          path: options.bare === true ? path : `/k/${token}${path}`,
-          method: options.method ?? 'GET',
-          headers: { Host: options.host ?? `127.0.0.1:${String(web.port)}` },
-        },
-        (res) => {
-          let body = '';
-          res.on('data', (chunk: Buffer) => (body += chunk.toString()));
-          res.on('end', () => {
-            resolve({ status: res.statusCode ?? 0, body, headers: res.headers });
-          });
-        },
-      );
-      req.on('error', reject);
-      req.end();
-    });
-
-  /** A form sent from the page (or from `origin`), under the token unless `bare`. */
-  const post = (
-    path: string,
-    fields: Record<string, string | string[]>,
-    options: { origin?: string | null; bare?: boolean } = {},
-  ): Promise<{ status: number; body: string; headers: Record<string, unknown> }> =>
-    new Promise((resolve, reject) => {
-      const params = new URLSearchParams();
-      for (const [key, value] of Object.entries(fields)) {
-        for (const one of Array.isArray(value) ? value : [value]) params.append(key, one);
-      }
-      const body = params.toString();
+      const bearer = options.token === undefined ? token : options.token;
       const origin =
         options.origin === undefined ? `http://127.0.0.1:${String(web.port)}` : options.origin;
       const req = httpRequest(
         {
           host: '127.0.0.1',
           port: web.port,
-          path: options.bare === true ? path : `/k/${token}${path}`,
-          method: 'POST',
+          path,
+          method: options.method ?? 'GET',
           headers: {
-            Host: `127.0.0.1:${String(web.port)}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            ...(origin !== null && { Origin: origin }),
+            Host: options.host ?? `127.0.0.1:${String(web.port)}`,
+            ...(bearer !== null && { Authorization: `Bearer ${bearer}` }),
+            ...(options.body !== undefined && { 'Content-Type': 'application/json' }),
+            ...(origin !== null && options.method === 'POST' && { Origin: origin }),
           },
         },
         (res) => {
-          let text = '';
-          res.on('data', (chunk: Buffer) => (text += chunk.toString()));
+          let body = '';
+          res.on('data', (chunk: Buffer) => (body += chunk.toString()));
           res.on('end', () => {
-            resolve({ status: res.statusCode ?? 0, body: text, headers: res.headers });
+            resolve({
+              status: res.statusCode ?? 0,
+              body,
+              headers: res.headers,
+              json: () => JSON.parse(body) as unknown,
+            });
           });
         },
       );
       req.on('error', reject);
-      req.end(body);
+      req.end(options.body === undefined ? undefined : JSON.stringify(options.body));
     });
 
-  /** Where a 303 sends the browser, under the token, for a GET. */
-  const follow = (location: unknown) => get(String(location).replace(`/k/${token}`, ''));
+  const get = (path: string) => send(`/api${path}`);
+  const post = (path: string, body: unknown, options: { origin?: string | null } = {}) =>
+    send(`/api${path}`, { method: 'POST', body, ...options });
+
+  const propose = (id: string, name: string, text?: string) => {
+    const dir = join(home, '.wheems', 'review', 'skills', id);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, 'proposal.json'),
+      JSON.stringify({
+        id,
+        name,
+        workspace: 'default',
+        agent: 'chief-of-staff',
+        conversation: null,
+        created: new Date().toISOString(),
+        basedOn: null,
+        similar: [],
+      }),
+    );
+    const skill = text ?? `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`;
+    writeFileSync(join(dir, 'SKILL.md'), skill);
+    return fingerprint(skill);
+  };
 
   beforeEach(async () => {
     home = mkdtempSync(join(tmpdir(), 'web-'));
@@ -112,7 +124,7 @@ describe('the web app', () => {
       id: 'root',
       owner: null,
       parent: null,
-      title: 'Shortlist <b>marinas</b>',
+      title: 'Shortlist marinas',
       purpose: 'Three marinas within an hour',
       ask: 'Shortlist marinas for the winter',
       herdrName: 'default-sroot',
@@ -128,7 +140,12 @@ describe('the web app', () => {
       herdrName: 'default-schild',
     });
     state.close();
-    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0 });
+    // A built app of our own, so the files it serves are known.
+    appDir = join(home, 'app');
+    mkdirSync(join(appDir, 'assets'), { recursive: true });
+    writeFileSync(join(appDir, 'index.html'), '<!doctype html><div id="root"></div>');
+    writeFileSync(join(appDir, 'assets', 'index-abc.js'), 'console.log(1)');
+    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0, appDir });
     token = await webToken(home, env);
   });
 
@@ -137,118 +154,25 @@ describe('the web app', () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  it('keeps its token owner-only, and serves pages only under it, never by cookie', async () => {
+  it('keeps its token owner-only, gives it after the # and answers the API only with it in a header', async () => {
     expect(statSync(join(home, '.wheems', 'web-token')).mode & 0o777).toBe(0o600);
-    expect((await get('/health', { bare: true })).status).toBe(200);
-    const outside = await get('/w/default', { bare: true });
-    expect(outside.status).toBe(401);
-    expect(outside.body).toContain('wheems web open');
-    expect((await get('/k/wrong/w/default', { bare: true })).status).toBe(401);
-    expect((await get('/?token=wrong', { bare: true })).status).toBe(401);
-    // An old ?token= link moves under the token, and sets no cookie.
-    const moved = await get(`/w/default?token=${token}`, { bare: true });
-    expect(moved.status).toBe(303);
-    expect(moved.headers.location).toBe(`/k/${token}/w/default`);
-    expect(moved.headers['set-cookie']).toBeUndefined();
-    // Every link on a page stays under the token.
-    const page = await get('/w/default');
-    expect(page.body).toContain(`href="/k/${token}/w/default/sessions"`);
-    expect(page.body).not.toMatch(/href="\/(w|setup)/);
+    expect(webUrl(4317, 'abc')).toBe('http://127.0.0.1:4317/#token=abc');
+    expect((await send('/health', { token: null })).status).toBe(200);
+    expect((await send('/api/install', { token: null })).status).toBe(401);
+    expect((await send('/api/install', { token: 'wrong' })).status).toBe(401);
+    const install = await get('/install');
+    expect(install.status).toBe(200);
+    expect(install.json().workspaces[0]).toMatchObject({ id: 'default', name: 'Default' });
+    // A link from before the app moves its token after the #, which no browser sends on.
+    const old = await send(`/k/${token}/w/default`, { token: null });
+    expect(old.status).toBe(303);
+    expect(old.headers.location).toBe(`/w/default#token=${token}`);
+    expect((await send('/k/wrong/w/default', { token: null })).status).toBe(401);
   });
 
-  it('refuses another host, other methods, and forms from elsewhere', async () => {
-    expect((await get('/w/default', { host: 'evil.example:80' })).status).toBe(421);
-    expect((await get('/w/default', { method: 'PUT' })).status).toBe(405);
-    expect((await get('/w/default', { method: 'POST' })).status).toBe(403);
-    const page = await get('/w/default');
-    expect(String(page.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
-    // same-origin, never no-referrer: with no-referrer a browser sends its forms with Origin: null.
-    expect(page.headers['referrer-policy']).toBe('same-origin');
-  });
-
-  it("shows a workspace's sessions as a tree, with what was asked, escaping what it shows", async () => {
-    expect((await get('/')).headers.location).toBe(`/k/${token}/w/default`);
-    const overview = await get('/w/default');
-    expect(overview.status).toBe(200);
-    expect(overview.body).toContain('<h1>Default</h1>');
-    expect(overview.body).toContain(esc('Shortlist <b>marinas</b>'));
-    expect(overview.body).not.toContain('<b>marinas</b>');
-    // The session it started sits a level deeper.
-    expect(overview.body).toMatch(/padding-left:48px[^>]*s=child/);
-
-    const detail = await get('/w/default/sessions?s=child');
-    expect(detail.body).toContain('Your original ask');
-    expect(detail.body).toContain('Shortlist marinas for the winter');
-    expect(detail.body).toContain('Prices for each marina');
-    expect((await get('/w/nope')).status).toBe(404);
-  });
-
-  it('shows a session still running under an ended one, and keeps ended ones shown when asked', async () => {
-    const state = await StateStore.open(paths(home, env).store);
-    state
-      .workspace('default')
-      .update('root', { state: 'ended', endedAt: new Date().toISOString() });
-    state.close();
-    const open = await get('/w/default');
-    expect(open.body).toContain('s=child');
-    expect(open.body).toContain('s=root');
-    const ended = await get('/w/default/sessions?ended=1');
-    expect(ended.body).toContain('s=root&amp;ended=1');
-  });
-
-  it('shows what waits for review, the settings, the connections and about you', async () => {
-    const proposal = join(home, '.wheems', 'review', 'skills', 'p1');
-    mkdirSync(proposal, { recursive: true });
-    writeFileSync(
-      join(proposal, 'proposal.json'),
-      JSON.stringify({
-        id: 'p1',
-        name: 'boat-maintenance',
-        workspace: 'default',
-        agent: 'chief-of-staff',
-        conversation: null,
-        created: new Date().toISOString(),
-        basedOn: null,
-        similar: [],
-      }),
-    );
-    writeFileSync(join(proposal, 'SKILL.md'), '# Boat maintenance\n\nRemind me <soon>.\n');
-    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
-    writeFileSync(
-      join(home, '.wheems', 'review', 'about-you', 'n1-default.md'),
-      'Prefers the 08:15 ferry.',
-    );
-    writeFileSync(join(home, 'about-you.md'), 'Lives by the sea.');
-    writeFileSync(
-      join(home, 'secrets.json'),
-      JSON.stringify({ slack: { bot_token: 'xoxb-never-shown', app_token: 'xapp-never-shown' } }),
-    );
-
-    const overview = await get('/w/default');
-    expect(overview.body).toContain(`href="/k/${token}/w/default/review"`);
-    const review = await get('/w/default/review');
-    expect(review.status).toBe(200);
-    expect(review.body).toContain('boat-maintenance');
-    expect(review.body).toContain(esc('Remind me <soon>.'));
-
-    const settings = await get('/w/default/settings');
-    expect(settings.status).toBe(200);
-    expect(settings.body).toContain('agents/chief-of-staff.md');
-    expect(settings.body).toContain('direct messages on slack');
-
-    const connections = await get('/connections?w=default');
-    expect(connections.status).toBe(200);
-    expect(connections.body).toContain('Connected');
-    expect(connections.body).toContain('claude-subscription');
-    expect(connections.body).not.toContain('never-shown');
-
-    const about = await get('/about-you');
-    expect(about.body).toContain('Prefers the 08:15 ferry.');
-    expect(about.body).toContain('Lives by the sea.');
-    expect((await get('/w/nope/settings')).status).toBe(404);
-  });
-
-  it('acts only on forms from its own page, under the token', async () => {
+  it('refuses another host, other methods, and changes from elsewhere', async () => {
+    expect((await send('/api/install', { host: 'evil.example:80' })).status).toBe(421);
+    expect((await send('/api/install', { method: 'PUT' })).status).toBe(405);
     expect(
       (await post('/w/default/review/p1', { decision: 'decline' }, { origin: null })).status,
     ).toBe(403);
@@ -262,119 +186,193 @@ describe('the web app', () => {
       ).status,
     ).toBe(403);
     expect(
-      (await post('/w/default/review/p1', { decision: 'decline' }, { bare: true })).status,
+      (await send('/api/w/default/review/p1', { method: 'POST', body: 'x', token: null })).status,
     ).toBe(401);
+    expect((await send('/w/default', { method: 'POST', token: null })).status).toBe(405);
   });
 
-  it('approves a skill for the agents chosen, declines a change about you, and says what came of it', async () => {
-    const proposal = join(home, '.wheems', 'review', 'skills', 'p2');
-    mkdirSync(proposal, { recursive: true });
-    writeFileSync(
-      join(proposal, 'proposal.json'),
-      JSON.stringify({
-        id: 'p2',
-        name: 'ferry-times',
-        workspace: 'default',
-        agent: 'chief-of-staff',
-        conversation: null,
-        created: new Date().toISOString(),
-        basedOn: null,
-        similar: [],
-      }),
-    );
-    writeFileSync(
-      join(proposal, 'SKILL.md'),
-      '---\nname: ferry-times\ndescription: Finds ferry times\n---\n\n# Ferry times\n\nCheck the timetable.\n',
-    );
-    const review = await get('/w/default/review');
-    expect(review.body).toContain(`action="/k/${token}/w/default/review/p2"`);
-    expect(review.body).toMatch(/name="agents" value="chief-of-staff" checked/);
+  it('serves the app for any page, its assets, and nothing outside its folder', async () => {
+    writeFileSync(join(home, 'secret.txt'), 'never served');
+    const page = await send('/w/default/sessions', { token: null });
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('<div id="root">');
+    // same-origin, never no-referrer: with no-referrer a browser sends Origin: null.
+    expect(page.headers['referrer-policy']).toBe('same-origin');
+    expect(String(page.headers['content-security-policy'])).toContain("script-src 'self'");
+    const asset = await send('/assets/index-abc.js', { token: null });
+    expect(asset.headers['content-type']).toContain('text/javascript');
+    expect(asset.headers['cache-control']).toContain('immutable');
+    const escape = await send('/%2e%2e/secret.txt', { token: null });
+    expect(escape.body).not.toContain('never served');
+    expect((await send('/assets/missing.js', { token: null })).status).toBe(404);
+  });
 
-    const seen = /name="seen" value="(\w+)"/.exec(review.body)?.[1] ?? '';
-    // What the page showed is what's approved: a stale page is refused.
-    const stale = await post('/w/default/review/p2', { decision: 'approve', seen: 'old' });
-    expect((await follow(stale.headers.location)).body).toContain(
-      'changed since the page showed it',
-    );
-    const approved = await post('/w/default/review/p2', {
-      decision: 'approve',
-      seen,
-      agents: ['chief-of-staff', 'not-an-agent'],
+  it("gives a workspace's sessions as a tree, with what was asked", async () => {
+    const page = (await get('/w/default')).json();
+    expect(page.workspace).toMatchObject({ id: 'default', name: 'Default' });
+    expect(
+      page.mine.map((i: { session: { id: string }; depth: number }) => [i.session.id, i.depth]),
+    ).toEqual([
+      ['root', 1],
+      ['child', 2],
+    ]);
+    const detail = (await get('/w/default/sessions/child')).json();
+    expect(detail.item.session).toMatchObject({
+      ask: 'Shortlist marinas for the winter',
+      purpose: 'Prices for each marina',
     });
-    expect(approved.status).toBe(303);
-    const after = await follow(approved.headers.location);
-    expect(after.body).toContain(
-      'Added ferry-times version 1 to the library, pinned in default, for chief-of-staff.',
+    expect(detail.outcome).toBeNull();
+    expect((await get('/w/nope')).status).toBe(404);
+    expect((await get('/w/default/sessions/nope')).status).toBe(404);
+  });
+
+  it('shows a session still running under an ended one, and ended ones when asked', async () => {
+    const state = await StateStore.open(paths(home, env).store);
+    state
+      .workspace('default')
+      .update('root', { state: 'ended', endedAt: new Date().toISOString() });
+    state.close();
+    const open = (await get('/w/default/sessions')).json();
+    expect(open.mine.map((i: { session: { id: string } }) => i.session.id)).toEqual([
+      'root',
+      'child',
+    ]);
+    expect((await get('/w/default/sessions/root?ended=1')).status).toBe(200);
+  });
+
+  it('gives what waits for review, the settings, the connections and about you, never a credential', async () => {
+    propose('p1', 'boat-maintenance');
+    mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
+    writeFileSync(
+      join(home, '.wheems', 'review', 'about-you', 'n1-default.md'),
+      'Prefers the 08:15 ferry.',
     );
+    writeFileSync(join(home, 'about-you.md'), 'Lives by the sea.');
+    writeFileSync(
+      join(home, 'secrets.json'),
+      JSON.stringify({ slack: { bot_token: 'xoxb-never-shown', app_token: 'xapp-never-shown' } }),
+    );
+    expect((await get('/install')).json().workspaces[0].waiting).toBe(1);
+    const review = (await get('/w/default/review')).json();
+    expect(review.proposals[0]).toMatchObject({ name: 'boat-maintenance' });
+    expect(review.proposals[0].agents).toEqual([{ name: 'chief-of-staff', checked: true }]);
+    const settings = (await get('/w/default/settings')).json();
+    expect(settings.chief.file).toBe('agents/chief-of-staff.md');
+    const connections = await get('/connections');
+    expect(connections.json().connections[0]).toMatchObject({ name: 'slack', connected: true });
+    expect(connections.body).not.toContain('never-shown');
+    const about = (await get('/about-you')).json();
+    expect(about.current).toBe('Lives by the sea.');
+    expect(about.suggestions[0]).toMatchObject({
+      name: 'n1-default.md',
+      text: 'Prefers the 08:15 ferry.',
+    });
+    expect((await get('/w/nope/settings')).status).toBe(404);
+  });
+
+  it('reads a session store from an older Wheems without changing it', async () => {
+    await web.close();
+    const store = paths(home, env).store;
+    rmSync(store, { force: true });
+    const db = new DatabaseSync(store);
+    db.exec(MIGRATIONS[0] ?? '');
+    db.exec(MIGRATIONS[1] ?? '');
+    db.exec('PRAGMA user_version = 2');
+    db.exec(
+      "INSERT INTO sessions (id, workspace, kind, title, state, created_at, last_active_at) VALUES ('old', 'default', 'adhoc', 'An old session', 'idle', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z')",
+    );
+    db.close();
+    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0, appDir });
+    const detail = await get('/w/default/sessions/old');
+    expect(detail.status).toBe(200);
+    expect(detail.json().item.session).toMatchObject({ title: 'An old session', ask: null });
+    const after = new DatabaseSync(store, { readOnly: true });
+    expect(after.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
+    after.close();
+  });
+
+  it('approves a skill for the agents chosen, only as seen, and declines a change about you', async () => {
+    const seen = propose('p2', 'ferry-times');
+    const stale = (await post('/w/default/review/p2', { decision: 'approve', seen: 'old' })).json();
+    expect(stale).toMatchObject({ ok: false });
+    expect(stale.text).toContain('changed since the page showed it');
+    const approved = (
+      await post('/w/default/review/p2', {
+        decision: 'approve',
+        seen,
+        agents: ['chief-of-staff', 'not-an-agent'],
+      })
+    ).json();
+    expect(approved).toEqual({
+      ok: true,
+      text: expect.stringContaining(
+        'Added ferry-times version 1 to the library, pinned in default, for chief-of-staff.',
+      ),
+    });
     expect(readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8')).toContain(
       'ferry-times: 1',
     );
     expect(
       readFileSync(join(home, 'workspaces', 'default', 'agents', 'chief-of-staff.md'), 'utf8'),
     ).toContain('ferry-times');
-    // Shown once, then gone.
-    expect((await follow(approved.headers.location)).body).not.toContain('Added ferry-times');
     expect(
-      (await post('/w/default/review/p2', { decision: 'approve' })).headers.location,
-    ).toBeDefined();
+      (await post('/w/default/review/p2', { decision: 'approve', seen })).json(),
+    ).toMatchObject({
+      ok: false,
+      text: 'That proposal has already been dealt with.',
+    });
 
     mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
     const suggestion = join(home, '.wheems', 'review', 'about-you', 'n9-default.md');
     writeFileSync(suggestion, 'Prefers tea.');
-    const declined = await post('/about-you/n9-default.md', {
-      decision: 'decline',
-      seen: fingerprint('Prefers tea.'),
-    });
-    expect((await follow(declined.headers.location)).body).toContain(
-      'Declined the change to about-you.md.',
-    );
+    const declined = (
+      await post('/about-you/n9-default.md', {
+        decision: 'decline',
+        seen: fingerprint('Prefers tea.'),
+      })
+    ).json();
+    expect(declined).toEqual({ ok: true, text: 'Declined the change to about-you.md.' });
     expect(existsSync(suggestion)).toBe(false);
   });
 
   it('applies two approvals at once one after the other, losing neither', async () => {
-    const propose = (id: string, name: string) => {
-      const dir = join(home, '.wheems', 'review', 'skills', id);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(
-        join(dir, 'proposal.json'),
-        JSON.stringify({
-          id,
-          name,
-          workspace: 'default',
-          agent: 'chief-of-staff',
-          conversation: null,
-          created: new Date().toISOString(),
-          basedOn: null,
-          similar: [],
-        }),
-      );
-      const text = `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`;
-      writeFileSync(join(dir, 'SKILL.md'), text);
-      return fingerprint(text);
-    };
     const a = propose('pa', 'tide-tables');
     const b = propose('pb', 'mooring-fees');
     await Promise.all([
-      post('/w/default/review/pa', { decision: 'approve', seen: a, agents: 'chief-of-staff' }),
-      post('/w/default/review/pb', { decision: 'approve', seen: b, agents: 'chief-of-staff' }),
+      post('/w/default/review/pa', { decision: 'approve', seen: a, agents: ['chief-of-staff'] }),
+      post('/w/default/review/pb', { decision: 'approve', seen: b, agents: ['chief-of-staff'] }),
     ]);
     const pinned = readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8');
     expect(pinned).toContain('tide-tables: 1');
     expect(pinned).toContain('mooring-fees: 1');
   });
 
-  it('shows a long change about you in full before it can be approved', async () => {
+  it('gives a long change about you in full, with the fingerprint approving needs', async () => {
     mkdirSync(join(home, '.wheems', 'review', 'about-you'), { recursive: true });
     const long = `${'Likes sailing. '.repeat(700)}The end.`;
     writeFileSync(join(home, '.wheems', 'review', 'about-you', 'n8-default.md'), long);
-    const page = await get('/about-you');
-    expect(page.body).toContain('The end.');
-    expect(page.body).toContain(`value="${fingerprint(long)}"`);
+    const about = (await get('/about-you')).json();
+    expect(about.suggestions[0]).toMatchObject({ text: long, seen: fingerprint(long) });
   });
 
-  it('shows how a slow send turned out when the page is reloaded, even a failure', async () => {
+  it("says so when the service isn't there to send to", async () => {
+    const sent = (
+      await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' })
+    ).json();
+    expect(sent).toMatchObject({ ok: false });
+    expect(sent.text).toContain("The service isn't running");
+  });
+
+  it('gives how a slow send turned out, even a failure, once', async () => {
     await web.close();
-    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0, sendWaitMs: 20 });
+    web = await startWeb({
+      home,
+      env,
+      registry: new DriverRegistry(),
+      port: 0,
+      appDir,
+      sendWaitMs: 20,
+    });
     const socket = paths(home, env).socket;
     mkdirSync(dirname(socket), { recursive: true });
     const slowService = createServer((conn) => {
@@ -384,14 +382,16 @@ describe('the web app', () => {
     });
     await new Promise<void>((done) => slowService.listen(socket, done));
     try {
-      const sent = await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' });
-      const first = await follow(sent.headers.location);
-      expect(first.body).toContain(esc("Sending: it's starting up first."));
+      const first = (
+        await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' })
+      ).json();
+      expect(first.text).toMatch(/^Sending: it's starting up first/);
       await new Promise((done) => setTimeout(done, 400));
-      // A reload of the very same address, whose own message was shown already.
-      const reloaded = await follow(sent.headers.location);
-      expect(reloaded.body).toContain(esc("Your message wasn't sent: it could not be resumed"));
-      expect((await follow(sent.headers.location)).body).not.toContain('could not be resumed');
+      expect((await get('/w/default/sessions/child')).json().outcome).toEqual({
+        ok: false,
+        text: "Your message wasn't sent: it could not be resumed",
+      });
+      expect((await get('/w/default/sessions/child')).json().outcome).toBeNull();
     } finally {
       await new Promise((done) => slowService.close(done));
     }
@@ -429,33 +429,5 @@ describe('the web app', () => {
     );
     expect(ran).toBe(0);
     expect(existsSync(lock)).toBe(true);
-  });
-
-  it("says so when the service isn't there to send to", async () => {
-    const sent = await post('/w/default/sessions/child', { action: 'send', text: 'Any news?' });
-    expect(sent.status).toBe(303);
-    expect((await follow(sent.headers.location)).body).toContain(esc("The service isn't running"));
-  });
-
-  it('reads a session store from an older Wheems without changing it', async () => {
-    await web.close();
-    const store = paths(home, env).store;
-    rmSync(store, { force: true });
-    const db = new DatabaseSync(store);
-    db.exec(MIGRATIONS[0] ?? '');
-    db.exec(MIGRATIONS[1] ?? '');
-    db.exec('PRAGMA user_version = 2');
-    db.exec(
-      "INSERT INTO sessions (id, workspace, kind, title, state, created_at, last_active_at) VALUES ('old', 'default', 'adhoc', 'An old session', 'idle', '2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z')",
-    );
-    db.close();
-    web = await startWeb({ home, env, registry: new DriverRegistry(), port: 0 });
-    const page = await get('/w/default/sessions?s=old');
-    expect(page.status).toBe(200);
-    expect(page.body).toContain('An old session');
-    expect(page.body).not.toContain('Your original ask');
-    const after = new DatabaseSync(store, { readOnly: true });
-    expect(after.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
-    after.close();
   });
 });

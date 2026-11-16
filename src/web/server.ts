@@ -1,11 +1,11 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { join } from 'node:path';
+import { extname, join, normalize, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { paths } from '../home.js';
-import { actOnSession, decideAboutYou, decideProposal, parseForm, type Flash } from './actions.js';
-import { CSS, SCRIPT } from './assets.js';
+import { actOnSession, decideAboutYou, decideProposal, type Flash, type Form } from './actions.js';
 import {
   aboutYouData,
   connectionsData,
@@ -15,20 +15,8 @@ import {
   sessionMessages,
   settingsData,
   workspacePage,
-  type InstallSummary,
   type WebContext,
 } from './data.js';
-import {
-  aboutYouPage,
-  connectionsPage,
-  esc,
-  messagePage,
-  overviewPage,
-  reviewPage,
-  sessionsPage,
-  settingsPage,
-  setupPage,
-} from './pages.js';
 
 /** The web app's port unless `--port` or `WHEEMS_WEB_PORT` says otherwise. */
 export const DEFAULT_WEB_PORT = 4317;
@@ -39,8 +27,10 @@ export interface WebOptions {
   registry: DriverRegistry;
   port?: number;
   log?: (message: string) => void;
-  /** How long a send waits before the page moves on; tests shorten it. */
+  /** How long a send waits before answering; tests shorten it. */
   sendWaitMs?: number;
+  /** The built app's folder. Default: `app/` beside this file, as `npm run build` makes it. */
+  appDir?: string;
 }
 
 export interface RunningWeb {
@@ -77,42 +67,51 @@ export async function webToken(home: string, env: NodeJS.ProcessEnv): Promise<st
   return token;
 }
 
-/** The address that opens the web app, with the token that lets the browser in. */
+/**
+ * The address that opens the web app. The token goes after `#`, which a browser never sends to
+ * any server: the app keeps it in this origin's own storage and sends it with each request.
+ */
 export function webUrl(port: number, token?: string): string {
   const base = `http://127.0.0.1:${String(port)}/`;
-  return token === undefined ? base : `${base}k/${token}/`;
+  return token === undefined ? base : `${base}#token=${token}`;
+}
+
+interface Web {
+  port: number;
+  token: string;
+  context: WebContext;
+  log: (message: string) => void;
+  /** How a slow send or end turned out, by workspace/session, until the app asks for it. */
+  outcomes: Map<string, Flash>;
+  sendWaitMs: number | undefined;
+  appDir: string;
 }
 
 /**
- * Serves the web app on 127.0.0.1. It reads config, the session store (read-only) and doctor's
- * checks, and acts only through the code the CLI uses (actions.ts). Every request needs the token, and the Host header must be
- * this address, so neither another user's process nor another site in the browser can use it.
+ * Serves the web app on 127.0.0.1: the built React app (web/), and a JSON API under /api that
+ * reads config, the session store (read-only) and doctor's checks, and acts only through the
+ * code the CLI uses (actions.ts). The API needs the token in an Authorization header, which only
+ * the app, from this origin, holds; the Host header must be this address; and changes must come
+ * from this page's Origin. The app's files hold no data, so they're served to anyone local.
  */
 export async function startWeb(options: WebOptions): Promise<RunningWeb> {
   const token = await webToken(options.home, options.env);
   const context: WebContext = { home: options.home, env: options.env, registry: options.registry };
   // The port it ends up on, known once it listens (port 0 lets the system choose).
-  const web = {
+  const web: Web = {
     port: 0,
     token,
     context,
-    flashes: new Flashes(),
     log: options.log ?? (() => undefined),
     outcomes: new Map<string, Flash>(),
     sendWaitMs: options.sendWaitMs,
+    appDir: options.appDir ?? fileURLToPath(new URL('./app/', import.meta.url)),
   };
   const server = createServer((req, res) => {
     handle(req, res, web).catch((error: unknown) => {
-      options.log?.(`Web app: ${error instanceof Error ? error.message : String(error)}`);
+      web.log(`Web app: ${error instanceof Error ? error.message : String(error)}`);
       if (!res.headersSent)
-        send(
-          res,
-          500,
-          messagePage(
-            'Something went wrong',
-            "The page couldn't be made. The service log says why.",
-          ),
-        );
+        json(res, 500, { error: 'Something went wrong. The service log says why.' });
       else res.end();
     });
   });
@@ -142,103 +141,83 @@ function listen(server: Server, port: number): Promise<void> {
   });
 }
 
-async function handle(
-  req: IncomingMessage,
-  res: ServerResponse,
-  web: {
-    port: number;
-    token: string;
-    context: WebContext;
-    flashes: Flashes;
-    log: (message: string) => void;
-    /** How a slow send or end turned out, by workspace/session, until its page shows it. */
-    outcomes: Map<string, Flash>;
-    sendWaitMs: number | undefined;
-  },
-): Promise<void> {
+async function handle(req: IncomingMessage, res: ServerResponse, web: Web): Promise<void> {
   const allowedHosts = [`127.0.0.1:${String(web.port)}`, `localhost:${String(web.port)}`];
   if (!allowedHosts.includes(req.headers.host ?? '')) {
-    send(res, 421, 'Wrong host', 'text/plain; charset=utf-8');
+    text(res, 421, 'Wrong host');
     return;
   }
   const posting = req.method === 'POST';
   if (req.method !== 'GET' && req.method !== 'HEAD' && !posting) {
-    send(res, 405, 'Only GET and POST are served', 'text/plain; charset=utf-8');
+    text(res, 405, 'Only GET and POST are served');
     return;
-  }
-  // A form may be sent only from this page: browsers name the page a POST came from, and a
-  // form on another site can't send this one's Origin. The token in the address is a second lock.
-  if (posting) {
-    const origins = allowedHosts.map((h) => `http://${h}`);
-    if (!origins.includes(req.headers.origin ?? '')) {
-      send(res, 403, 'Forms are accepted only from the Wheems page', 'text/plain; charset=utf-8');
-      return;
-    }
   }
   const url = new URL(req.url ?? '/', `http://${allowedHosts[0] ?? ''}`);
   if (url.pathname === '/health') {
-    send(res, 200, '{"wheems":true}', 'application/json');
-    return;
-  }
-  if (url.pathname === '/app.css' || url.pathname.endsWith('/app.css')) {
-    send(res, 200, CSS, 'text/css; charset=utf-8');
-    return;
-  }
-  if (url.pathname === '/app.js' || url.pathname.endsWith('/app.js')) {
-    send(res, 200, SCRIPT, 'text/javascript; charset=utf-8');
+    json(res, 200, { wheems: true });
     return;
   }
 
-  // Pages live under /k/<token>/: the token is in every address, never in a cookie, because a
-  // browser sends cookies for 127.0.0.1 to every port on it, and other local servers could
-  // read them. `wheems web open` gives the address; an old ?token= link is moved there.
-  const offered = url.searchParams.get('token');
-  if (offered !== null && same(offered, web.token)) {
-    url.searchParams.delete('token');
-    redirect(res, `/k/${web.token}${url.pathname}${url.search}`);
+  if (url.pathname.startsWith('/api/')) {
+    // The token comes only in a header the app sets: a link or a form on another site can't.
+    const auth = req.headers.authorization ?? '';
+    if (!same(auth.replace(/^Bearer /, ''), web.token) || !auth.startsWith('Bearer ')) {
+      json(res, 401, { error: 'Open the web app with wheems web open.' });
+      return;
+    }
+    // Changes must come from this page: browsers name the page a request came from.
+    if (posting && !allowedHosts.map((h) => `http://${h}`).includes(req.headers.origin ?? '')) {
+      json(res, 403, { error: 'Changes are accepted only from the Wheems page.' });
+      return;
+    }
+    await api(req, res, url, web, posting);
     return;
   }
-  const all = url.pathname.split('/').filter((p) => p !== '');
-  if (all[0] !== 'k' || !same(all[1] ?? '', web.token)) {
-    send(
-      res,
-      401,
-      messagePage(
-        'Open it from Wheems',
-        'For your privacy, the web app only opens from this computer, with the link <span class="mono">wheems web open</span> gives you.',
-      ),
-    );
+  if (posting) {
+    text(res, 405, 'Changes go through /api');
     return;
   }
-  const base = `/k/${web.token}`;
-  const page = (status: number, html: string, eventual?: Flash) => {
-    // Every link and form on the page stays under the token, and an action's outcome shows once.
-    const flash = web.flashes.take(url.searchParams.get('flash')) ?? eventual;
-    const shown = flash
-      ? html.replace(
-          '<div class="wrap">',
-          `<div class="wrap"><p class="card pad flash ${flash.ok ? 'ok' : 'no'}" role="status">${esc(flash.text)}</p>`,
-        )
-      : html;
-    send(
-      res,
-      status,
-      shown.replaceAll('href="/', `href="${base}/`).replaceAll('action="/', `action="${base}/`),
-    );
+
+  // Links from before the app kept the token in the path: move it after the #.
+  const old = /^\/k\/([^/]+)(\/.*)?$/.exec(url.pathname);
+  if (old) {
+    if (!same(old[1] ?? '', web.token)) {
+      text(res, 401, 'That link has expired. Open the web app with wheems web open.');
+      return;
+    }
+    redirect(res, `${old[2] ?? '/'}${url.search}#token=${web.token}`);
+    return;
+  }
+  await serveApp(res, url.pathname, web.appDir);
+}
+
+/** The JSON API. Every answer is the view a page shows, from data.ts, or an action's outcome. */
+async function api(
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+  web: Web,
+  posting: boolean,
+): Promise<void> {
+  const parts = url.pathname
+    .slice('/api/'.length)
+    .split('/')
+    .filter((p) => p !== '')
+    .map((p) => decodeURIComponent(p));
+  const [area, id, sub, item] = parts;
+  const found = (value: unknown) => {
+    if (value === null || value === undefined) json(res, 404, { error: 'Not found' });
+    else json(res, 200, value);
   };
 
   if (posting) {
-    const form = parseForm(await readBody(req));
-    const done = (flash: Flash, to: string) => {
-      const sep = to.includes('?') ? '&' : '?';
-      redirect(res, `${base}${to}${sep}flash=${web.flashes.put(flash)}`);
-    };
-    const [area, id, sub, item] = all.slice(2).map((p) => decodeURIComponent(p));
+    const form = await readForm(req);
+    if (form === null) {
+      json(res, 400, { error: 'Send JSON.' });
+      return;
+    }
     if (area === 'w' && id !== undefined && sub === 'review' && item !== undefined) {
-      done(
-        await decideProposal(web.context, id, item, form),
-        `/w/${encodeURIComponent(id)}/review`,
-      );
+      json(res, 200, await decideProposal(web.context, id, item, form));
       return;
     }
     if (area === 'w' && id !== undefined && sub === 'sessions' && item !== undefined) {
@@ -255,130 +234,148 @@ async function handle(
         },
         web.sendWaitMs,
       );
-      done(flash, `/w/${encodeURIComponent(id)}/sessions?s=${encodeURIComponent(item)}`);
+      json(res, 200, flash);
       return;
     }
     if (area === 'about-you' && id !== undefined && sub === undefined) {
-      const back = url.searchParams.get('w');
-      done(
-        await decideAboutYou(web.context, id, form),
-        `/about-you${back !== null ? `?w=${encodeURIComponent(back)}` : ''}`,
-      );
+      json(res, 200, await decideAboutYou(web.context, id, form));
       return;
     }
-    send(res, 404, 'No such action', 'text/plain; charset=utf-8');
+    json(res, 404, { error: 'No such action' });
     return;
   }
 
-  const parts = all.slice(2);
-  if (parts.length === 0) {
+  if (area === 'install' && id === undefined) {
+    found((await installSummary(web.context)).summary);
+    return;
+  }
+  if (area === 'setup' && id === undefined) {
     const { summary } = await installSummary(web.context);
-    const first = summary.workspaces[0];
-    redirect(res, first ? `${base}/w/${encodeURIComponent(first.id)}` : `${base}/setup`);
+    json(res, 200, { install: summary, report: await doctorReport(web.context) });
     return;
   }
-  // Install pages keep the workspace the person came from (?w=) in the switcher.
-  const chosen = (summary: InstallSummary) =>
-    summary.workspaces.find((w) => w.id === url.searchParams.get('w')) ??
-    summary.workspaces[0] ??
-    null;
-  if (parts[0] === 'setup' && parts.length === 1) {
-    const { summary } = await installSummary(web.context);
-    const report = await doctorReport(web.context);
-    page(200, setupPage(summary, chosen(summary), report));
+  if (area === 'connections' && id === undefined) {
+    found(await connectionsData(web.context));
     return;
   }
-  if (parts[0] === 'connections' && parts.length === 1) {
-    const view = await connectionsData(web.context);
-    page(200, connectionsPage(view, chosen(view.install)));
+  if (area === 'about-you' && id === undefined) {
+    found(await aboutYouData(web.context));
     return;
   }
-  if (parts[0] === 'about-you' && parts.length === 1) {
-    const view = await aboutYouData(web.context);
-    page(200, aboutYouPage(view, chosen(view.install)));
-    return;
-  }
-  if (parts[0] === 'w' && parts[1] !== undefined && parts.length === 3) {
-    const id = decodeURIComponent(parts[1]);
-    if (parts[2] === 'review') {
-      const view = await reviewData(web.context, id);
-      if (view) {
-        page(200, reviewPage(view));
+  if (area === 'w' && id !== undefined) {
+    if (sub === undefined) {
+      found(await workspacePage(web.context, id));
+      return;
+    }
+    if (sub === 'review' && item === undefined) {
+      found(await reviewData(web.context, id));
+      return;
+    }
+    if (sub === 'settings' && item === undefined) {
+      found(await settingsData(web.context, id));
+      return;
+    }
+    if (sub === 'sessions') {
+      const page = await workspacePage(web.context, id, {
+        includeEnded: url.searchParams.get('ended') === '1',
+      });
+      if (!page) {
+        found(null);
         return;
       }
-    }
-    if (parts[2] === 'settings') {
-      const view = await settingsData(web.context, id);
-      if (view) {
-        page(200, settingsPage(view));
+      if (item === undefined) {
+        json(res, 200, page);
         return;
       }
-    }
-  }
-  if (parts[0] === 'w' && parts[1] !== undefined && parts.length <= 3) {
-    const id = decodeURIComponent(parts[1]);
-    const view = parts[2] ?? 'overview';
-    const includeEnded = url.searchParams.get('ended') === '1';
-    const data = await workspacePage(web.context, id, {
-      includeEnded: view === 'sessions' && includeEnded,
-    });
-    if (!data) {
-      page(
-        404,
-        messagePage(
-          'No such workspace',
-          `There's no workspace <span class="mono">${esc(id)}</span> in this install.`,
-        ),
-      );
-      return;
-    }
-    if (view === 'overview') {
-      page(200, overviewPage(data));
-      return;
-    }
-    if (view === 'sessions') {
-      const wanted = url.searchParams.get('s');
-      const sessions = [...data.chiefTree, ...data.mine].map((i) => i.session);
-      const selected =
-        (wanted !== null ? sessions.find((s) => s.id === wanted) : sessions[0]) ?? null;
-      const messages = selected ? await sessionMessages(web.context, id, selected) : [];
-      // How a slow send or end turned out, once it has.
-      const key = selected ? `${id}/${selected.id}` : '';
-      // Kept for later only when this visit has another message still to show; a reload of a
-      // page whose message was shown already shows it.
-      const flashId = url.searchParams.get('flash');
-      const eventual =
-        flashId !== null && web.flashes.has(flashId) ? undefined : web.outcomes.get(key);
-      if (eventual) web.outcomes.delete(key);
-      page(200, sessionsPage(data, selected, messages, includeEnded), eventual);
+      const tree = [...page.chiefTree, ...page.mine];
+      const chosen = tree.find((i) => i.session.id === item);
+      if (!chosen) {
+        found(null);
+        return;
+      }
+      // How a slow send or end turned out, given once.
+      const key = `${id}/${item}`;
+      const outcome = web.outcomes.get(key) ?? null;
+      web.outcomes.delete(key);
+      json(res, 200, {
+        item: chosen,
+        messages: await sessionMessages(web.context, id, chosen.session),
+        outcome,
+      });
       return;
     }
   }
-  page(404, messagePage('Not found', 'There\'s no page here. <a href="/">Go to the start</a>.'));
+  json(res, 404, { error: 'Not found' });
 }
 
-function send(
-  res: ServerResponse,
-  status: number,
-  body: string,
-  type = 'text/html; charset=utf-8',
-): void {
+const TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json',
+};
+
+/** A file of the built app, or its index.html for any page address (the app routes itself). */
+async function serveApp(res: ServerResponse, pathname: string, appDir: string): Promise<void> {
+  const root = appDir.endsWith(sep) ? appDir : `${appDir}${sep}`;
+  const wanted = normalize(join(root, decodeURIComponent(pathname)));
+  const isFile = extname(pathname) !== '' && wanted.startsWith(root);
+  const file = isFile ? wanted : join(root, 'index.html');
+  const body = await readFile(file).catch(() => null);
+  if (body === null) {
+    if (isFile) text(res, 404, 'Not found');
+    else
+      text(
+        res,
+        503,
+        "The web app isn't built. In the Wheems repository, run npm run build; an installed Wheems has it.",
+      );
+    return;
+  }
+  const hashed = pathname.startsWith('/assets/');
+  res.writeHead(200, {
+    ...SECURITY,
+    'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
+    // Built assets are named by their content, so they never change; the page itself might.
+    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-store',
+  });
+  res.end(body);
+}
+
+const SECURITY = {
+  'X-Content-Type-Options': 'nosniff',
+  // same-origin: nothing about the app reaches another site, and its own requests carry their
+  // Origin (no-referrer makes browsers send Origin: null).
+  'Referrer-Policy': 'same-origin',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy':
+    "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'",
+};
+
+function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, {
-    'Content-Type': type,
+    ...SECURITY,
+    'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff',
-    // same-origin: the token in the address never reaches another site, and the page's own
-    // forms still carry their Origin (no-referrer makes browsers send Origin: null).
-    'Referrer-Policy': 'same-origin',
-    'X-Frame-Options': 'DENY',
-    'Content-Security-Policy':
-      "default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+  });
+  res.end(JSON.stringify(body));
+}
+
+function text(res: ServerResponse, status: number, body: string): void {
+  res.writeHead(status, {
+    ...SECURITY,
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-store',
   });
   res.end(body);
 }
 
 function redirect(res: ServerResponse, location: string): void {
-  res.writeHead(303, { Location: location, 'Cache-Control': 'no-store' });
+  res.writeHead(303, { ...SECURITY, Location: location, 'Cache-Control': 'no-store' });
   res.end();
 }
 
@@ -388,17 +385,19 @@ function same(a: string, b: string): boolean {
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** The most a form may send: a skill's text, edited, fits well within it. */
-const MAX_FORM = 256 * 1024;
+/** The most a request may send: a skill's text, edited, fits well within it. */
+const MAX_BODY = 256 * 1024;
 
-function readBody(req: IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
+/** A JSON body as a form: each field's values, so the actions read it the same way. */
+async function readForm(req: IncomingMessage): Promise<Form | null> {
+  if (!(req.headers['content-type'] ?? '').startsWith('application/json')) return null;
+  const body = await new Promise<string>((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_FORM) {
-        reject(new Error('The form is too large'));
+      if (size > MAX_BODY) {
+        reject(new Error('The request is too large'));
         req.destroy();
         return;
       }
@@ -409,30 +408,19 @@ function readBody(req: IncomingMessage): Promise<string> {
     });
     req.on('error', reject);
   });
-}
-
-/** Outcomes of actions, each shown once by the page an action returns to, then forgotten. */
-class Flashes {
-  private readonly kept = new Map<string, { flash: Flash; until: number }>();
-
-  put(flash: Flash): string {
-    const now = Date.now();
-    for (const [id, entry] of this.kept) if (entry.until < now) this.kept.delete(id);
-    const id = randomBytes(9).toString('base64url');
-    this.kept.set(id, { flash, until: now + 5 * 60_000 });
-    return id;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
   }
-
-  /** Whether a message is still waiting to be shown. */
-  has(id: string): boolean {
-    const entry = this.kept.get(id);
-    return entry !== undefined && entry.until >= Date.now();
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+  const form: Form = new Map();
+  for (const [key, value] of Object.entries(parsed)) {
+    const values = (Array.isArray(value) ? value : [value]).filter(
+      (v): v is string => typeof v === 'string',
+    );
+    form.set(key, values);
   }
-
-  take(id: string | null): Flash | undefined {
-    if (id === null) return undefined;
-    const entry = this.kept.get(id);
-    this.kept.delete(id);
-    return entry && entry.until >= Date.now() ? entry.flash : undefined;
-  }
+  return form;
 }
