@@ -3,7 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.7
+
+Released 16 November 2026. The web app edits a workspace's settings, asks before ending or
+declining anything, and says plainly when Wheems or Slack can't be reached. No change to the
+session store. Still an early preview.
 
 **Added**
 
@@ -23,7 +27,6 @@ change anything, including commands and config formats, without a migration path
   you've just ended stays in view with how it went, and no longer says to attach to it in Herdr.
   When the service has stopped, the page and its sidebar say Wheems can't be reached, rather than
   "Failed to fetch".
-
 - When this Mac can't reach Slack, `wheems doctor` and `wheems setup` say so in a few seconds,
   as "Couldn't reach Slack", rather than blaming the tokens, retrying for up to half an hour and
   printing the Slack library's warnings. When Slack is limiting requests, they say that rather
