@@ -67,3 +67,11 @@ export function runInteractive(
     });
   });
 }
+
+/**
+ * Starts a command in a process group of its own and doesn't wait for it, so it outlives this
+ * process: the service uses it to have launchd restart the service itself.
+ */
+export function startDetached(command: string, args: string[]): void {
+  spawn(command, args, { detached: true, stdio: 'ignore' }).unref();
+}

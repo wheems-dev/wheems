@@ -252,6 +252,25 @@ export async function actOnSession(
 }
 
 /** 'slow' after a while, so a page needn't wait for the service longer than that. */
+/**
+ * Restarts the service, so it uses changed settings. It answers first, then restarts, so the
+ * page sees a moment when nothing answers, and then the new service.
+ */
+export async function restartService(context: WebContext): Promise<Flash> {
+  const where = paths(context.home, context.env);
+  try {
+    const answer = await request(where.socket, { op: 'restart' }, 5000);
+    return answer.ok
+      ? {
+          ok: true,
+          text: 'Restarting with the new settings. The page comes back in a few seconds.',
+        }
+      : { ok: false, text: `Not restarted: ${answer.error}` };
+  } catch (error) {
+    return { ok: false, text: notReached(error as Error) };
+  }
+}
+
 function after(ms: number): Promise<'slow'> {
   return new Promise((done) => {
     setTimeout(() => {

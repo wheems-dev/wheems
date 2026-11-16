@@ -5,7 +5,7 @@
 import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { homedir, userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
-import { runCommand, type RunResult } from '../util/process.js';
+import { runCommand, startDetached, type RunResult } from '../util/process.js';
 
 export const LABEL = 'dev.wheems.service';
 
@@ -235,4 +235,20 @@ function xml(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+/**
+ * Restarts this service's own launchd job, from inside it, once it has answered: `kickstart -k`
+ * stops it and starts it again with the latest config. The command runs in a process group of
+ * its own, so stopping the service doesn't stop it. Returns why it can't, or null.
+ */
+export async function restartSoon(pid = process.pid, delayMs = 500): Promise<string | null> {
+  const status = await serviceStatus();
+  if (status.pid !== pid) {
+    return "This Wheems isn't the one launchd runs (wheems start), so it can't restart itself. Restart it where it runs.";
+  }
+  setTimeout(() => {
+    startDetached('launchctl', ['kickstart', '-k', `${domain()}/${LABEL}`]);
+  }, delayMs);
+  return null;
 }

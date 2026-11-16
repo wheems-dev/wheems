@@ -450,6 +450,8 @@ export interface SettingsView {
   skillBudget: number;
   skills: { name: string; version: number }[];
   agents: { name: string; engine: string; model: string }[];
+  /** A fingerprint of workspace.yaml, so a save applies only to the file the page showed. */
+  seen: string;
 }
 
 /** A workspace's settings, as `workspace.yaml`, its agents and `skills.yaml` say. */
@@ -461,7 +463,9 @@ export async function settingsData(context: WebContext, id: string): Promise<Set
   if (!workspace || !config || !listed) return null;
   const chief = chiefOf(workspace);
   const chiefAgent = workspace.agents.find((a) => a.definition.name === config.chief_of_staff);
+  const files = await settingsFiles(workspace);
   return {
+    seen: files.seen,
     install: summary,
     workspace: listed,
     folder: workspace.dir,
@@ -602,6 +606,20 @@ export async function aboutYouData(context: WebContext): Promise<AboutYouView> {
 }
 
 /** A short fingerprint of text, so an action applies only to the version the person saw. */
+/** The file a workspace's settings come from, and a fingerprint of it. */
+export interface SettingsFiles {
+  workspaceFile: string;
+  workspaceText: string;
+  /** Changes apply only to the file as the page showed it. */
+  seen: string;
+}
+
+export async function settingsFiles(workspace: LoadedWorkspace): Promise<SettingsFiles> {
+  const workspaceFile = `${workspace.dir}/workspace.yaml`;
+  const workspaceText = await readFile(workspaceFile, 'utf8');
+  return { workspaceFile, workspaceText, seen: fingerprint(workspaceText) };
+}
+
 export function fingerprint(text: string): string {
   return createHash('sha256').update(text).digest('hex').slice(0, 32);
 }
