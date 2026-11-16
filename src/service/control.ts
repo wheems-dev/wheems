@@ -115,6 +115,8 @@ export interface ServiceReport {
   connections: string[];
   /** Where each workspace's chat comes from, and why it doesn't, if it doesn't. */
   workspaces: { id: string; chat: string | null; problem?: string }[];
+  /** The port the web app is served on, or null when it isn't (its port was taken). */
+  web?: { port: number } | null;
 }
 
 export type ControlHandler = (request: ControlRequest) => Promise<ControlResponse>;

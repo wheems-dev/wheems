@@ -51,6 +51,31 @@ describe('wheems status', () => {
     );
   });
 
+  it('shows the web app as a link that opens it, or why it is not served', () => {
+    const report = {
+      version: '0.1.2',
+      pid: 4242,
+      startedAt: '2026-11-14T09:46:00Z',
+      home: '/Users/me/wheems',
+      connections: [],
+      workspaces: [],
+      web: { port: 4317 },
+    };
+    const url = 'http://127.0.0.1:4317/k/abc/';
+    const plain = formatStatus(facts({ answering: true, report, webUrl: url }), false).text;
+    expect(plain).toContain(`✓ Web app: ${url}\n`);
+    // In a terminal it's a link (OSC 8) whose text is the address itself.
+    const linked = formatStatus(facts({ answering: true, report, webUrl: url }), true).text;
+    expect(linked).toContain(`\x1b]8;;${url}\x1b\\${url}\x1b]8;;\x1b\\`);
+    const taken = formatStatus(facts({ answering: true, report: { ...report, web: null } }), false);
+    expect(taken.text).toContain('! Web app: not served, because its port was taken.');
+    // A service from before the web app says nothing about it.
+    const { web: _web, ...older } = report;
+    expect(formatStatus(facts({ answering: true, report: older }), false).text).not.toContain(
+      'Web app',
+    );
+  });
+
   it('says how to start it, or why it is down', () => {
     const first = (f: Partial<StatusFacts>) => formatStatus(facts(f), false).text.split('\n')[0];
     expect(first({})).toBe(
