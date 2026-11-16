@@ -413,6 +413,17 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
           }
           case 'conversations-restart': {
             const workspace = personsWorkspace(request.caller);
+            // With a restart to follow, every conversation that will start afresh is held, those
+            // set up before included, so the old service starts none of them on the old settings.
+            const held: string[] = [];
+            if (request.restart === true) {
+              held.push(...(await manager.startingAfresh(workspace)));
+              for (const { session } of request.choices) {
+                const key = state.threadKeyOf(session);
+                if (key !== undefined) held.push(key);
+              }
+              manager.hold(held);
+            }
             const restarted = await Promise.all(
               request.choices.map(({ session, choice }) => {
                 const key = state.threadKeyOf(session);
@@ -427,7 +438,19 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
                 return manager.restart(key, choice);
               }),
             );
-            return { ok: true, restarted };
+            if (request.restart !== true) return { ok: true, restarted };
+            if (restarted.some((outcome) => !outcome.done)) {
+              manager.release(held);
+              return { ok: true, restarted, restarting: false };
+            }
+            const why = await (options.restart ?? restartSoon)();
+            if (why !== null) {
+              manager.release(held);
+              return { ok: true, restarted, restarting: false, message: why };
+            }
+            log('Restarting, as asked from the web app, with the conversations set up');
+            // The held conversations stay held: this service stops in a moment.
+            return { ok: true, restarted, restarting: true };
           }
           case 'note': {
             const from = speaker(request);

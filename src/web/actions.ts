@@ -256,6 +256,8 @@ export async function actOnSession(
 /** How restarting a workspace's chat threads went: in all, and for each. */
 export interface ConversationsFlash extends Flash {
   outcomes: RestartOutcome[];
+  /** With `then: restart`: the service is restarting, every conversation set up. */
+  restarting?: boolean;
 }
 
 const CHOICES = new Set(['carry-on', 'hand-over', 'fresh']);
@@ -271,6 +273,7 @@ export async function restartConversations(
   form: Form,
 ): Promise<ConversationsFlash> {
   const choices: { session: string; choice: 'carry-on' | 'hand-over' | 'fresh' }[] = [];
+  const thenRestart = form.get('then')?.[0] === 'restart';
   for (const [name, values] of form) {
     if (!name.startsWith('s:')) continue;
     const choice = values[0] ?? '';
@@ -279,22 +282,49 @@ export async function restartConversations(
     }
     choices.push({ session: name.slice(2), choice: choice as 'carry-on' | 'hand-over' | 'fresh' });
   }
-  if (choices.length === 0) return { ok: true, text: 'No conversations to restart.', outcomes: [] };
+  if (choices.length === 0 && !thenRestart) {
+    return { ok: true, text: 'No conversations to restart.', outcomes: [] };
+  }
   const where = paths(context.home, context.env);
   try {
     const answer = await request(
       where.socket,
-      { op: 'conversations-restart', caller: { workspace }, choices },
+      {
+        op: 'conversations-restart',
+        caller: { workspace },
+        choices,
+        ...(thenRestart && { restart: true }),
+      },
       15 * 60_000,
     );
     if (!answer.ok) return { ok: false, text: `Not restarted: ${answer.error}`, outcomes: [] };
     const outcomes = answer.restarted ?? [];
     const left = outcomes.filter((o) => !o.done).length;
+    const set = `${String(outcomes.length - left)} ${outcomes.length - left === 1 ? 'conversation' : 'conversations'} set up`;
+    if (thenRestart) {
+      if (answer.restarting === true) {
+        return {
+          ok: true,
+          text: `${outcomes.length > 0 ? `${set}. ` : ''}Restarting with the new settings. The page comes back in a few seconds.`,
+          outcomes,
+          restarting: true,
+        };
+      }
+      return {
+        ok: false,
+        text:
+          left > 0
+            ? `${set}, ${String(left)} left as ${left === 1 ? 'it was' : 'they were'}, so the service wasn't restarted: one left would run on with its old session. Try again once ${left === 1 ? 'it has' : "they've"} answered.`
+            : `${set}, but the service wasn't restarted: ${answer.message ?? 'it said no'}`,
+        outcomes,
+        restarting: false,
+      };
+    }
     return {
       ok: left === 0,
       text:
         left === 0
-          ? `Done: ${String(outcomes.length)} ${outcomes.length === 1 ? 'conversation' : 'conversations'} set up.`
+          ? `Done: ${set}.`
           : `${String(outcomes.length - left)} done, ${String(left)} left as ${left === 1 ? 'it was' : 'they were'}.`,
       outcomes,
     };

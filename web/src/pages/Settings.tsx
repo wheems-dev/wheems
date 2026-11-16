@@ -165,15 +165,15 @@ function SettingsForm({
           key={chiefChange.round}
           id={id}
           engineChanged={chiefChange.engine}
-          restarting={restart.isPending}
           restarted={chiefChange.restarted}
           onResult={setFlash}
-          onAllSet={() => {
-            restart.mutate({});
+          onRestarted={() => {
+            setSaved(false);
+            setChiefChange((was) => (was === null ? null : { ...was, restarted: true }));
           }}
         />
       )}
-      {saved && (chiefChange === null || !running) && (
+      {saved && (chiefChange === null || chiefChange.restarted || !running) && (
         <div className="card pad row between">
           <span>
             {running
@@ -497,35 +497,32 @@ const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 function OpenConversations({
   id,
   engineChanged,
-  restarting,
   restarted,
   onResult,
-  onAllSet,
+  onRestarted,
 }: {
   id: string;
   engineChanged: boolean;
-  restarting: boolean;
   /** The service has restarted with the new settings: only how each went is left to show. */
   restarted: boolean;
   onResult: (result: Flash) => void;
-  /** Every conversation is set up: the service may restart. */
-  onAllSet: () => void;
+  onRestarted: () => void;
 }) {
   const view = useView<{ conversations: OpenConversation[]; problem: string | null }>(
     `/w/${encodeURIComponent(id)}/conversations`,
   );
   const [picked, setPicked] = useState<Record<string, Choice>>({});
-  // How each conversation went, by key, kept across tries: a retry only updates the ones it tried.
+  // How each conversation went the last time, by key: for showing only. What's left to set up
+  // always comes from the service, since a thread can change between tries.
   const [outcomes, setOutcomes] = useState<Record<string, RestartOutcome>>({});
-  const tried = useRef<string[]>([]);
+  // The service sets every conversation up and restarts itself in one request, only once all are
+  // set up, holding meanwhile those that will start afresh, so none starts on the old settings.
   const apply = useAction(`/w/${encodeURIComponent(id)}/conversations`, (result) => {
-    const came = 'outcomes' in result ? (result as ConversationsFlash).outcomes : [];
-    const next = { ...outcomes, ...Object.fromEntries(came.map((o) => [o.key, o])) };
-    setOutcomes(next);
+    const flash = result as ConversationsFlash;
+    const came = 'outcomes' in result ? flash.outcomes : [];
+    setOutcomes((now) => ({ ...now, ...Object.fromEntries(came.map((o) => [o.key, o])) }));
     onResult(result);
-    // Only when every conversation is set up: one left as it was would otherwise run on, after
-    // the restart, with its old session and the new settings.
-    if (tried.current.every((key) => next[key]?.done === true)) onAllSet();
+    if (flash.restarting === true) onRestarted();
   });
   if (view.isPending) return <Loading />;
   const conversations = view.data?.conversations ?? [];
@@ -543,10 +540,11 @@ function OpenConversations({
     const chosen = picked[c.session];
     return chosen !== undefined && choices.includes(chosen) ? chosen : fallback(c);
   };
-  const isSet = (c: OpenConversation) => outcomes[c.key]?.done === true;
+  // Set up already, as the service has it now: waiting to start afresh after the restart.
+  const isSet = (c: OpenConversation) => c.startsAfresh;
   const left = conversations.filter((c) => !isSet(c));
   const triedOnce = Object.keys(outcomes).length > 0;
-  const busy = apply.isPending || restarting;
+  const busy = apply.isPending;
   return (
     <section className="card pad stack" aria-labelledby="open-conversations">
       <h2 id="open-conversations">Conversations already open</h2>
@@ -605,29 +603,22 @@ function OpenConversations({
             type="button"
             disabled={busy || view.data?.problem !== null}
             onClick={() => {
-              // Set up already: only the restart is left, so nothing is handed over twice.
-              if (left.length === 0) {
-                onAllSet();
-                return;
-              }
-              tried.current = left.map((c) => c.key);
-              apply.mutate(Object.fromEntries(left.map((c) => [`s:${c.session}`, choiceOf(c)])));
+              apply.mutate({
+                then: 'restart',
+                ...Object.fromEntries(left.map((c) => [`s:${c.session}`, choiceOf(c)])),
+              });
             }}
           >
             {apply.isPending
-              ? 'Asking for handovers…'
-              : restarting
-                ? 'Restarting…'
-                : left.length === 0
-                  ? 'Restart now'
-                  : triedOnce
-                    ? 'Try again for the rest, and restart'
-                    : 'Apply and restart'}
+              ? 'Setting up and restarting…'
+              : triedOnce
+                ? 'Try again, and restart'
+                : 'Apply and restart'}
           </button>
           <span className="muted small">
-            {triedOnce && left.length > 0
+            {triedOnce
               ? "The service restarts only once every conversation is set up: one left as it was would run on with its old session. Try again once they've answered."
-              : 'A handover can take a few minutes: each chief writes its own.'}
+              : 'A handover can take a few minutes: each chief writes its own. The service restarts once all are set up.'}
           </span>
         </div>
       )}

@@ -94,6 +94,12 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('conversations-restart'),
     caller: callerSchema,
+    /**
+     * Then restart the service, once every conversation is set up: for a change to the chief,
+     * whose new settings only a restart brings in. Until then, the old service starts no session
+     * for a conversation set to start afresh.
+     */
+    restart: z.boolean().optional(),
     choices: z
       .array(
         z.object({
@@ -136,6 +142,8 @@ export type ControlResponse =
       conversations?: OpenConversation[];
       /** For `conversations-restart`: how each went. */
       restarted?: RestartOutcome[];
+      /** For `conversations-restart` with `restart`: whether the service is restarting. */
+      restarting?: boolean;
       /** The answer to a `session send --wait`. */
       answer?: string;
       sent?: MessageRecord;

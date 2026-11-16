@@ -413,6 +413,82 @@ describe('the service', () => {
     expect(wrong.err).toContain("There's no chat thread with session nope in personal.");
   });
 
+  it('sets threads up and restarts in one request, holding them until it does', async () => {
+    const first = await channel.receive({
+      channel: 'D1',
+      text: 'plan the trip',
+      userId: 'UME',
+      direct: true,
+    });
+    await waitFor(() => channel.sent.length === 1);
+    const socket = paths(home, env).socket;
+    const listed = await request(socket, {
+      op: 'conversations',
+      caller: { workspace: 'personal' },
+    });
+    const session = listed.ok ? (listed.conversations?.[0]?.session ?? '') : '';
+
+    // This test's service isn't launchd's, so the restart is refused: the thread is let go, and
+    // a message starts its new session here.
+    const refused = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [{ session, choice: 'fresh' }],
+      restart: true,
+    });
+    expect(refused).toMatchObject({ ok: true, restarting: false });
+    expect(refused.ok ? refused.message : '').toContain("can't restart itself");
+    await channel.receive({
+      channel: 'D1',
+      text: 'go on',
+      userId: 'UME',
+      direct: true,
+      threadId: first,
+    });
+    await waitFor(() => channel.sent.some((m) => m.text.includes('starts afresh')));
+    // Its answer, before the service stops.
+    await waitFor(() =>
+      channel.sent.some((m) => m.text.includes('echo:') && m.text.includes('go on')),
+    );
+
+    // A service that can restart holds every thread set to start afresh until it does.
+    await service?.stop();
+    let restarts = 0;
+    service = await runService({
+      home,
+      registry,
+      node: '/usr/local/bin/node',
+      cli: '/opt/wheems/dist/cli/main.js',
+      version: '9.9.9',
+      env,
+      log: () => undefined,
+      pollMs: 5,
+      startupSeconds: 2,
+      restart: () => {
+        restarts += 1;
+        return Promise.resolve(null);
+      },
+    });
+    const restarting = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [{ session, choice: 'fresh' }],
+      restart: true,
+    });
+    expect(restarting).toMatchObject({ ok: true, restarting: true });
+    expect(restarts).toBe(1);
+    const before = channel.sent.length;
+    await channel.receive({
+      channel: 'D1',
+      text: 'one more',
+      userId: 'UME',
+      direct: true,
+      threadId: first,
+    });
+    await waitFor(() => channel.sent.length > before);
+    expect(channel.sent.at(-1)?.text).toContain('restarting with new settings. Send that again');
+  });
+
   it('takes a skill proposal from an agent, for the person to review', async () => {
     const first = await channel.receive({
       channel: 'D1',

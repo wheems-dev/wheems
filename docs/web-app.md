@@ -125,8 +125,12 @@ lists the conversations already open, each with a choice ([session-handover.md](
 stays the same; **Hand over** starts a new session from a handover its chief writes, the default
 for a thread active in the last week when the engine changes; **Start fresh** starts one with only
 the ask, the default for older threads then. **Apply and restart** sets each up while the old
-service still runs, so the old chiefs can write their handovers, says how each went, then
-restarts the service. Still commands: the chat channel, accounts, archive and remove.
+service still runs, so the old chiefs can write their handovers, and says how each went. The
+service restarts itself in the same step, and only once every conversation is set up: one left
+as it was (answering a message, say) would run on with its old session, so then nothing restarts
+and **Try again** sets up the rest. Meanwhile a message to a thread set to start afresh is
+answered with a line asking to send it again in a moment, so no new session starts on the old
+settings. Still commands: the chat channel, accounts, archive and remove.
 
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because

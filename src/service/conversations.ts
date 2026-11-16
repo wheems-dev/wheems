@@ -147,6 +147,11 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
+  /**
+   * Conversations set up to start afresh after a restart that's coming: their next session must
+   * start on the new settings, so the old service mustn't start it. A message for one waits.
+   */
+  private readonly held = new Set<string>();
   /** Conversations whose agent was asked for a handover, and the handover once it came. */
   private readonly handingOver = new Map<string, string | null>();
   /** The latest `wheems chat reply` in each conversation. */
@@ -325,6 +330,25 @@ export class ConversationManager {
       });
     }
     return open.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
+  }
+
+  /**
+   * Holds conversations about to start afresh until the coming restart: the old service starts no
+   * session for them meanwhile. `release` lets them go, when the restart doesn't happen.
+   */
+  hold(keys: string[]): void {
+    for (const key of keys) this.held.add(key);
+  }
+
+  release(keys: string[]): void {
+    for (const key of keys) this.held.delete(key);
+  }
+
+  /** The workspace's conversations already set to start afresh at their next message. */
+  async startingAfresh(workspace: string): Promise<string[]> {
+    return (await this.options.store.all())
+      .filter(([, c]) => c.workspace === workspace && c.handover !== undefined)
+      .map(([key]) => key);
   }
 
   /**
@@ -721,6 +745,23 @@ export class ConversationManager {
     if (this.retired.has(binding.workspace.id)) {
       this.options.log(`Conversation ${key}: its workspace is no longer served`);
       return;
+    }
+    if (this.held.has(key)) {
+      if (seen === null) {
+        // From Wheems, such as a session's answer: it waits, kept in the store, and is delivered
+        // after the restart, or here if the restart doesn't happen.
+        while (this.held.has(key) && !this.stopped) await sleep(500);
+        if (this.stopped) return;
+      } else {
+        this.options.log(`Conversation ${key}: a message came while it waits for the restart`);
+        await this.notice(
+          key,
+          binding,
+          replyThread(event),
+          'Your chief of staff is restarting with new settings. Send that again in a moment.',
+        );
+        return;
+      }
     }
     const channel = this.channel(binding.connection);
     if (seen && channel.capabilities.reactions)
