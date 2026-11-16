@@ -3,7 +3,10 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.5
+
+Released 16 November 2026. The web app is now a React app: Overview and Sessions update as you
+watch. Still an early preview.
 
 **Changed**
 
