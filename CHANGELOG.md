@@ -3,7 +3,12 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.2
+
+Released 16 November 2026. The first pages of the web app, which `wheems start` now starts with
+everything else, and sessions that keep what you asked. When the service first starts, it moves
+the session store to schema version 3; an older Wheems won't open the store after that. Still an
+early preview.
 
 **Added**
 
