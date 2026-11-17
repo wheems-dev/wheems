@@ -362,7 +362,9 @@ stops, and the thread's next message starts a new session from the handover; Whe
 in the thread saying so. When the chief can't write one (it isn't running, or doesn't finish in
 time), Wheems writes one from the thread's ask and its latest messages, and says so. With
 `--fresh`, the next session starts with only the thread's ask; with `--carry-on`, its session
-just stops, and the next message resumes it as it was, on the settings then. A thread answering a
+just stops, and the next message resumes it as it was, on the settings then; that's refused when
+the chief's agent file now names a different engine, since the new engine never had the thread. A
+thread answering a
 message is left alone, and so is one whose session Herdr can't say is running. Only you restart
 threads, from a terminal or the web app; an agent can't. See [docs/session-handover.md](docs/session-handover.md).
 

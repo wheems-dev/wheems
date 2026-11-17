@@ -3,6 +3,16 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Fixed**
+
+- The service refuses to carry a chat thread on when the chief's agent file names a different
+  engine from the one it runs, reading the file at that moment, so neither `wheems session restart
+--carry-on` nor a web page whose choices were made before another tab changed the engine can
+  resume a thread on an engine that never had it. The thread is left as it was, with a note to
+  choose Hand over or Start fresh.
+
 ## 0.1.8
 
 Released 17 November 2026. A chat thread can hand over to a new session, or start afresh,

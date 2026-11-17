@@ -89,6 +89,13 @@ export interface ConversationManagerOptions {
   trustProblem?: (engine: string, dir: string) => Promise<string | null>;
   /** Why an engine can't start because it isn't signed in, with the step that fixes it, or null. */
   signInProblem?: (engine: string) => Promise<string | null>;
+  /**
+   * The engine a workspace's chief of staff's agent file names now, which the service runs once
+   * it restarts. Throws when it can't be read. Carry on is refused when it isn't the engine the
+   * service runs, since the next session would resume the conversation on an engine that never
+   * had it. Without this, the engine the service runs is assumed.
+   */
+  savedChiefEngine?: (workspace: string) => Promise<string>;
   log?: (message: string) => void;
   writeFile?: (path: string, content: string) => Promise<void>;
 }
@@ -135,6 +142,7 @@ export class ConversationManager {
       | 'trustProblem'
       | 'signInProblem'
       | 'sessionsSection'
+      | 'savedChiefEngine'
     >
   > & {
     sessionsSection: ConversationManagerOptions['sessionsSection'];
@@ -142,6 +150,7 @@ export class ConversationManager {
     onNote: ((workspace: string) => void) | undefined;
     trustProblem: (engine: string, dir: string) => Promise<string | null>;
     signInProblem: (engine: string) => Promise<string | null>;
+    savedChiefEngine: ((workspace: string) => Promise<string>) | undefined;
     writeFile: (path: string, content: string) => Promise<void>;
     log: (message: string) => void;
   };
@@ -191,6 +200,7 @@ export class ConversationManager {
       sessionsSection: undefined,
       trustProblem: () => Promise.resolve(null),
       signInProblem: () => Promise.resolve(null),
+      savedChiefEngine: undefined,
       log: () => undefined,
       writeFile: async (path, content) => {
         await mkdir(dirname(path), { recursive: true });
@@ -408,6 +418,23 @@ export class ConversationManager {
       };
     }
     if (choice === 'carry-on') {
+      // A session never carries on across an engine change: the new engine never had it. The
+      // agent file is read now, not when the choice was made, so no page or earlier answer can
+      // send Carry on for settings that have since changed.
+      const running = this.chiefOfStaff(binding).definition.engine;
+      const saved = this.options.savedChiefEngine
+        ? await this.options.savedChiefEngine(binding.workspace.id)
+        : running;
+      if (saved !== running) {
+        this.options.log(
+          `Conversation ${key}: not carried on, its chief changes from ${running} to ${saved}`,
+        );
+        return {
+          key,
+          done: false,
+          text: `Its chief of staff now runs on ${saved}, not ${running}, so its session can't carry on. Choose Hand over or Start fresh.`,
+        };
+      }
       if (live && !(await this.stopSession(live))) {
         return {
           key,

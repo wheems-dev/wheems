@@ -496,6 +496,37 @@ describe('the service', () => {
     expect(channel.sent.at(-1)?.text).toContain('restarting with new settings. Send that again');
   });
 
+  it("won't carry a thread on when the chief's agent file names another engine", async () => {
+    await channel.receive({ channel: 'D1', text: 'plan the trip', userId: 'UME', direct: true });
+    await waitFor(() => channel.sent.length === 1);
+    const socket = paths(home, env).socket;
+    const listed = await request(socket, {
+      op: 'conversations',
+      caller: { workspace: 'personal' },
+    });
+    const session = listed.ok ? (listed.conversations?.[0]?.session ?? '') : '';
+    // Saved to the agent file since the service started, as the Settings page or an editor does.
+    const loaded = (await loadInstall(home)).workspaces.find((w) => w.id === 'personal')!;
+    const chief = loaded.agents.find((a) => a.definition.name === loaded.config?.chief_of_staff)!;
+    const file = join(home, chief.file);
+    const running = chief.definition.engine;
+    writeFileSync(file, readFileSync(file, 'utf8').replace(`engine: ${running}`, 'engine: codex'));
+    const refused = await request(socket, {
+      op: 'conversations-restart',
+      caller: { workspace: 'personal' },
+      choices: [{ session, choice: 'carry-on' }],
+    });
+    expect(refused).toMatchObject({
+      ok: true,
+      restarted: [
+        {
+          done: false,
+          text: `Its chief of staff now runs on codex, not ${running}, so its session can't carry on. Choose Hand over or Start fresh.`,
+        },
+      ],
+    });
+  });
+
   it('refuses a restart whose choices leave a conversation out, and takes one with none left', async () => {
     const socket = paths(home, env).socket;
     const open = async (text: string) => {
