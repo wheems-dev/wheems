@@ -1,6 +1,6 @@
 import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { HealthCheck } from '../../contracts/driver.js';
 import type { EngineSetup } from '../../contracts/setup.js';
 import {
@@ -155,13 +155,19 @@ export class ClaudeCodeEngine implements EngineDriver {
    * writes there: the person's own (\`~/.claude/CLAUDE.md\`), and any in a folder above the
    * session's. Absolute paths, since Claude Code's \`claudeMdExcludes\` matches those.
    */
-  othersInstructions(sessionDir: string): string[] {
-    const files = [join(this.configDir, 'CLAUDE.md')];
-    let dir = resolve(sessionDir);
-    for (let parent = dirname(dir); parent !== dir; dir = parent, parent = dirname(dir)) {
-      for (const name of FOLDER_INSTRUCTIONS) files.push(join(parent, name));
+  async othersInstructions(sessionDir: string): Promise<string[]> {
+    const files = new Set<string>();
+    // Both as given and as the real path, since Claude Code sees the folder through any symlink.
+    for (const config of new Set([resolve(this.configDir), await canonical(this.configDir)])) {
+      files.add(join(config, 'CLAUDE.md'));
     }
-    return files;
+    for (const start of new Set([resolve(sessionDir), await canonical(sessionDir)])) {
+      let dir = start;
+      for (let parent = dirname(dir); parent !== dir; dir = parent, parent = dirname(dir)) {
+        for (const name of FOLDER_INSTRUCTIONS) files.add(join(parent, name));
+      }
+    }
+    return [...files];
   }
 
   /**
@@ -192,7 +198,7 @@ export class ClaudeCodeEngine implements EngineDriver {
     // which are written for their own work (docs/instructions.md). Their plugins, MCP servers,
     // connectors and other settings stay.
     const settings = {
-      claudeMdExcludes: this.othersInstructions(context.sessionDir),
+      claudeMdExcludes: await this.othersInstructions(context.sessionDir),
       skillOverrides: Object.fromEntries((await this.ownSkills()).map((name) => [name, 'off'])),
     };
     const command = [
@@ -223,6 +229,25 @@ export class ClaudeCodeEngine implements EngineDriver {
 
 /** The instruction files Claude Code reads by itself, in a folder or one of its parents. */
 const FOLDER_INSTRUCTIONS = ['CLAUDE.md', 'CLAUDE.local.md', join('.claude', 'CLAUDE.md')];
+
+/**
+ * A path with its symlinks resolved, as far as it exists: a folder not made yet keeps the rest
+ * of its path under its nearest real parent.
+ */
+async function canonical(path: string): Promise<string> {
+  const rest: string[] = [];
+  let at = resolve(path);
+  for (;;) {
+    try {
+      return join(await realpath(at), ...rest);
+    } catch {
+      const parent = dirname(at);
+      if (parent === at) return resolve(path);
+      rest.unshift(basename(at));
+      at = parent;
+    }
+  }
+}
 
 async function isFile(path: string): Promise<boolean> {
   return stat(path).then(

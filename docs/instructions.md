@@ -83,7 +83,8 @@ for a chief: they can tell it to write notes somewhere else, or run your own rev
 Wheems starts Claude Code with `--settings` that leave them out:
 
 - **`claudeMdExcludes`** lists your `~/.claude/CLAUDE.md`, and every `CLAUDE.md`,
-  `CLAUDE.local.md` and `.claude/CLAUDE.md` in a folder above the session's, as absolute paths.
+  `CLAUDE.local.md` and `.claude/CLAUDE.md` in a folder above the session's, as absolute paths,
+  both as given and with symlinks resolved, since Claude Code sees the real folder.
   The `CLAUDE.md` Wheems writes in the session's folder is never on the list.
 - **`skillOverrides`** turns off each skill in `~/.claude/skills/`, by its folder name and its
   `name`, read at every start. Never a `wheems-…` one, since those names are Wheems's.

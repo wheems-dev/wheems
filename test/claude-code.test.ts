@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -88,7 +96,7 @@ describe('claude-code engine', () => {
       '/home/me/wheems/workspaces/personal/CLAUDE.md',
     );
     expect(
-      new ClaudeCodeEngine({ configDir: '/elsewhere/.claude' }).othersInstructions('/a'),
+      await new ClaudeCodeEngine({ configDir: '/elsewhere/.claude' }).othersInstructions('/a'),
     ).toEqual([
       '/elsewhere/.claude/CLAUDE.md',
       '/CLAUDE.md',
@@ -101,6 +109,31 @@ describe('claude-code engine', () => {
       { path: 'AGENTS.md', content: expect.stringContaining('# Chief of staff') as string },
       { path: 'CLAUDE.md', content: expect.stringMatching(/^@AGENTS\.md$/m) as string },
     ]);
+  });
+
+  it('excludes the files above a session reached through a symlink, by their real paths too', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'wheems-link-')));
+    try {
+      mkdirSync(join(root, 'real', 'wheems'), { recursive: true });
+      symlinkSync(join(root, 'real'), join(root, 'link'));
+      // The session's folder needn't exist yet.
+      const excluded = await new ClaudeCodeEngine({
+        configDir: join(root, 'link', 'conf'),
+      }).othersInstructions(join(root, 'link', 'wheems', 'sessions', 'new'));
+      expect(excluded).toEqual(
+        expect.arrayContaining([
+          join(root, 'link', 'conf', 'CLAUDE.md'),
+          join(root, 'real', 'conf', 'CLAUDE.md'),
+          join(root, 'link', 'wheems', 'CLAUDE.md'),
+          join(root, 'real', 'wheems', 'CLAUDE.md'),
+          join(root, 'real', 'CLAUDE.md'),
+        ]),
+      );
+      expect(excluded).not.toContain(join(root, 'real', 'wheems', 'sessions', 'new', 'CLAUDE.md'));
+      expect(new Set(excluded).size).toBe(excluded.length);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("hides the person's own skills, but never Wheems's", async () => {
