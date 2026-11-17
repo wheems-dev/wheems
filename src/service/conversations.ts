@@ -1068,6 +1068,7 @@ export class ConversationManager {
     );
     const runtimeSkill = (await this.options.runtime.agentSkill?.()) ?? null;
     const builtins = {
+      chat: { where: chatPlace(binding, this.options.install) },
       ...(sessions && { sessions }),
       chief: { team: teamOf(workspace) },
       ...(runtimeSkill !== null && { runtime: runtimeSkill }),
@@ -1751,4 +1752,19 @@ export function askFrom(text: string): string {
   const trimmed = text.trim();
   if (holdsCredential(trimmed)) return '';
   return trimmed.length <= ASK_LIMIT ? trimmed : `${trimmed.slice(0, ASK_LIMIT - 1)}…`;
+}
+
+/**
+ * Where the person talks to a chief, as its built-ins say it: such as "on Slack, in direct
+ * messages" or "on Slack, in #marketing". Named from the workspace's config, so the chief's own
+ * file never has to name a channel.
+ */
+export function chatPlace(binding: Binding, install: InstallConfig): string {
+  const driver = install.connections[binding.connection]?.driver ?? binding.connection;
+  const service = driver.charAt(0).toUpperCase() + driver.slice(1);
+  const chat = binding.workspace.config?.channels.chat;
+  if (binding.channel === null) return `on ${service}, in direct messages`;
+  return chat !== undefined && 'channel' in chat
+    ? `on ${service}, in #${chat.channel.replace(/^#/, '')}`
+    : `on ${service}, in a channel`;
 }

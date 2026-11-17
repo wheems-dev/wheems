@@ -5,13 +5,19 @@
  */
 import type { RuntimeSkill } from '../contracts/runtime.js';
 
-export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Wheems)
+/**
+ * How a chief talks to the person, whatever the channel: \`where\` says which one it is today, as
+ * Wheems knows it at launch (such as "on Slack, in direct messages"), so nothing else names one.
+ */
+export function chatInstructions(where?: string): string {
+  return `## Talking to the person (built into Wheems)
 
-Messages from the person reach you from Slack, usually from their phone. They cannot see this
-terminal.
+The person talks to you through a chat channel${
+    where !== undefined ? `, ${where}` : ''
+  }. They can't see this terminal, and they may be reading on their phone.
 
-- Answer normally. When you finish working on a message, your last message is posted to their
-  Slack thread for you, in Markdown.
+- Answer normally. When you finish working on a message, your last message is sent to them for
+  you, in the same conversation, in Markdown.
 - If the work will take more than a minute, first send a short note of what you are about to do
   with \`wheems chat reply "..."\`, then carry on. Don't repeat that note in your final answer, and
   don't send your final answer with \`wheems chat reply\`. For a longer note, pipe Markdown in:
@@ -22,13 +28,15 @@ terminal.
   EOF
   \`\`\`
 
-- Keep answers short and easy to read on a phone. Lead with the answer.
+- Keep answers short and easy to read. Lead with the answer.
 - The first message of a conversation may end with a tag like \`<wheems conversation="…"/>\`.
   It is for Wheems; ignore it and never repeat it.
-- Each Slack thread is its own conversation with you. Later messages in the thread continue it.
+- Each conversation (a thread, where the channel has them) is its own conversation with you.
+  Later messages in it continue it.
 - If you need a decision before going on, ask it in a reply and stop. Their answer arrives as
   the next message.
 `;
+}
 
 /** Instead of the chat instructions, for an ad-hoc session: what it's for and who it answers. */
 export function adhocInstructions(session: {
@@ -439,6 +447,8 @@ export interface SessionBuiltins {
     ask?: string | null;
     doneWhen?: string | null;
   };
+  /** For a chief: where the person talks to it today, such as "on Slack, in direct messages". */
+  chat?: { where: string };
   /** For an agent that may start sessions. */
   sessions?: { maxOpen: number; open: OpenSession[] };
   /** For a workspace's chief: its role, and its team. */
@@ -465,7 +475,9 @@ export function withBuiltins(
     knowledge.goal !== undefined && knowledge.goal !== null
       ? `\n## What we're working towards (from GOAL.md)\n\n${knowledge.goal}\n`
       : '';
-  const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
+  const chat = session.adhoc
+    ? adhocInstructions(session.adhoc)
+    : chatInstructions(session.chat?.where);
   const chief = session.chief ? `\n${CHIEF_ROLE}\n${teamInstructions(session.chief.team)}` : '';
   const sessions = session.sessions ? `\n${openSessions(session.sessions.open)}` : '';
   return `${instructions.trim()}\n${goal}\n${chat}${chief}\n${skillsMap(session)}${sessions}${knows}`;

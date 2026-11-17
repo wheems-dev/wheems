@@ -223,3 +223,10 @@ behaviour, so that editing it can't break anything.
   older Herdr app, doesn't apply to Wheems sessions.
 - **`WHEEMS.md` holds only who the chief is and how it talks.** All behaviour lives in the
   built-in rules and skills.
+
+### WHEEMS.md doesn't name a channel (17 November 2026)
+
+The owner pointed out that `WHEEMS.md` said the person talks to the chief "from Slack", while Slack
+is one of many channels to come. `WHEEMS.md` stays channel-agnostic: it says who the chief is. The
+built-in instructions don't name a channel either. Wheems generates one line saying where the
+person reaches this chief today, from the workspace's config.
