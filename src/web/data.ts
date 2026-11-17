@@ -12,6 +12,7 @@ import { readSecrets } from '../secrets.js';
 import { listProposals } from '../skills/proposals.js';
 import {
   StateStore,
+  type ApprovalRecord,
   type ChatTurn,
   type Handover,
   type MessageRecord,
@@ -416,10 +417,39 @@ export interface ProposalView {
   agents: { name: string; checked: boolean }[];
 }
 
+/** An approval, as the Review page shows it. */
+export interface ApprovalView {
+  id: string;
+  question: string;
+  details: string | null;
+  choices: string[];
+  state: ApprovalRecord['state'];
+  /** Who it waits on while it's open: the chief, or you. */
+  waitingOn: 'chief' | 'person' | null;
+  /** The agent that asked, and what it was working on. */
+  askedBy: string;
+  working: string | null;
+  /** The person's own words that started the work, when known. */
+  ask: string | null;
+  /** The chief's note, when it brought the request to the person. */
+  note: string | null;
+  answer: string | null;
+  answeredBy: 'chief' | 'person' | null;
+  answeredVia: string | null;
+  reason: string | null;
+  askedAt: string;
+  answeredAt: string | null;
+  expiresAt: string;
+}
+
 export interface ReviewView {
   install: InstallSummary;
   workspace: WorkspaceSummary;
   proposals: ProposalView[];
+  /** Approvals still open, oldest first, and the latest closed ones, newest first. */
+  approvals: { open: ApprovalView[]; history: ApprovalView[] };
+  /** Why the session store couldn't be read, when it couldn't. */
+  storeProblem: string | null;
 }
 
 /** The skill proposals waiting from one workspace, oldest first. */
@@ -449,7 +479,57 @@ export async function reviewData(context: WebContext, id: string): Promise<Revie
           a.definition.name === p.proposal.agent || a.definition.skills.includes(p.proposal.name),
       })),
     }));
-  return { install: summary, workspace, proposals };
+  let storeProblem: string | null = null;
+  const store = await openStore(where).catch((error: unknown) => {
+    storeProblem = describe(error);
+    return null;
+  });
+  const approvals: ReviewView['approvals'] = { open: [], history: [] };
+  if (store) {
+    try {
+      const sessions = store.workspace(id);
+      const view = (a: ApprovalRecord): ApprovalView => {
+        const asker = a.askerSession !== null ? sessions.session(a.askerSession) : undefined;
+        const open = a.state === 'waiting' || a.state === 'escalated';
+        return {
+          id: a.id,
+          question: a.question,
+          details: a.details,
+          choices: a.choices,
+          state: a.state,
+          waitingOn: !open
+            ? null
+            : a.state === 'waiting' && a.decider === 'chief'
+              ? 'chief'
+              : 'person',
+          askedBy:
+            asker?.kind === 'thread'
+              ? 'your chief of staff'
+              : (a.askerAgent?.split('/').at(-1) ?? 'a rule'),
+          working: asker?.kind === 'adhoc' ? asker.title : null,
+          ask: asker?.ask ?? null,
+          note: a.note,
+          answer: a.answer,
+          answeredBy: a.answeredBy,
+          answeredVia: a.answeredVia,
+          reason: a.reason,
+          askedAt: a.askedAt,
+          answeredAt: a.answeredAt,
+          expiresAt: a.expiresAt,
+        };
+      };
+      approvals.open = sessions
+        .approvals({ states: ['waiting', 'escalated'], limit: 50 })
+        .reverse()
+        .map(view);
+      approvals.history = sessions
+        .approvals({ states: ['answered', 'expired', 'withdrawn'], limit: 30 })
+        .map(view);
+    } finally {
+      store.close();
+    }
+  }
+  return { install: summary, workspace, proposals, approvals, storeProblem };
 }
 
 export interface SettingsView {

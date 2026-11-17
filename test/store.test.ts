@@ -555,6 +555,66 @@ describe('session store', () => {
     ).toEqual(['other']);
   });
 
+  it('records an answer to an approval once, expires what ran out, and forgets them with the workspace', () => {
+    const sessions = state.workspace('acme');
+    const base = {
+      kind: 'request' as const,
+      askerSession: 's1',
+      askerAgent: 'acme/dev',
+      decider: 'chief' as const,
+      personOnly: false,
+      chiefSession: 't1',
+      details: null,
+      choices: ['Approve', 'Decline'],
+      fingerprint: 'f',
+      askedAt: '2026-11-17T10:00:00.000Z',
+    };
+    const first = sessions.addApproval({
+      ...base,
+      id: 'aaaaaa',
+      question: 'Merge it?',
+      expiresAt: '2026-11-18T10:00:00.000Z',
+    });
+    expect(first).toMatchObject({ state: 'waiting', choices: ['Approve', 'Decline'], post: null });
+    sessions.addApproval({
+      ...base,
+      id: 'bbbbbb',
+      question: 'Deploy it?',
+      expiresAt: '2026-11-17T11:00:00.000Z',
+    });
+    expect(sessions.openApprovals('s1')).toBe(2);
+    const answer = {
+      answer: 'Approve',
+      reason: null,
+      by: 'chief' as const,
+      via: 'session' as const,
+      at: '2026-11-17T10:05:00.000Z',
+    };
+    // The first answer counts; a second, at once or later, doesn't.
+    expect(sessions.answerApproval('aaaaaa', answer, ['waiting'])).toBe(true);
+    expect(
+      sessions.answerApproval('aaaaaa', { ...answer, answer: 'Decline' }, ['waiting', 'escalated']),
+    ).toBe(false);
+    expect(sessions.approval('aaaaaa')?.answer).toBe('Approve');
+    // Only one of two settling it marks it delivered.
+    expect(sessions.markApprovalDelivered('aaaaaa', answer.at)).toBe(true);
+    expect(sessions.markApprovalDelivered('aaaaaa', answer.at)).toBe(false);
+    expect(sessions.unreportedDecisions().map((a) => a.id)).toEqual(['aaaaaa']);
+    sessions.markReported(['aaaaaa'], answer.at);
+    expect(sessions.unreportedDecisions()).toEqual([]);
+
+    const expired = state.expireApprovals(new Date('2026-11-17T12:00:00.000Z'));
+    expect(expired.map((a) => [a.id, a.state])).toEqual([['bbbbbb', 'expired']]);
+    expect(state.expireApprovals(new Date('2026-11-17T12:00:00.000Z'))).toEqual([]);
+    expect(state.undeliveredApprovals().map((a) => a.id)).toEqual(['bbbbbb']);
+    expect(sessions.withdrawApproval('bbbbbb', answer.at)).toBe(false);
+    // Another workspace can't see them.
+    expect(state.workspace('other').approval('aaaaaa')).toBeUndefined();
+    expect(state.approvalAnywhere('aaaaaa')?.workspace).toBe('acme');
+    state.forgetWorkspace('acme');
+    expect(state.approvalAnywhere('aaaaaa')).toBeUndefined();
+  });
+
   it('opens read-only for doctor without writing', async () => {
     await new ConversationStore(state).set('a', conversation('a'));
     const reader = await StateStore.open(file, { readOnly: true });

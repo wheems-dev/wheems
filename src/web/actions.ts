@@ -155,6 +155,36 @@ async function decideAboutYouNow(context: WebContext, name: string, form: Form):
 const SEND_WAIT_MS = 15_000;
 
 /**
+ * Answers an approval as the person, from the Review page, as `wheems approval answer` does:
+ * through the service, which tells whoever asked.
+ */
+export async function answerApproval(
+  context: WebContext,
+  workspace: string,
+  id: string,
+  form: Form,
+): Promise<Flash> {
+  const choice = field(form, 'choice')?.trim() ?? '';
+  if (choice === '') return { ok: false, text: 'Choose an answer.' };
+  const reason = (field(form, 'reason') ?? '').trim();
+  try {
+    const answer = await request(paths(context.home, context.env).socket, {
+      op: 'approval-answer',
+      caller: { workspace },
+      id,
+      choice,
+      ...(reason !== '' && { reason }),
+      via: 'web',
+    });
+    return answer.ok
+      ? { ok: true, text: `Answered: ${answer.approval?.answer ?? choice}. Whoever asked is told.` }
+      : { ok: false, text: `Not answered: ${answer.error}` };
+  } catch (error) {
+    return { ok: false, text: notReached(error as Error) };
+  }
+}
+
+/**
  * Sends a message into a session, or ends one, through the service, as `wheems session send`
  * and `wheems session end` do, as the person, in the session's workspace.
  */
