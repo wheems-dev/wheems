@@ -159,3 +159,13 @@ What it decides (designed in [team.md](../team.md) and [approvals.md](../approva
 - **Project leads have no channel.** They're on the chief's team, and milestone 4's test changes
   from chatting with a lead to the chief routing work to it.
 - **Sub-agents are read-only in the web app**, with End as an emergency stop.
+
+Answered the same day:
+
+- **The chief creates agents without asking.** Making it easy is the point. Limits are in code
+  instead: no new accounts or integrations, permissions no wider than `auto`, a cap per workspace.
+  The person is told in a line, and can edit or remove the agent.
+- **Strict about work:** the chief reads and answers; its team makes and changes things. Looking
+  at an email is the chief's; replying to it, development of any size and long research are the
+  team's. Its tools are narrowed to match where the engine allows.
+- **Gemini isn't needed now.**

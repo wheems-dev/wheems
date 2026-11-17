@@ -9,13 +9,13 @@ than doing it. Decided by the owner on 17 November 2026 ([ideas/decisions.md](id
 - **One relationship, not many.** The person talks to the chief of staff and nobody else. They
   never manage sessions, agents or leads.
 - **The chief manages and never does the work.** It understands what's asked, decides who should
-  do it, hands it over, follows it, checks the result and reports back. It writes no code, edits
-  no files and doesn't do the research itself, not even for a quick hotfix.
+  do it, hands it over, follows it, checks the result and reports back. It reads and answers, but
+  writes no code, edits no files and does no long research itself, not even for a quick hotfix.
 - **It has a team.** The team is made of defined agents, such as a web developer, a marketer or a
   Cloudflare specialist, each on the engine and model that suits it. For one-off work it starts
   ad-hoc sessions instead.
-- **The team can grow.** When the same kind of work keeps coming up, the chief proposes a new
-  agent for it ("we do a lot of SEO now, so let's have an SEO agent"). The person can also build
+- **The team can grow.** When the same kind of work keeps coming up, the chief creates a new
+  agent for it, without asking ("we do a lot of SEO now, so let's have an SEO agent"). The person can also build
   the team themselves in the web app.
 - **Teams can be pre-built.** A starter set gives a workspace a chief and a recommended team from
   the start, such as "lead-generation site" or "online shop" ([product.md](product.md)).
@@ -55,10 +55,8 @@ Chiefs get a built-in section of their own, **Your role**, which every chief rec
 agent file says. The agent file keeps the workspace's own goal and the chief's character. The
 section says:
 
-- **You manage; your team does the work.** You talk to the person, search the knowledge base,
-  plan, choose who does what, follow the work, check results and report. You don't edit files,
-  write code, run a project's commands or do research at length. That includes small fixes: a
-  small fix is a small job for a developer.
+- **You manage; your team does the work.** See [What counts as work](#what-counts-as-work).
+  That includes small fixes: a small fix is a small job for a developer.
 - **Choose who does it:**
   - a defined agent on your team, when the work matches its role;
   - otherwise an ad-hoc session, with a clear purpose and what to hand back.
@@ -67,13 +65,29 @@ section says:
 - **Decisions.** Answer your team's approval requests within your authority, and bring the person
   only what's theirs to decide ([approvals.md](approvals.md)).
 - **Notice what repeats.** When you've started ad-hoc sessions for the same kind of work several
-  times, propose an agent for it.
+  times, create an agent for it.
+
+### What counts as work
+
+The line is simple, so the chief can apply it and Wheems can enforce it: **the chief reads and
+answers; its team makes and changes things.**
+
+| The chief does it                                                                                  | The team does it                                                                     |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Talking with the person, answering questions                                                       | Anything that creates or changes files, code, sites, data or settings                |
+| Reading what it's given or can reach: an email, a document, a page, a result                       | Development of any size, including a one-line fix                                    |
+| Quick lookups: the knowledge base, a session's answer, one web page                                | Research beyond a quick lookup, and anything that takes more than a few minutes      |
+| Planning, choosing who does what, briefing, checking results, deciding what to bring to the person | Acting in the outside world: sending, publishing, deploying, buying (with approvals) |
+| Its own notes, through `wheems knowledgebase note`                                                 | Writing anything longer than a reply: reports, articles, drafts to send              |
+
+"Look at this email and tell me what you think" is the chief's. "Reply to it" is a job for an
+agent. When in doubt, it delegates.
 
 ### Enforcing it, not only asking
 
-Instructions are guidance, not a guardrail
-([architecture.md](architecture.md#guardrails-that-work-with-any-engine)), so where an engine
-allows it, a chief also **can't** do the work:
+Strictly. Instructions are guidance, not a guardrail
+([architecture.md](architecture.md#guardrails-that-work-with-any-engine)), so a chief also
+**can't** do the work. In effect it's **read-only, plus `wheems`**:
 
 - **The chief's session gets no project folders.** It starts in its own session folder, and only
   the agents doing the work are given a project's folder.
@@ -120,14 +134,26 @@ work on it.
 
 ## Growing the team
 
-- **The chief proposes an agent** with `wheems agent create`, which is planned for milestone 5.
-  It gives the name, the role, the engine, and why it's needed (for example "five ad-hoc SEO
-  sessions in two weeks").
-- **The person approves it** with one tap. An agent's file sets the engine, the account and the
-  permissions, which means what it costs and what it can reach, so that decision is the person's
-  only ([approvals.md](approvals.md)).
-- **The nightly tidy notices repeats** as well. It's already planned to spot repeated requests and
-  offer a routine, and it can offer an agent in the same way.
+**The chief creates agents itself, without asking** (decided 17 November). Making it easy is the
+point. With `wheems agent create`, it gives the name, the role (the agent's instructions), a
+description saying when to use it, and the engine and model. Wheems writes the agent file,
+validates it, commits it, and from then on lists the agent in **Your team**.
+
+The limits are in code, not in asking:
+
+- **No new spending or reach.** It can only use accounts and integrations the workspace already
+  has, and skills from the workspace's `skills.yaml`.
+- **No wider permissions** than `auto`: never `skip`.
+- **No changes to the chief itself.** Its own agent file, the workspace's settings and the rules
+  are the person's.
+- **A cap**, such as twelve agents per workspace, so a confused chief can't multiply them.
+
+**The person is told, not asked.** One line in the thread, "I've added an SEO agent to the team",
+and the agent shows on the Team page as made by the chief. The person can edit or remove it there.
+The chief may also edit or retire agents it made. The person's own agents are the person's.
+
+- **The nightly tidy notices repeats** as well, as it's already planned to for routines, and
+  suggests to the chief that it create an agent.
 - **Starter sets** are workspace templates that ship a chief and a team, chosen at `wheems setup`
   or when a chief is set up by inviting the app to a channel.
 
@@ -159,16 +185,22 @@ stays as an emergency stop. To change what a sub-agent is doing, the person tell
    and **Your team**, and remove "answer simple things yourself". This is a small change, and it
    changes behaviour at once.
 2. **Approvals** ([approvals.md](approvals.md)), built for the chief only.
-3. **Narrowing the chief's tools,** engine by engine, with doctor's view of it.
+3. **Narrowing the chief's tools,** engine by engine, starting with Claude Code, with doctor's
+   view of it.
 4. **Team, read-only, in the web app,** and sub-agents made read-only on Sessions.
-5. **Creating and editing agents:** `wheems agent create`, the Team page's editing, the chief's
-   proposals and starter sets. The roadmap has these in milestone 5, and they could move earlier.
+5. **Creating and editing agents:** `wheems agent create` for the chief and the person, the Team
+   page's editing, and starter sets. The roadmap has these in milestone 5, and they could move earlier.
 
 ## Open questions
 
-1. **May the chief create an agent without asking?** This design says no: it proposes and the
-   person taps. A looser option lets it create agents from the library's templates, on the
-   workspace's own accounts, with permissions no wider than its own.
-2. **How strictly is the chief kept from doing work?** The suggestion is to narrow its tools on
-   Claude Code first, the engine most chiefs run on, and warn elsewhere.
-3. **Gemini.** Use it through opencode for now, or write a Gemini CLI engine driver?
+Answered on 17 November:
+
+- **The chief creates agents without asking,** within the limits above.
+- **It's kept strictly from doing work:** it reads and answers, and its tools are narrowed to
+  match, starting with Claude Code.
+- **Gemini isn't needed now.** Any agent can use a Gemini model through opencode if wanted.
+
+Still open:
+
+1. **The agent cap.** Twelve per workspace is a guess. It should be set by how many agents a chief
+   can still choose between well.

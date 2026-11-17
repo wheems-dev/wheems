@@ -51,6 +51,46 @@ A sub-agent asks with `wheems approval request`. It never chooses who decides:
   `wheems approval answer` refuses it. Nothing in milestone 3 creates one yet. Folder links in
   milestone 4 are the first.
 
+## What the chief may decide
+
+**Recommended, and not yet agreed.** It follows the same line as the chief's work
+([team.md](team.md#what-counts-as-work)): the chief decides what can be undone and stays inside
+what the person asked for. The person decides five things:
+
+| The person decides          | For example                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Money**                   | Any purchase, a paid plan, a subscription, or anything that adds to a bill                     |
+| **Speaking for the person** | Sending an email or message to someone outside, publishing, replying to a customer or a review |
+| **What can't be undone**    | Deploying to production, deleting data, force-pushing, closing or cancelling an account        |
+| **Access**                  | Sharing anything outside, granting access, new credentials or integrations, linking a folder   |
+| **Outside the ask**         | Anything the person didn't ask for and wouldn't expect, however small                          |
+
+Everything else is the chief's. For example:
+
+- merging a fix to a working branch;
+- deploying to staging or a preview;
+- choosing between drafts;
+- creating an agent;
+- starting or ending sessions;
+- retrying a failed job.
+
+How the line is drawn and kept:
+
+- **Five categories, not a long list,** so the chief can apply them and the person can remember
+  them.
+- **In milestone 3, the chief applies them** from its instructions. From milestone 9, the broker
+  maps each action to its category in code, so a production deploy is the person's whatever the
+  chief thinks.
+- **A workspace can move a category to the chief,** for example publishing on a blog where the
+  person trusts it: `approvals: { chief_decides: [speaking] }` in `workspace.yaml`. It can also
+  name single actions with rules. Only the person changes this. The chief can't widen its own
+  authority.
+- **The person sees every decision the chief made.** A short daily list ("Decisions I made today:
+  merged the checkout fix to staging for the developer, …") goes to `updates`, or to the chat
+  channel without one. That way a bad call is noticed, and the person learns where to widen or
+  narrow the chief's authority. It's also the record a later "shadow mode" for decisions can
+  learn from.
+
 ## What the person sees
 
 When the chief brings a decision to the person, it's a post **in the chat thread the work came
@@ -209,9 +249,9 @@ person's phone, one tap answers it, and the work carries on.
 
 ## Open questions
 
-1. **How much may a chief approve by itself?** This design lets it answer anything not marked as
-   the person's only, and records every answer it gives. A stricter start is a list in
-   `workspace.yaml` of what the chief may approve, with everything else escalated.
+1. **What the chief may decide.** See the recommendation [above](#what-the-chief-may-decide):
+   five categories for the person, everything else the chief's, and a daily list of the chief's
+   decisions.
 2. **Engine prompts from the phone.** Answering an engine's own permission prompt remotely would
    let agents run on `ask`, but it means typing into each engine's screen through Herdr, which is
    easy to get wrong. The suggestion is to leave it until after the broker, through which most
