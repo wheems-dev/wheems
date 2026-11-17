@@ -3,6 +3,15 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- **Nothing a chief reads names a channel.** A new `WHEEMS.md` says only who the chief is, and
+  the built-in "Talking to the person" section no longer mentions Slack. The channel's driver
+  turns the chief's Markdown into what its service shows, so the chief doesn't need to know
+  which channel it's on.
+
 ## 0.1.12
 
 Released 17 November 2026. Wheems sessions on Claude Code no longer get your own `CLAUDE.md` or

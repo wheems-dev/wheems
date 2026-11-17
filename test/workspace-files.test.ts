@@ -39,6 +39,8 @@ describe("a workspace's files", () => {
 
   it('starts a workspace with WHEEMS.md for its chief, GOAL.md to fill in, and an empty team', async () => {
     expect(readFileSync(join(ws, 'WHEEMS.md'), 'utf8')).toContain('# Personal: chief of staff');
+    // Who the chief is, whatever channel the person uses.
+    expect(readFileSync(join(ws, 'WHEEMS.md'), 'utf8')).not.toMatch(/slack|phone/i);
     expect(readFileSync(join(ws, 'GOAL.md'), 'utf8')).toContain('The goal for Personal');
     expect(existsSync(join(ws, 'agents', 'chief-of-staff.md'))).toBe(false);
     const install = await loadInstall(home);

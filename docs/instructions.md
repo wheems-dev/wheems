@@ -50,6 +50,11 @@ to about 1,700 tokens and a worker to about 1,050, before your own files:
   thinks of it: the chief's role (manage, never do the work), how to talk to the person, a
   worker's job with its finish line and the evidence to hand back, and never putting secrets in
   anything. Plus a short map: each Wheems skill and when to use it.
+
+  Neither `WHEEMS.md` nor the rules name a chat channel, since Slack is one of many to come. The
+  chief doesn't need to know which it's on: the channel's driver turns its Markdown into what the
+  service shows, and handles threads and buttons.
+
 - **How-to, as built-in skills.** The steps and commands for each behaviour, loaded by the
   engine only when the agent needs them. Rules don't go in skills: an agent can skip a skill.
 
