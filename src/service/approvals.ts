@@ -514,8 +514,11 @@ export class ApprovalService {
     const sends: { to: string; about: string | null; text: string }[] = [];
     const waiter = this.waiters.get(approval.id);
     if (waiter) {
-      // The asker hears it from the command it's waiting on.
+      // The asker hears it from the command it's waiting on, which counts as delivered to it.
       waiter(approval);
+      if (approval.askerSession !== null) {
+        sessions.markApprovalDeliveredTo(approval.id, approval.askerSession);
+      }
     } else if (asker && asker.state !== 'ended') {
       sends.push({ to: asker.id, about: null, text: outcomeText(approval) });
     } else {
