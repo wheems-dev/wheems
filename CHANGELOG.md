@@ -3,7 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.12
+
+Released 17 November 2026. Wheems sessions on Claude Code no longer get your own `CLAUDE.md` or
+your own skills, and every session gets Herdr's own skill, for programs only: agents are started
+only through `wheems session`. No change to the session store. Still an early preview.
 
 **Added**
 
