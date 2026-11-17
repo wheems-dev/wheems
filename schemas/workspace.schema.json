@@ -229,6 +229,31 @@
       ],
       "additionalProperties": false
     },
+    "approvals": {
+      "default": {
+        "chief_decides": []
+      },
+      "description": "Which decisions the chief of staff makes, and which it brings to the person.",
+      "type": "object",
+      "properties": {
+        "chief_decides": {
+          "default": [],
+          "description": "Kinds of decision that are usually the person's, left to the chief in this workspace: `money`, `speaking` (for the person, to anyone outside), `irreversible`, `access` and `outside` (the ask). Only the person changes this.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "money",
+              "speaking",
+              "irreversible",
+              "access",
+              "outside"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "rules": {
       "default": [],
       "description": "Rules written once and enforced at every layer that can enforce them.",

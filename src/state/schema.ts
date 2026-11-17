@@ -146,6 +146,43 @@ export const MIGRATIONS: readonly string[] = [
   `
   ALTER TABLE sessions ADD COLUMN done_when TEXT;
   `,
+  // 7: approvals: a question that waits for a decision, from the chief (for its team) or from the
+  // person. The question, details and choices never change once asked (docs/approvals.md).
+  `
+  CREATE TABLE approvals (
+    id TEXT PRIMARY KEY,
+    workspace TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('request', 'action', 'purchase', 'folder', 'workflow')),
+    asker_session TEXT,            -- the session that asked; null when a rule did
+    asker_agent TEXT,
+    decider TEXT NOT NULL CHECK (decider IN ('chief', 'person')),
+    person_only INTEGER NOT NULL DEFAULT 0 CHECK (person_only IN (0, 1)),
+    chief_session TEXT,            -- the chief's chat thread the work came from; null for none
+    question TEXT NOT NULL,
+    details TEXT,
+    choices TEXT NOT NULL,         -- a JSON array of labels
+    fingerprint TEXT NOT NULL,     -- of exactly what was asked
+    state TEXT NOT NULL
+      CHECK (state IN ('waiting', 'escalated', 'answered', 'expired', 'withdrawn')),
+    answer TEXT,
+    reason TEXT,
+    answered_by TEXT CHECK (answered_by IN ('chief', 'person')),
+    answered_via TEXT CHECK (answered_via IN ('session', 'chat', 'web', 'terminal')),
+    note TEXT,                     -- the chief's note when it escalated
+    post_connection TEXT,
+    post_channel TEXT,
+    post_thread TEXT,
+    post_message TEXT,
+    asked_at TEXT NOT NULL,
+    escalated_at TEXT,
+    answered_at TEXT,              -- answered, expired or withdrawn
+    delivered_at TEXT,             -- when the outcome was kept for its asker, to be delivered
+    expires_at TEXT NOT NULL,
+    reported_at TEXT               -- when a chief's decision went in its daily list
+  ) STRICT;
+  CREATE INDEX approvals_workspace ON approvals (workspace, state, asked_at);
+  CREATE INDEX approvals_asker ON approvals (asker_session, state);
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

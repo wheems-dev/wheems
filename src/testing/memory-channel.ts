@@ -4,6 +4,7 @@ import type {
   InboundHandler,
   MessageRef,
   OutboundMessage,
+  PostChange,
   SentMessage,
 } from '../contracts/channel.js';
 import { DriverError, type HealthCheck } from '../contracts/driver.js';
@@ -18,6 +19,8 @@ export class MemoryChannel implements ChannelDriver {
   readonly capabilities: ChannelCapabilities;
   /** Everything sent through the driver, oldest first. */
   readonly sent: (OutboundMessage & { messageId: string })[] = [];
+  /** Every change to a sent message, oldest first. `sent` shows each message as it is now. */
+  readonly updates: (PostChange & MessageRef)[] = [];
   /** Reactions currently on messages, as `<channel>/<messageId>` to reaction names. */
   readonly reactions = new Map<string, Set<string>>();
   private handler: InboundHandler | undefined;
@@ -26,10 +29,11 @@ export class MemoryChannel implements ChannelDriver {
   private readonly visible: Map<string, string> | undefined;
   resolveChannel?: (nameOrId: string) => Promise<string | null>;
   channelName?: (channelId: string) => Promise<string | null>;
+  update?: (message: MessageRef, change: PostChange) => Promise<void>;
 
   constructor(
     capabilities: Partial<ChannelCapabilities> = {},
-    options: { channels?: Record<string, string> } = {},
+    options: { channels?: Record<string, string>; updates?: boolean } = {},
   ) {
     this.capabilities = {
       threads: true,
@@ -39,6 +43,26 @@ export class MemoryChannel implements ChannelDriver {
       joins: true,
       ...capabilities,
     };
+    if (options.updates !== false) {
+      this.update = (message, change) => {
+        const sent = this.sent.find(
+          (m) => m.messageId === message.messageId && m.channel === message.channel,
+        );
+        if (!sent) {
+          return Promise.reject(
+            new DriverError(this.name, 'not_found', `No message ${message.messageId}`),
+          );
+        }
+        sent.text = change.text;
+        if (change.buttons !== undefined && change.buttons.length > 0) {
+          sent.buttons = change.buttons;
+        } else {
+          delete sent.buttons;
+        }
+        this.updates.push({ ...change, ...message });
+        return Promise.resolve();
+      };
+    }
     if (options.channels !== undefined) {
       const visible = new Map(Object.entries(options.channels));
       this.visible = visible;

@@ -8,7 +8,7 @@ import { createConnection, createServer, type Server } from 'node:net';
 import { dirname } from 'node:path';
 import { z } from 'zod';
 import type { IndexStatus } from '../knowledge/search.js';
-import type { MessageRecord, SessionRecord } from '../state/store.js';
+import type { ApprovalRecord, MessageRecord, SessionRecord } from '../state/store.js';
 import type { OpenConversation, RestartOutcome } from './conversations.js';
 import type { SessionDetails } from './sessions.js';
 
@@ -121,6 +121,42 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({ op: z.literal('restart') }),
   /** The first chief greets the person in chat; with `once`, only if it never has. */
   z.object({ op: z.literal('greet'), once: z.boolean().optional() }),
+  /** Asks the caller's decider (docs/approvals.md): its chief, or for a chief, the person. */
+  z.object({
+    op: z.literal('approval-request'),
+    caller: callerSchema,
+    question: z.string(),
+    details: z.string().optional(),
+    choices: z.array(z.string()).max(10).optional(),
+    expires_seconds: z.number().int().positive().optional(),
+    wait: z.boolean().optional(),
+    wait_seconds: z.number().int().positive().max(3600).optional(),
+  }),
+  z.object({
+    op: z.literal('approval-answer'),
+    caller: callerSchema,
+    id: z.string().min(1),
+    choice: z.string().min(1),
+    reason: z.string().optional(),
+    /** How the person answered, when it's them: from the web app or a terminal. */
+    via: z.enum(['web', 'terminal']).optional(),
+  }),
+  z.object({
+    op: z.literal('approval-escalate'),
+    caller: callerSchema,
+    id: z.string().min(1),
+    note: z.string().optional(),
+  }),
+  z.object({ op: z.literal('approval-withdraw'), caller: callerSchema, id: z.string().min(1) }),
+  z.object({ op: z.literal('approval-list'), caller: callerSchema, all: z.boolean().optional() }),
+  z.object({ op: z.literal('approval-show'), caller: callerSchema, id: z.string().min(1) }),
+  /** A one-way post from the chief, or the person, to a workspace's named channel. */
+  z.object({
+    op: z.literal('chat-post'),
+    caller: callerSchema,
+    channel: z.string().min(1),
+    text: z.string().min(1),
+  }),
   z.object({
     op: z.literal('session-send'),
     caller: callerSchema,
@@ -158,6 +194,9 @@ export type ControlResponse =
       stale?: boolean;
       /** The answer to a `session send --wait`. */
       answer?: string;
+      /** For `approval-…`: the approval as it stands now. */
+      approval?: ApprovalRecord;
+      approvals?: ApprovalRecord[];
       sent?: MessageRecord;
     }
   | { ok: false; error: string };

@@ -28,6 +28,8 @@ import { FilingQueue } from './filing.js';
 import { TaskRunner } from './runner.js';
 import { ConversationStore } from './store.js';
 import { SessionService } from './sessions.js';
+import { ApprovalService } from './approvals.js';
+import { ChatPoster } from './poster.js';
 import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
@@ -62,6 +64,8 @@ export interface ServiceOptions {
   webPort?: number | null;
   /** Starts the web app; a test can slow it down. */
   startWeb?: (options: WebOptions) => Promise<RunningWeb>;
+  /** How often to expire approvals and send the daily list of decisions; 0 turns it off. */
+  approvalTickMs?: number;
 }
 
 export interface RunningService {
@@ -238,6 +242,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       if (key === undefined) return Promise.reject(new Error(`No conversation for ${sessionId}`));
       return manager.tell(key, text);
     },
+    // Ending a session takes back the approvals it was waiting on.
+    onEnded: (session) => void approvals.withdrawFor(session),
     log,
     ...(options.startupSeconds !== undefined && { startupSeconds: options.startupSeconds }),
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
@@ -319,6 +325,17 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     ...(options.pollMs !== undefined && { pollMs: options.pollMs }),
   });
 
+  const poster = new ChatPoster({ install: config, bindings, channels, state, log });
+  const approvals: ApprovalService = new ApprovalService({
+    install: config,
+    workspaces: install.workspaces,
+    state,
+    sessions,
+    poster,
+    log,
+    ...(options.approvalTickMs !== undefined && { tickMs: options.approvalTickMs }),
+  });
+
   // Inviting the app to a channel is the whole setup: see onboarding.ts.
   const onboarding = new Onboarding({
     install: config,
@@ -345,7 +362,18 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         workspaceReport.push({ id: binding.workspace.id, chat: place });
       }
     },
-    deliver: (connection, event) => manager.handle(connection, event),
+    // A press of an approval's button, or a reply that answers one in words, is the person
+    // deciding; everything else goes to the conversation it belongs to.
+    deliver: async (connection, event) => {
+      try {
+        if (event.type === 'button' && (await approvals.press(connection, event))) return;
+        if (event.type === 'message' && (await approvals.replyInWords(connection, event))) return;
+      } catch (error) {
+        log(`Approvals: ${error instanceof Error ? error.message : String(error)}`);
+        if (event.type === 'button') return;
+      }
+      await manager.handle(connection, event);
+    },
     log,
   });
 
@@ -647,6 +675,75 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             );
             return { ok: true, message: greeted.place };
           }
+          case 'approval-request': {
+            const asked = await approvals.request(sessions.caller(request.caller), {
+              question: request.question,
+              ...(request.details !== undefined && { details: request.details }),
+              ...(request.choices !== undefined && { choices: request.choices }),
+              ...(request.expires_seconds !== undefined && {
+                expiresSeconds: request.expires_seconds,
+              }),
+              ...(request.wait !== undefined && { wait: request.wait }),
+              ...(request.wait_seconds !== undefined && { waitSeconds: request.wait_seconds }),
+            });
+            return {
+              ok: true,
+              approval: asked.settled ?? asked.approval,
+              message: asked.next,
+            };
+          }
+          case 'approval-answer':
+            return {
+              ok: true,
+              approval: await approvals.answer(
+                sessions.caller(request.caller),
+                request.id,
+                request.choice,
+                {
+                  ...(request.reason !== undefined && { reason: request.reason }),
+                  ...(request.via !== undefined && { via: request.via }),
+                },
+              ),
+            };
+          case 'approval-escalate':
+            return {
+              ok: true,
+              approval: await approvals.escalate(
+                sessions.caller(request.caller),
+                request.id,
+                request.note,
+              ),
+            };
+          case 'approval-withdraw':
+            return {
+              ok: true,
+              approval: await approvals.withdraw(sessions.caller(request.caller), request.id),
+            };
+          case 'approval-list':
+            return {
+              ok: true,
+              approvals: approvals.list(sessions.caller(request.caller), {
+                ...(request.all !== undefined && { all: request.all }),
+              }),
+            };
+          case 'approval-show':
+            return {
+              ok: true,
+              approval: approvals.show(sessions.caller(request.caller), request.id),
+            };
+          case 'chat-post': {
+            const caller = sessions.caller(request.caller);
+            if (caller.session !== null && caller.session.kind !== 'thread') {
+              throw new Error(
+                'Only your chief of staff posts to a channel. Your results go back to your owner, who decides what the person hears.',
+              );
+            }
+            const posted = await poster.toChannel(caller.workspace, request.channel, {
+              text: request.text,
+            });
+            log(`Posted to ${request.channel} in ${caller.workspace.id} (${posted.channel})`);
+            return { ok: true, message: `Posted to ${request.channel}.` };
+          }
           case 'session-end': {
             const ended = await sessions.end(sessions.caller(request.caller), request.id);
             return {
@@ -674,6 +771,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   await manager.recover();
   // Senders of messages lost in the restart hear so, now the chats are connected.
   void sessions.recoverLost(lost);
+  // Approvals that ran out while the service was away expire, and answers not yet delivered are.
+  void approvals.start();
   manager.startNotes();
   // Files edited, and notes that landed, while the service was away.
   void search.syncAll();
@@ -707,6 +806,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       );
       clearInterval(syncTimer);
       clearInterval(tidyTimer);
+      approvals.stop();
       for (const channel of channels.values()) await channel.stop().catch(() => undefined);
       await sessions.stop();
       await manager.stop();

@@ -31,6 +31,12 @@ export interface ChannelDriver extends Driver<'channel'> {
    */
   react(message: MessageRef, reaction: string, on: boolean): Promise<void>;
 
+  /**
+   * Optional: changes a message the driver sent, in place: its text, and its buttons (none
+   * removes them). Drivers without it can't change a post; Wheems replies under it instead.
+   */
+  update?(message: MessageRef, change: PostChange): Promise<void>;
+
   /** Disconnects. No handler calls happen after it resolves. Safe to call twice. */
   stop(): Promise<void>;
 
@@ -128,6 +134,19 @@ export interface OutboundMessage {
   text: string;
   buttons?: Button[];
   /** Who the post appears to be from, on drivers with `identities`. */
+  identity?: Identity;
+  /**
+   * People to notify, by the driver's ids for them, such as the person whose decision a post
+   * waits for. The driver mentions them in its own way.
+   */
+  mentions?: string[];
+}
+
+/** A change to a message already sent: its new text and buttons. */
+export interface PostChange {
+  text: string;
+  /** The buttons it carries now; none (or left out) removes them. */
+  buttons?: Button[];
   identity?: Identity;
 }
 
