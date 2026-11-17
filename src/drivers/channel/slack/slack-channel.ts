@@ -1,10 +1,13 @@
 import type {
+  ButtonPress,
   LookupOptions,
   ChannelCapabilities,
   ChannelDriver,
   InboundHandler,
+  Button,
   MessageRef,
   OutboundMessage,
+  PostChange,
   SentMessage,
 } from '../../../contracts/channel.js';
 import { DriverError, type HealthCheck } from '../../../contracts/driver.js';
@@ -22,7 +25,7 @@ export class SlackChannel implements ChannelDriver {
   readonly name = 'slack';
   readonly capabilities: ChannelCapabilities = {
     threads: true,
-    buttons: false,
+    buttons: true,
     reactions: true,
     identities: true,
     joins: true,
@@ -77,13 +80,6 @@ export class SlackChannel implements ChannelDriver {
   }
 
   async send(message: OutboundMessage): Promise<SentMessage> {
-    if (message.buttons && message.buttons.length > 0) {
-      throw new DriverError(
-        this.name,
-        'unsupported',
-        'Buttons arrive in a later version of the Slack driver',
-      );
-    }
     const identity = message.identity
       ? {
           username: message.identity.name,
@@ -95,12 +91,17 @@ export class SlackChannel implements ChannelDriver {
         }
       : {};
     let first: SlackResult | undefined;
-    for (const chunk of chunks(message.text, MAX_BLOCK)) {
+    const parts = chunks(message.text, MAX_BLOCK);
+    const mentions = (message.mentions ?? []).map((id) => `<@${id}>`).join(' ');
+    for (const [index, chunk] of parts.entries()) {
+      // Mentions and buttons go with the last part, under the whole text.
+      const last = index === parts.length - 1;
       try {
         const result = await this.transport.call('chat.postMessage', {
           channel: message.channel,
-          text: chunk,
-          blocks: [{ type: 'markdown', text: chunk }],
+          // What a notification shows: the mention first, so it says who it's for.
+          text: last && mentions !== '' ? `${mentions} ${chunk}` : chunk,
+          blocks: blocksFor(chunk, last ? message.buttons : undefined, last ? mentions : ''),
           ...(message.threadId !== undefined && { thread_ts: message.threadId }),
           ...identity,
           unfurl_links: false,
@@ -128,6 +129,22 @@ export class SlackChannel implements ChannelDriver {
       const code = slackError(error);
       if (code === 'already_reacted' || code === 'no_reaction') return;
       throw this.toDriverError(error, 'Slack did not take the reaction');
+    }
+  }
+
+  /** Changes a message the app posted: its text, and its buttons (none removes them). */
+  async update(message: MessageRef, change: PostChange): Promise<void> {
+    const text =
+      change.text.length > MAX_BLOCK ? `${change.text.slice(0, MAX_BLOCK)}…` : change.text;
+    try {
+      await this.transport.call('chat.update', {
+        channel: message.channel,
+        ts: message.messageId,
+        text,
+        blocks: blocksFor(text, change.buttons, ''),
+      });
+    } catch (error) {
+      throw this.toDriverError(error, 'Slack did not change the message');
     }
   }
 
@@ -228,6 +245,12 @@ export class SlackChannel implements ChannelDriver {
   private async onEvent(event: SlackEvent): Promise<void> {
     const handler = this.handler;
     if (!handler) return;
+    // A press of a button on one of the app's posts, from an interactive envelope.
+    if (event.type === 'block_actions') {
+      const press = buttonPress(event);
+      if (press) await handler(press);
+      return;
+    }
     // The app was added to a channel: member_joined_channel (needs that bot event), or the
     // channel_join message Slack also posts, for apps that only get message events.
     const joined =
@@ -325,4 +348,62 @@ function fileNames(files: unknown[]): { name: string }[] {
       typeof f.name === 'string' ? f.name : typeof f.title === 'string' ? f.title : 'a file';
     return { name };
   });
+}
+
+/**
+ * A post's blocks: its Markdown, then any mentions, then any buttons. Slack's markdown block
+ * doesn't notify for mentions, so they go in a section of their own.
+ */
+function blocksFor(
+  text: string,
+  buttons: Button[] | undefined,
+  mentions: string,
+): Record<string, unknown>[] {
+  const blocks: Record<string, unknown>[] = [{ type: 'markdown', text }];
+  if (mentions !== '') blocks.push({ type: 'section', text: { type: 'mrkdwn', text: mentions } });
+  if (buttons !== undefined && buttons.length > 0) {
+    blocks.push({
+      type: 'actions',
+      elements: buttons.map((button) => ({
+        type: 'button',
+        action_id: button.id,
+        value: button.id,
+        text: { type: 'plain_text', text: button.label.slice(0, 75) },
+        ...(button.style !== undefined && { style: button.style }),
+      })),
+    });
+  }
+  return blocks;
+}
+
+/** A button press from a `block_actions` payload, or null when it isn't one Wheems can read. */
+function buttonPress(payload: SlackEvent): ButtonPress | null {
+  const user = (payload.user as { id?: unknown } | undefined)?.id;
+  const container = (payload.container ?? {}) as {
+    channel_id?: unknown;
+    message_ts?: unknown;
+    thread_ts?: unknown;
+  };
+  const message = (payload.message ?? {}) as { ts?: unknown; thread_ts?: unknown };
+  const channel = (payload.channel as { id?: unknown } | undefined)?.id ?? container.channel_id;
+  const ts = message.ts ?? container.message_ts;
+  const action = (payload.actions as { action_id?: unknown }[] | undefined)?.[0];
+  if (
+    typeof user !== 'string' ||
+    typeof channel !== 'string' ||
+    typeof ts !== 'string' ||
+    typeof action?.action_id !== 'string'
+  ) {
+    return null;
+  }
+  const thread = message.thread_ts ?? container.thread_ts;
+  return {
+    type: 'button',
+    channel,
+    messageId: ts,
+    threadId: typeof thread === 'string' && thread !== ts ? thread : null,
+    userId: user,
+    buttonId: action.action_id,
+    receivedAt: new Date(),
+  };
 }
