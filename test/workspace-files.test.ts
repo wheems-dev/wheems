@@ -27,7 +27,9 @@ describe("a workspace's files", () => {
     writeFileSync(join(home, 'install.yaml'), installYaml());
     ws = await initWorkspace({ home, id: 'personal' });
   });
-  afterEach(() => rmSync(home, { recursive: true, force: true }));
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
 
   const problems = async () => {
     const install = await loadInstall(home);
