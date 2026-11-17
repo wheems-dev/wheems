@@ -153,8 +153,12 @@ stopped.
 │   └── skills/<name>/<n>/SKILL.md   every version of every skill
 └── workspaces/
     └── acme/
-        ├── workspace.yaml    chief of staff, channels, rules, accounts
-        ├── agents/           one Markdown file per agent
+        ├── WHEEMS.md         the chief of staff, the agent you talk to
+        ├── GOAL.md           what the workspace is working towards; every session reads it
+        ├── workspace.yaml    chief of staff's name, channels, rules, accounts
+        ├── agents/           the chief's team, one Markdown file per agent
+        ├── AGENTS.md         written at every start: everything the chief's session needs
+        ├── CLAUDE.md         written at every start: @AGENTS.md, for Claude Code
         ├── skills.yaml       chosen skills and pinned versions
         ├── workflows/        one YAML file per workflow
         ├── projects/         planned (4): one folder per project, see Projects
@@ -162,7 +166,9 @@ stopped.
         │       ├── project.yaml
         │       ├── agents/   agents only this project uses, such as its lead
         │       └── knowledge/   the same shape as the workspace's
-        ├── .claude/          planned (6): this workspace's own Claude Code config
+        ├── .claude/          skills/: Wheems's skills for Claude Code, written at every start;
+        │                     planned (6): this workspace's own Claude Code config
+        ├── .agents/skills/   written at every start: Wheems's skills, for Codex and opencode
         └── knowledge/
             ├── brief.md      short, capped; every agent here loads it at launch
             ├── activity.md   planned (4): one line per filed project note, newest first
@@ -215,8 +221,8 @@ filed or committed, and pages and the brief that hold one are not kept.
 
 Agents search before answering about past work:
 `wheems knowledgebase search "what did we decide about the boat name"`, run in their session,
-searches their own workspace's pages and notes (filed and in the inbox). Their built-in instructions
-tell them to.
+searches their own workspace's pages and notes (filed and in the inbox). The map in their
+instructions tells them when, and the built-in `wheems-knowledge` skill how.
 
 - **By keyword**, always: SQLite's full-text search, built into Node.js, so it needs nothing
   installed.
@@ -277,7 +283,7 @@ A skill is how to do a task that comes up again, in the [Agent Skills](https://a
 (`library/skills/<name>/<n>/SKILL.md`). A workspace pins the versions it uses in `skills.yaml`,
 and each agent lists the skills it uses, so a skill reaches only the agents it was given to.
 
-Agents learn to propose skills from their built-in instructions:
+Agents learn to propose skills from the built-in `wheems-skill-proposals` skill:
 
 - `wheems skill list` and `wheems skill show <name>` show the library, so an agent improves an
   existing skill rather than adding another, and reads it before changing it.
@@ -524,10 +530,10 @@ owned by that session; one you start from a terminal is yours (no owner).
 
 **Each ad-hoc session runs in a folder of its own**, `.wheems/sessions/<workspace>/adhoc/<id>/`.
 Under `adhoc/`, an id can never collide with the per-agent folders milestone 5 puts at
-`.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. The engine writes the
-agent's instructions file into the folder a session runs in, so a session running another agent, or
-the chief's own with a different Sessions section, would otherwise replace the chief's `CLAUDE.md`
-in the workspace folder. It's inside the install folder, which the engines trust from setup, and
+`.wheems/sessions/<workspace>/<agent>/`, and `adhoc` can't be an agent's name. Wheems writes
+`AGENTS.md`, `CLAUDE.md` and the session's skills into the folder it runs in, so a session running
+another agent, or a worker, would otherwise replace the chief's in the workspace folder. It's
+inside the install folder, which the engines trust from setup, and
 reaches the knowledge base through `wheems knowledgebase` as every agent does. Chiefs' thread
 sessions stay in the workspace folder until milestone 5's session folders.
 
@@ -995,8 +1001,9 @@ OpenRouter is an API, not a CLI: one account and key with pay-as-you-go access t
 models. Paired with opencode, it covers any model without a separate subscription for each.
 
 **Engine drivers.** One small module per engine turns a single agent definition into what that
-engine expects: how to start it with a model, its instructions file (`CLAUDE.md` for Claude
-Code, `AGENTS.md` for Codex and opencode), its skills, its permissions and its MCP servers.
+engine expects: how to start it with a model, its instructions (`AGENTS.md` for every engine, with
+a one-line `CLAUDE.md` that has Claude Code read it), its skills (`.claude/skills/` or
+`.agents/skills/`), its permissions and its MCP servers. See [instructions.md](instructions.md).
 Each driver also declares what its engine supports, so doctor can say what won't work.
 
 **Accounts and usage limits**

@@ -81,6 +81,8 @@ Claude Code also loads your own `~/.claude/CLAUDE.md`, your user skills, plugins
 into every Wheems session on it. Those are written for your own work, not for a chief. `--bare`
 would stop them but also stops Claude Code reading the keychain, which breaks a subscription
 sign-in. `--setting-sources project,local` may stop them; it needs trying before it's used, since
-it also drops your user settings. Open.
+it also drops your user settings. Milestone 6's Claude Code config folder per workspace would
+stop them too, since Claude Code then reads its user files from there, if a subscription sign-in
+carries over to it. Open.
 
 Codex reads `~/.codex/AGENTS.md` and `~/.codex/skills/`; opencode has no global file.

@@ -394,8 +394,8 @@ wheems session create --title "Packaging suppliers" \
   chief's from any of its threads. Each new thread's session is told the chief's open sessions
   when it starts.
 - Each ad-hoc session runs in a folder of its own, `.wheems/sessions/<workspace>/adhoc/<id>/`, where
-  its engine's instructions file is written, so it never replaces the chief's. (So no agent can be
-  called `adhoc`.)
+  its `AGENTS.md`, `CLAUDE.md` and skills are written, so they never replace the chief's. (So no
+  agent can be called `adhoc`.)
 - `wheems session list` and `wheems session search "…"` find sessions in the workspace, most
   recently active first. Search looks at titles, purposes, summaries and agent names. A session's
   summary is written by Wheems: its purpose at first, then the title of its latest note.
@@ -610,8 +610,9 @@ wheems skill show weekly-report 1  # an older one
 ### Proposals
 
 When an agent works out how to do something it'll be asked to do again, it proposes a skill. Its
-built-in instructions say to improve an existing skill rather than add another, to read a skill
-before changing it, to write lessons rather than logs, and to leave out one-off failures.
+built-in `wheems-skill-proposals` skill says to improve an existing skill rather than add another,
+to read a skill before changing it, to write lessons rather than logs, and to leave out one-off
+failures.
 
 ```bash
 wheems skill propose weekly-report - <<'EOF'
@@ -1029,11 +1030,11 @@ and channels other than `chat` in `workspace.yaml`; and `workflows/*.yaml`. See
 
 ## Engines
 
-| Engine      | Instructions file | Default model         | Signs in with                                    | Follows each turn by                        |
-| ----------- | ----------------- | --------------------- | ------------------------------------------------ | ------------------------------------------- |
-| Claude Code | `CLAUDE.md`       | `claude-opus-5-5`     | A Claude subscription                            | Its status in Herdr, and its transcript     |
-| Codex       | `AGENTS.md`       | `gpt-6.1-sol`         | A ChatGPT subscription                           | Its status in Herdr, and its session record |
-| opencode    | `AGENTS.md`       | `opencode/big-pickle` | OpenRouter, a provider's key, or its free models | Its answers                                 |
+| Engine      | Reads                                | Skills from       | Default model         | Signs in with                                    | Follows each turn by                        |
+| ----------- | ------------------------------------ | ----------------- | --------------------- | ------------------------------------------------ | ------------------------------------------- |
+| Claude Code | `CLAUDE.md`, which says `@AGENTS.md` | `.claude/skills/` | `claude-opus-5-5`     | A Claude subscription                            | Its status in Herdr, and its transcript     |
+| Codex       | `AGENTS.md`                          | `.agents/skills/` | `gpt-6.1-sol`         | A ChatGPT subscription                           | Its status in Herdr, and its session record |
+| opencode    | `AGENTS.md`                          | `.agents/skills/` | `opencode/big-pickle` | OpenRouter, a provider's key, or its free models | Its answers                                 |
 
 - Every conversation keeps one engine session, and a session that ended is resumed by its id.
   Claude Code takes Wheems's id for it. Codex and opencode choose their own ids, which Wheems
