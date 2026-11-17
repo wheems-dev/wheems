@@ -3,7 +3,10 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.13
+
+Released 17 November 2026. Nothing a chief reads names a chat channel, so it reads the same
+whichever channel the person uses. No change to the session store. Still an early preview.
 
 **Changed**
 
