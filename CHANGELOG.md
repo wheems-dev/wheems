@@ -3,9 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.9
 
-The chief of staff now manages and delegates instead of doing the work itself, and knows its team.
+Released 17 November 2026. The chief of staff now manages and delegates instead of doing the work
+itself, and knows its team; and a chat thread can no longer carry on across a change of engine. No
+change to the session store. Still an early preview.
 
 **Changed**
 
