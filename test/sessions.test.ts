@@ -228,6 +228,7 @@ describe('wheems session', () => {
     // sessions skill, where its engine reads skills, beside the others.
     expect(instructions).toContain('## Your open sessions (built into Wheems)');
     expect(readdirSync(join(folder, '.agents', 'skills')).sort()).toEqual([
+      'wheems-approvals',
       'wheems-knowledge',
       'wheems-memory',
       'wheems-notes',
