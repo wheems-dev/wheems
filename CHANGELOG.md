@@ -3,6 +3,19 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- **The chief of staff is `WHEEMS.md`,** in the workspace's folder, and the workspace's goal is
+  `GOAL.md` beside it. `agents/` holds the chief's team. When the service starts, a workspace
+  from before moves over: `agents/chief-of-staff.md` becomes `WHEEMS.md`, and its "What we're
+  working towards" section, if it has one, becomes `GOAL.md`. Every session in the workspace
+  reads `GOAL.md`, the chief's and its team's.
+- **Every engine reads `AGENTS.md`.** Wheems writes everything a session needs there at every
+  start, and a `CLAUDE.md` whose one line, `@AGENTS.md`, has Claude Code read the same file.
+  See `docs/instructions.md`.
+
 ## 0.1.10
 
 Released 17 November 2026. Work a chief hands on now has a finish line it can check, answers

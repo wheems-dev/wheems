@@ -221,7 +221,7 @@ describe('the welcome screen', () => {
     writeFileSync(join(home, 'install.yaml'), installYaml());
     await initWorkspace({ home, id: 'personal' });
     // An agent file nobody may read makes loading the install fail.
-    const agent = join(home, 'workspaces', 'personal', 'agents', 'chief-of-staff.md');
+    const agent = join(home, 'workspaces', 'personal', 'WHEEMS.md');
     chmodSync(agent, 0o000);
     let out = '';
     let code: number;

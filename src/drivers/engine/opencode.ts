@@ -13,6 +13,7 @@ import {
 import type { EngineSetup } from '../../contracts/setup.js';
 import { runCommand } from '../../util/process.js';
 import { extractVersion } from '../../util/version.js';
+import { instructionsFiles } from './instructions.js';
 
 export interface OpencodeOptions {
   /** The `opencode` executable. Defaults to `opencode` on PATH. */
@@ -94,12 +95,7 @@ export class OpencodeEngine implements EngineDriver {
       cwd: context.sessionDir,
       env: {},
       ...(resuming && session.task !== null && { typeAfterStart: session.task }),
-      files: [
-        {
-          path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
-        },
-      ],
+      files: instructionsFiles(agent.instructions),
     });
   }
 

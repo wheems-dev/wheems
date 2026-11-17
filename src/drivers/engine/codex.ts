@@ -17,6 +17,7 @@ import { runCommand } from '../../util/process.js';
 import { codexTrusts } from '../../util/trust.js';
 import { markCodexTrusted } from '../../util/trust-write.js';
 import { extractVersion } from '../../util/version.js';
+import { instructionsFiles } from './instructions.js';
 
 export interface CodexOptions {
   /** The `codex` executable. Defaults to `codex` on PATH. */
@@ -111,12 +112,7 @@ export class CodexEngine implements EngineDriver {
       command,
       cwd: context.sessionDir,
       env: {},
-      files: [
-        {
-          path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
-        },
-      ],
+      files: instructionsFiles(agent.instructions),
     });
   }
 

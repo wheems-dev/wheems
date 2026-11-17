@@ -71,7 +71,8 @@ describe('claude-code engine', () => {
     expect(plan.cwd).toBe(context.sessionDir);
     expect(plan.env).toEqual({ CLAUDE_CODE_FORCE_SESSION_PERSISTENCE: '1' });
     expect(plan.files).toEqual([
-      { path: 'CLAUDE.md', content: expect.stringContaining('# Chief of staff') as string },
+      { path: 'AGENTS.md', content: expect.stringContaining('# Chief of staff') as string },
+      { path: 'CLAUDE.md', content: expect.stringMatching(/^@AGENTS\.md$/m) as string },
     ]);
   });
 

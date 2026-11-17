@@ -242,9 +242,10 @@ Projects inside a workspace (milestone 4) keep context clean but are never walls
 
 ```text
 workspaces/default/
+├── WHEEMS.md              the chief of staff, the agent you talk to
+├── GOAL.md                what the workspace is working towards
 ├── workspace.yaml         its name, accounts, chat channel, knowledge settings
-├── agents/
-│   └── chief-of-staff.md  the agent you talk to
+├── agents/                the chief's team, an agent file each
 ├── skills.yaml            the skills it uses, pinned to library versions
 └── knowledge/
     ├── brief.md           a short summary every agent here loads at launch
@@ -271,13 +272,15 @@ permissions: auto
 You look after my personal admin. Be brief.
 ```
 
-When Wheems starts an agent, it writes the engine's instructions file in the workspace folder
-(`CLAUDE.md` for Claude Code, `AGENTS.md` for Codex and opencode). The file holds the agent's
-instructions, then Wheems's built-in instructions, then what the agent should know at launch:
-`about-you.md` and the workspace's brief. The built-in instructions cover talking to the person,
-writing notes, searching the knowledge base, proposing skills and, for a chief, its role, its team
-and starting sessions. Don't edit the instructions
-file: it's rewritten at every launch and ignored by git.
+The chief's file is `WHEEMS.md`, and its team's are in `agents/`. When Wheems starts an agent,
+it writes `AGENTS.md` in the session's folder with everything the session needs: the agent's
+instructions, the workspace's `GOAL.md`, Wheems's built-in instructions, then what the agent
+should know at launch, `about-you.md` and the workspace's brief. It writes a `CLAUDE.md` beside it
+whose one line, `@AGENTS.md`, has Claude Code read the same file, so every engine reads the same
+thing. The built-in instructions cover talking to the person, writing notes, searching the
+knowledge base, proposing skills and, for a chief, its role, its team and starting sessions.
+Don't edit `AGENTS.md` or `CLAUDE.md`: they're rewritten at every launch and ignored by git. See
+[docs/instructions.md](docs/instructions.md).
 
 `permissions` says how much an agent may do without asking:
 
@@ -323,8 +326,10 @@ suggests an agent for it. The chief creating agents itself, and a Team page in t
 planned; see [docs/team.md](docs/team.md).
 
 A chief made before 0.1.9 has an agent file that says "Do what you're asked, end to end". The
-built-in role overrides it, but it's worth editing the file to describe the chief's goal instead,
-as a new one does under **What we're working towards**.
+built-in role overrides it, but it's worth editing `WHEEMS.md` to say who the chief is, and
+`GOAL.md` to say what it and its team are working towards. Workspaces from before 0.1.11 are
+moved over when the service starts: `agents/chief-of-staff.md` becomes `WHEEMS.md`, and its
+**What we're working towards** section, if it has one, becomes `GOAL.md`.
 
 ## Talking to agents
 

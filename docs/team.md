@@ -25,13 +25,14 @@ than doing it. Decided by the owner on 17 November 2026 ([ideas/decisions.md](id
 ## How a chief's behaviour is made today
 
 A chief isn't a script. It's an agent session (Claude Code, Codex or opencode) running in
-Herdr, and its behaviour comes from text Wheems writes into the engine's instructions file
-(`CLAUDE.md` or `AGENTS.md`) in its session folder at every launch. That text has three parts:
+Herdr, and its behaviour comes from text Wheems writes into `AGENTS.md` (which `CLAUDE.md`
+points to) in its session folder at every launch ([instructions.md](instructions.md)). That text
+has three parts:
 
-1. **The agent file**, `workspaces/<id>/agents/chief-of-staff.md`. Its front matter sets the engine,
-   model, account and permissions, and its body is the role. `wheems init` writes it from
-   `chiefOfStaffMd` in `src/cli/templates.ts`. It's the person's to edit, and the web app's
-   Settings page edits its front matter.
+1. **`WHEEMS.md`** in the workspace's folder, and **`GOAL.md`** beside it. `WHEEMS.md`'s front
+   matter sets the engine, model, account and permissions, and its body is who the chief is.
+   `wheems init` writes both from `wheemsMd` and `goalMd` in `src/cli/templates.ts`. They're the
+   person's to edit, and the web app's Settings page edits `WHEEMS.md`'s front matter.
 2. **Wheems's built-in instructions**, appended by `withBuiltins` in `src/agents/builtin.ts`:
    - talking to the person;
    - notes;

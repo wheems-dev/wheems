@@ -87,13 +87,19 @@ export function engineContract(label: string, options: EngineContractOptions): v
       }
     });
 
-    it('writes the instructions to its instructions file', async () => {
+    it('writes the instructions to AGENTS.md, which its instructions file is or points to', async () => {
       const plan = await driver.prepare(agent, context);
+      const agents = plan.files.find((f) => normalize(f.path) === 'AGENTS.md');
+      expect(agents, 'a planned AGENTS.md').toBeDefined();
+      expect(agents?.content).toContain('Reply with the word ready.');
       const file = plan.files.find(
         (f) => normalize(f.path) === driver.capabilities.instructionsFile,
       );
       expect(file, `a planned ${driver.capabilities.instructionsFile}`).toBeDefined();
-      expect(file?.content).toContain('Reply with the word ready.');
+      if (driver.capabilities.instructionsFile !== 'AGENTS.md') {
+        // An engine that reads another file reads AGENTS.md through it (docs/instructions.md).
+        expect(file?.content).toMatch(/^@AGENTS\.md$/m);
+      }
     });
 
     it('keeps planned files inside the session folder', async () => {

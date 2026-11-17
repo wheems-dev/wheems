@@ -103,6 +103,31 @@ async function loadWorkspace(
     if (agent) agents.push(agent);
   }
 
+  // The chief of staff is WHEEMS.md, named by workspace.yaml; agents/ holds its team.
+  const chiefName = config?.chief_of_staff ?? DEFAULT_CHIEF;
+  const wheemsFile = join(dir, CHIEF_FILE);
+  const old = agents.findIndex((a) => a.definition.name === chiefName);
+  if (await exists(wheemsFile)) {
+    if (old !== -1) {
+      problems.push({
+        level: 'error',
+        file: agents[old]?.file ?? '',
+        message: `The chief of staff is ${CHIEF_FILE} now, so this file is ignored: move what you need into ${CHIEF_FILE} and delete it`,
+      });
+      agents.splice(old, 1);
+    }
+    const chief = parseAgent(display(wheemsFile), await readFile(wheemsFile, 'utf8'), problems, {
+      name: chiefName,
+    });
+    if (chief) agents.unshift(chief);
+  } else if (old !== -1) {
+    problems.push({
+      level: 'warning',
+      file: agents[old]?.file ?? '',
+      message: `The chief of staff's file is ${CHIEF_FILE} now: the service moves this one there when it starts`,
+    });
+  }
+
   const workflows: LoadedWorkflow[] = [];
   for (const entry of await listDir(join(dir, 'workflows'))) {
     const ext = extname(entry);
@@ -119,7 +144,19 @@ async function loadWorkspace(
 /** Ad-hoc sessions' folders sit beside per-agent ones, under this name. */
 export const RESERVED_AGENT_NAME = 'adhoc';
 
-export function parseAgent(file: string, text: string, problems: Problem[]): LoadedAgent | null {
+/** The chief of staff's file in a workspace's folder, and the workspace's goal beside it. */
+export const CHIEF_FILE = 'WHEEMS.md';
+export const GOAL_FILE = 'GOAL.md';
+/** The chief's name when workspace.yaml doesn't give one. */
+export const DEFAULT_CHIEF = 'chief-of-staff';
+
+export function parseAgent(
+  file: string,
+  text: string,
+  problems: Problem[],
+  /** For the chief's WHEEMS.md, whose name comes from workspace.yaml, not its file name. */
+  fixed?: { name: string },
+): LoadedAgent | null {
   const match = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!match) {
     problems.push({
@@ -132,13 +169,16 @@ export function parseAgent(file: string, text: string, problems: Problem[]): Loa
   }
   const config = parseYaml(file, match[1] ?? '', agentFrontMatterSchema, problems, 1);
   if (!config) return null;
-  const fileName = basename(file, extname(file));
+  const fileName = fixed?.name ?? basename(file, extname(file));
   const name = config.name ?? fileName;
   if (config.name !== undefined && config.name !== fileName) {
     problems.push({
       level: 'error',
       file,
-      message: `The agent's name "${config.name}" must match its file name "${fileName}"`,
+      message:
+        fixed !== undefined
+          ? `The chief of staff's name comes from chief_of_staff in workspace.yaml ("${fileName}"): leave name out of ${CHIEF_FILE}`
+          : `The agent's name "${config.name}" must match its file name "${fileName}"`,
     });
   }
   if (name === RESERVED_AGENT_NAME) {

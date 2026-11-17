@@ -1,5 +1,5 @@
 import { relative } from 'node:path';
-import type { LoadedInstall, LoadedWorkspace, Problem } from './load.js';
+import { CHIEF_FILE, type LoadedInstall, type LoadedWorkspace, type Problem } from './load.js';
 
 export interface CrossCheckOptions {
   /** Engine drivers that are registered. Agents naming another engine get a warning. */
@@ -67,7 +67,7 @@ export function crossCheck(install: LoadedInstall, options: CrossCheckOptions = 
 
     const agentNames = new Set(workspace.agents.map((a) => a.definition.name));
     if (!agentNames.has(config.chief_of_staff)) {
-      error(`The chief of staff "${config.chief_of_staff}" has no file in agents/`);
+      error(`The chief of staff "${config.chief_of_staff}" has no ${CHIEF_FILE}`);
     }
     for (const rule of config.rules) {
       if (rule.require && !agentNames.has(rule.require.review)) {

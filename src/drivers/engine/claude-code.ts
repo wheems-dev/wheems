@@ -17,6 +17,7 @@ import { runCommand } from '../../util/process.js';
 import { claudeTrusts } from '../../util/trust.js';
 import { markClaudeTrusted } from '../../util/trust-write.js';
 import { extractVersion } from '../../util/version.js';
+import { instructionsFiles } from './instructions.js';
 
 export interface ClaudeCodeOptions {
   /** The `claude` executable. Defaults to `claude` on PATH. */
@@ -169,12 +170,7 @@ export class ClaudeCodeEngine implements EngineDriver {
         // Claude Code session would otherwise turn saving off.
         CLAUDE_CODE_FORCE_SESSION_PERSISTENCE: '1',
       },
-      files: [
-        {
-          path: this.capabilities.instructionsFile,
-          content: `<!-- Written by Wheems from agents/${agent.name}.md; edits here are replaced. -->\n\n${agent.instructions}\n`,
-        },
-      ],
+      files: instructionsFiles(agent.instructions),
     });
   }
 }

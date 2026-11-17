@@ -328,6 +328,8 @@ skill. The person reviews every proposal before any agent can use it.
 export interface Knowledge {
   aboutYou: string | null;
   brief: string | null;
+  /** The workspace's GOAL.md, which the person writes. */
+  goal?: string | null;
 }
 
 /** What the built-ins say about the session an agent runs in. */
@@ -360,12 +362,16 @@ export function withBuiltins(
     known.length === 0
       ? ''
       : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
+  const goal =
+    knowledge.goal !== undefined && knowledge.goal !== null
+      ? `\n## What we're working towards (from GOAL.md)\n\n${knowledge.goal}\n`
+      : '';
   const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
   const chief = session.chief ? `\n${CHIEF_ROLE}\n${teamInstructions(session.chief.team)}` : '';
   const sessions = session.sessions
     ? `\n${sessionsInstructions({ ...session.sessions, chief: session.chief !== undefined })}`
     : '';
-  return `${instructions.trim()}\n\n${chat}${chief}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
+  return `${instructions.trim()}\n${goal}\n${chat}${chief}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
 }
 
 /** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */

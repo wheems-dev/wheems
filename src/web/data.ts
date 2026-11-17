@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { runDoctor, type DoctorReport } from '../doctor/doctor.js';
@@ -276,7 +276,8 @@ function chiefOf(workspace: LoadedWorkspace): ChiefSummary | null {
   const agent = workspace.agents.find((a) => a.definition.name === name);
   if (!agent) return null;
   return {
-    file: `agents/${name}.md`,
+    // Named from the workspace's folder, as the page shows it: WHEEMS.md.
+    file: relative(join('workspaces', workspace.id), agent.file),
     engine: agent.definition.engine,
     model: agent.definition.model,
     account: agent.definition.account,
