@@ -1219,6 +1219,7 @@ export class SessionService {
     const own = isChief(workspace, agent.definition.name)
       ? workerInstructions(config?.name ?? workspace.id)
       : agent.definition.instructions;
+    const runtimeSkill = (await this.options.runtime.agentSkill?.()) ?? null;
     const builtins = {
       adhoc: {
         title: session.title ?? '',
@@ -1228,6 +1229,7 @@ export class SessionService {
         owner: ownerLabel(sessions, session),
       },
       ...(startsSessions && { sessions: startsSessions }),
+      ...(runtimeSkill !== null && { runtime: runtimeSkill }),
     };
     const instructions = withBuiltins(own, knowledge, builtins);
     return launchSession({

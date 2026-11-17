@@ -59,10 +59,31 @@ to about 1,700 tokens and a worker to about 1,050, before your own files:
 | `wheems-notes`           | Writing a note: when, what goes in it, the format, and answering Wheems's note requests                               | Everyone                                    |
 | `wheems-knowledge`       | Searching the knowledge base, and reading what it finds                                                               | Everyone                                    |
 | `wheems-skill-proposals` | Proposing a new or changed skill for review                                                                           | Everyone                                    |
+| `wheems-herdr`           | Running programs that must keep running, such as a dev server, in Herdr terminals with `hc`; never agents             | Everyone, when Herdr can print its manual   |
 
 New behaviours go in as skills the same way: creating team agents, approvals and reporting back
-when they come. Agents never drive Herdr directly; sessions are always started and messaged
-through `wheems session`, and the `wheems-sessions` skill says so.
+when they come.
+
+### Herdr
+
+`wheems-herdr` is Herdr's own manual for `hc`, read from `hc --skill` once per service run so it
+matches the installed version, after Wheems's rules for it. The Herdr adapter builds it
+(`src/drivers/runtime/herdr/agent-skill.ts`), through the runtime contract's `agentSkill`, so
+Wheems's core never names `hc`. The line the owner chose on 17 November 2026:
+
+- **Programs that must keep running go in Herdr terminals:** a dev server, a watcher, a long
+  build or test run. They keep going past the agent's turn, and the person can attach and watch.
+  Programs end with the session that started them, and Wheems stops quiet sessions, so one that
+  must outlive it is started with `--outlive-parent` and named in the answer.
+- **Agents never do.** `hc`'s manual starts with "Delegate a task", which teaches `hc run … claude`.
+  An agent started that way has no session record, no hand-back, no finish line and no limit, is
+  invisible to the web app and to approvals, and is killed when the chief's session stops. Agents
+  are started and messaged only through `wheems session`. The skill's preamble says it comes
+  before the manual, and the rule is also in the instructions every session always loads, in case
+  the skill isn't read.
+
+If agents ever start agents of their own, it'll be a feature that goes through Wheems, so it's
+tracked, not a way around it.
 
 Skills are written at every start into the folder each engine reads: `.claude/skills/` for Claude
 Code, `.agents/skills/` for Codex and opencode. Each is a `SKILL.md` named `wheems-…`, written by

@@ -36,7 +36,7 @@ has three parts:
 2. **Wheems's built-in instructions**, appended by `withBuiltins` in `src/agents/builtin.ts`:
    talking to the person, the chief's role and team, its open sessions, and a short map of
    Wheems's skills (`wheems-sessions`, `wheems-knowledge`, `wheems-notes`,
-   `wheems-skill-proposals`). The skills, written beside it at every start by `builtinSkills`,
+   `wheems-skill-proposals`, and `wheems-herdr` from Herdr's own manual). The skills, written beside it at every start by `builtinSkills`,
    teach the `wheems` commands, and are loaded only when they're needed.
 
 3. **What it knows**: `about-you.md` and the workspace's brief.

@@ -2,6 +2,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Hc, HcError } from '../src/drivers/runtime/herdr/hc.js';
+import { herdrSkill } from '../src/drivers/runtime/herdr/agent-skill.js';
 import { HERDR_MINIMUM_VERSION, HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
 import { expectDriverError, runtimeContract } from '../src/testing/index.js';
 import { fakeHc, isolatedHcEnv, realHcAvailable, type FakeHc } from './helpers/hc.js';
@@ -209,5 +210,50 @@ describe('herdr runtime', () => {
 
   it('refuses a session without a command', async () => {
     await expectDriverError(runtime().start({ name: 'x', command: [] }), 'invalid');
+  });
+});
+
+describe("Herdr's skill for agents", () => {
+  let fake: FakeHc | undefined;
+  afterEach(() => {
+    fake?.cleanup();
+    fake = undefined;
+  });
+
+  it("is hc's own manual after Wheems's rules: programs in Herdr, agents through wheems session", () => {
+    const skill = herdrSkill(
+      '---\nname: hc\ndescription: x\n---\n\n# hc manual\n\nDelegate a task.\n',
+    );
+    expect(skill.name).toBe('wheems-herdr');
+    expect(skill.content).toMatch(/^---\nname: wheems-herdr\ndescription: "How to run a program/);
+    // Its own front matter gives way to the skill's; the rest follows Wheems's rules.
+    expect(skill.content).not.toContain('name: hc');
+    expect(skill.content).toContain('**Never use `hc` for agents.**');
+    expect(skill.content).toContain('This comes before "Delegate a task"');
+    expect(skill.content.indexOf('Never use `hc` for agents')).toBeLessThan(
+      skill.content.indexOf('# hc manual'),
+    );
+    expect(skill.rule).toContain('never for an agent');
+  });
+
+  it('reads hc --skill once, and asks again when hc had none', async () => {
+    fake = fakeHc();
+    const log = join(fake.dir, 'log');
+    const without = new HerdrRuntime({
+      binary: fake.binary,
+      env: { ...fake.env, FAKE_HC_LOG: log },
+    });
+    expect(await without.agentSkill()).toBeNull();
+    const runtime = new HerdrRuntime({
+      binary: fake.binary,
+      env: { ...fake.env, FAKE_HC_LOG: log, FAKE_HC_SKILL: '# hc manual\n' },
+    });
+    expect((await runtime.agentSkill())?.content).toContain('# hc manual');
+    expect((await runtime.agentSkill())?.name).toBe('wheems-herdr');
+    const calls = readFileSync(log, 'utf8')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l) as string[]);
+    expect(calls.filter((c) => c[0] === '--skill')).toHaveLength(2);
   });
 });

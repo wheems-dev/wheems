@@ -5,6 +5,7 @@ import {
   type ReadOptions,
   type ReadResult,
   type RuntimeDriver,
+  type RuntimeSkill,
   type SendOptions,
   type SendResult,
   type SessionInfo,
@@ -15,6 +16,7 @@ import {
   type WaitResult,
 } from '../../../contracts/runtime.js';
 import { isAtLeast } from '../../../util/version.js';
+import { herdrSkill } from './agent-skill.js';
 import { Hc, HcError, type HcOptions, type HcTerminal, type HcWaitResult } from './hc.js';
 
 /** The oldest Herdr core this version of Wheems was tested with. */
@@ -35,6 +37,7 @@ export class HerdrRuntime implements RuntimeDriver {
   readonly minimumVersion: string;
   private readonly hc: Hc;
   private versionChecked: Promise<void> | undefined;
+  private manual: Promise<string> | undefined;
 
   constructor(options: HerdrRuntimeOptions = {}) {
     this.hc = new Hc(options);
@@ -43,6 +46,22 @@ export class HerdrRuntime implements RuntimeDriver {
       pinned !== undefined && isAtLeast(pinned, HERDR_MINIMUM_VERSION)
         ? pinned
         : HERDR_MINIMUM_VERSION;
+  }
+
+  /**
+   * The \`wheems-herdr\` skill, from \`hc --skill\` read once and kept; null when \`hc\` can't print
+   * it, and asked again next time.
+   */
+  async agentSkill(): Promise<RuntimeSkill | null> {
+    this.manual ??= this.hc.skill();
+    try {
+      const text = (await this.manual).trim();
+      if (text !== '') return herdrSkill(text);
+    } catch {
+      // No manual this time: sessions start without the skill, and the next asks again.
+    }
+    this.manual = undefined;
+    return null;
   }
 
   async check(): Promise<HealthCheck[]> {

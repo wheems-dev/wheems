@@ -4,7 +4,8 @@
 // file (FAKE_HC_STATE) and simulates two programs: anything with `sleep` in its
 // command runs until killed; anything else echoes the first line it reads as
 // `got:<line>` and exits 0. FAKE_HC_VERSION sets the version it reports and
-// FAKE_HC_LOG, when set, gets one JSON line of arguments per call.
+// FAKE_HC_LOG, when set, gets one JSON line of arguments per call. FAKE_HC_SKILL is its
+// manual for agents.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
@@ -14,6 +15,15 @@ if (process.env.FAKE_HC_LOG) appendFileSync(process.env.FAKE_HC_LOG, `${JSON.str
 
 if (args[0] === '--version' || args[0] === '-V') {
   process.stdout.write(`hc ${version}\n`);
+  process.exit(0);
+}
+// FAKE_HC_SKILL is what `hc --skill` prints; without it, hc has none and fails.
+if (args[0] === '--skill') {
+  if (process.env.FAKE_HC_SKILL === undefined) {
+    process.stderr.write('unknown option --skill\n');
+    process.exit(2);
+  }
+  process.stdout.write(process.env.FAKE_HC_SKILL);
   process.exit(0);
 }
 if (process.env.FAKE_HC_BAD_OUTPUT) {

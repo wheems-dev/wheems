@@ -3,6 +3,8 @@
  * learn to use the framework: through the `wheems` command, never through tokens
  * or hand-written scripts.
  */
+import type { RuntimeSkill } from '../contracts/runtime.js';
+
 export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Wheems)
 
 Messages from the person reach you from Slack, usually from their phone. They cannot see this
@@ -210,8 +212,9 @@ ended, so you can come back to it. ${
       options.chief === true
         ? 'Start one for any work that no agent on your team fits.'
         : "Start one for work that is long, or that you'll come back to; answer simple things yourself."
-    } Always start and talk to sessions with \`wheems session\`: never start or drive a terminal
-session yourself.
+    } Always start and talk to sessions with \`wheems session\`: never start an agent in a terminal
+yourself, with the terminal's own commands or otherwise, since Wheems wouldn't know about it,
+nothing would bring its answer back, and it would be stopped when your session is.
 
 - Search before you start one: one may already be working on it.
 
@@ -364,6 +367,9 @@ export function builtinSkills(session: SessionBuiltins = {}): BuiltinSkill[] {
     KNOWLEDGE_SKILL,
     NOTES_SKILL,
     SKILL_PROPOSALS_SKILL,
+    ...(session.runtime !== undefined
+      ? [{ name: session.runtime.name, content: session.runtime.content }]
+      : []),
   ];
 }
 
@@ -372,6 +378,8 @@ export function builtinSkills(session: SessionBuiltins = {}): BuiltinSkill[] {
  * not a skill is read. The how-to is in the skills (docs/instructions.md).
  */
 function skillsMap(session: SessionBuiltins): string {
+  const runtime =
+    session.runtime !== undefined ? `- \`${session.runtime.name}\`: ${session.runtime.when}\n` : '';
   const sessions = session.sessions
     ? `- \`wheems-sessions\`: before you start, message, wait on or end a session.${
         session.chief ? ' Every job you hand on goes through it.' : ''
@@ -388,12 +396,14 @@ ${sessions}- \`wheems-knowledge\`: before you answer about past work, decisions,
   learned, finished or blocked, and when Wheems asks for your note.
 - \`wheems-skill-proposals\`: when you've worked out how to do something you'll be asked to do
   again.
-
+${runtime}
 Whatever you're doing:
 
 - Never put passwords, tokens or other secrets in a session's title or purpose, a note or a skill.
 - Never edit \`knowledge/\` or \`about-you.md\` yourself: write a note.
-- Start and talk to other sessions only with \`wheems session\`, never in a terminal yourself.
+- Start and talk to other agents only with \`wheems session\`, never in a terminal yourself.${
+    session.runtime !== undefined ? ` ${session.runtime.rule}` : ''
+  }
 `;
 }
 
@@ -433,6 +443,8 @@ export interface SessionBuiltins {
   sessions?: { maxOpen: number; open: OpenSession[] };
   /** For a workspace's chief: its role, and its team. */
   chief?: { team: TeamMember[] };
+  /** The skill for the runtime sessions run in, such as Herdr's, when it has one. */
+  runtime?: RuntimeSkill;
 }
 
 /** An agent's instructions with the built-in ones appended, and what it knows at launch. */

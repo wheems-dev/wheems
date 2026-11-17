@@ -757,6 +757,8 @@ describe('architecture', () => {
     }).filter((f) => f.endsWith('.ts'));
     const offenders = files.filter((f) => {
       if (f === join('drivers', 'runtime', 'herdr', 'hc.ts')) return false;
+      // The skill that tells agents how to use hc names it in its text, but never runs it.
+      if (f === join('drivers', 'runtime', 'herdr', 'agent-skill.ts')) return false;
       return /['"`]hc['"`]/.test(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'));
     });
     expect(offenders).toEqual([]);

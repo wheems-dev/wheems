@@ -57,6 +57,7 @@ A session is one long-lived terminal program, usually an agent CLI.
 | `wait(session, { timeoutSeconds, output })`           | Until it stops working or exits, or prints `output`. A timeout is a check-in (`ended: false`), not a failure. |
 | `get(session)` / `list({ labels })`                   | One session by id or name (`null` when there is none), or live sessions.                                      |
 | `stop(session)` / `remove(session)`                   | Ends its program; removes a finished session.                                                                 |
+| `agentSkill()` (optional)                             | A skill for agents running in it, from its own manual, with the rule every session always loads; or `null`.   |
 
 ### Engine ([`engine.ts`](../src/contracts/engine.ts))
 
