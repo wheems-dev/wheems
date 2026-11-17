@@ -159,19 +159,22 @@ describe('wheems session', () => {
     behave = (line) => (line.startsWith('hello') ? 'reply' : 'answer');
     received = new Map();
     answers = new Map();
-    runtime = new MemoryRuntime({
-      'fake-agent': fakeAgent({
-        behaviour: (line) => behave(line),
-        reply: async (conversation, text) => {
-          const result = await wheems(['chat', 'reply', text], {
-            WHEEMS_CONVERSATION: conversation,
-          });
-          if (result.code !== 0) throw new Error(result.err);
-        },
-        received,
-        answers,
-      }),
-    });
+    runtime = new MemoryRuntime(
+      {
+        'fake-agent': fakeAgent({
+          behaviour: (line) => behave(line),
+          reply: async (conversation, text) => {
+            const result = await wheems(['chat', 'reply', text], {
+              WHEEMS_CONVERSATION: conversation,
+            });
+            if (result.code !== 0) throw new Error(result.err);
+          },
+          received,
+          answers,
+        }),
+      },
+      { manual: '# The runtime manual' },
+    );
     await start();
   });
 
@@ -226,10 +229,19 @@ describe('wheems session', () => {
     expect(instructions).toContain('## Your open sessions (built into Wheems)');
     expect(readdirSync(join(folder, '.agents', 'skills')).sort()).toEqual([
       'wheems-knowledge',
+      'wheems-memory',
       'wheems-notes',
       'wheems-sessions',
       'wheems-skill-proposals',
     ]);
+    // The runtime's own skill, and its rule in the instructions every session always loads.
+    expect(
+      readFileSync(join(folder, '.agents', 'skills', 'wheems-memory', 'SKILL.md'), 'utf8'),
+    ).toContain('# The runtime manual');
+    expect(instructions).toContain('- `wheems-memory`: when a program must keep running.');
+    expect(instructions).toContain(
+      'never in a terminal yourself. Use the memory runtime only for programs.',
+    );
     expect(
       readFileSync(join(folder, '.agents', 'skills', 'wheems-sessions', 'SKILL.md'), 'utf8'),
     ).toContain("Start one for work that is long, or that you'll come back to");

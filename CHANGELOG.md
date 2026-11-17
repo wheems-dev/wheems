@@ -5,6 +5,19 @@ change anything, including commands and config formats, without a migration path
 
 ## Unreleased
 
+**Added**
+
+- **A `wheems-herdr` skill for every session:** Herdr's own manual for `hc`, read from the
+  installed `hc --skill`, after Wheems's rules for it. Agents use Herdr terminals for programs
+  that must keep running, such as a dev server you can attach to and watch, and never to start
+  an agent, which only ever goes through `wheems session`. The rule is also in the instructions
+  every session always loads.
+
+**Changed**
+
+- A new workspace's `WHEEMS.md` says only who the chief is and how it talks. What it does is built
+  into Wheems and loaded every time, so editing `WHEEMS.md` can't change it.
+
 **Fixed**
 
 - **A Wheems session on Claude Code no longer gets your own `~/.claude/CLAUDE.md` or your own

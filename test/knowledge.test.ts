@@ -138,6 +138,18 @@ describe('notes', () => {
       'wheems-skill-proposals',
     ]);
     expect(withBuiltins('# Agent')).not.toContain('wheems-sessions');
+    // The runtime's skill, when it has one, with its rule always loaded.
+    const runtime = {
+      name: 'wheems-herdr',
+      content: 'x',
+      when: 'for programs.',
+      rule: 'Programs only.',
+    };
+    expect(builtinSkills({ runtime }).map((s) => s.name)).toContain('wheems-herdr');
+    const withRuntime = withBuiltins('# Agent', undefined, { runtime });
+    expect(withRuntime).toContain('- `wheems-herdr`: for programs.');
+    expect(withRuntime).toContain('never in a terminal yourself. Programs only.');
+    expect(withBuiltins('# Agent')).not.toContain('Programs only.');
     const team = withBuiltins('# Chief', undefined, {
       chief: {
         team: [{ name: 'writer', description: null, engine: 'codex', model: 'gpt-6.1-sol' }],

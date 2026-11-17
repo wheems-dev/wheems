@@ -203,3 +203,23 @@ The owner wanted to simplify what each session loads ([instructions.md](../instr
 - **Wheems's behaviours become built-in skills** (the owner's idea), so new ones can be added
   without the always-loaded instructions growing. Rules stay always loaded, because an agent can
   skip a skill. Only the how-to moves to skills.
+
+### Herdr's skill, and agents only through Wheems (17 November 2026)
+
+The owner asked to load Herdr's skills into every session, and to keep `WHEEMS.md` free of
+behaviour, so that editing it can't break anything.
+
+- **Agents are started only with `wheems session`; Herdr is for programs.** This was the
+  recommendation, and the owner agreed. An agent started with `hc run` would go round Wheems:
+  - no record, no hand-back and no finish line;
+  - invisible to the web app and to approvals;
+  - killed when the chief's session stops.
+
+  Herdr's `hc` stays for programs that must keep running, such as a dev server, where the person
+  can watch.
+
+- **`wheems-herdr` is built from `hc --skill`,** so it always matches the installed Herdr. A
+  Wheems preamble comes first, and the rule is always loaded as well. `herdr --skill`, for the
+  older Herdr app, doesn't apply to Wheems sessions.
+- **`WHEEMS.md` holds only who the chief is and how it talks.** All behaviour lives in the
+  built-in rules and skills.

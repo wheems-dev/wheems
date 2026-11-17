@@ -1066,7 +1066,12 @@ export class ConversationManager {
       workspace,
       `${workspace.id}/${agent.definition.name}`,
     );
-    const builtins = { ...(sessions && { sessions }), chief: { team: teamOf(workspace) } };
+    const runtimeSkill = (await this.options.runtime.agentSkill?.()) ?? null;
+    const builtins = {
+      ...(sessions && { sessions }),
+      chief: { team: teamOf(workspace) },
+      ...(runtimeSkill !== null && { runtime: runtimeSkill }),
+    };
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
     const started = await launchSession({
       runtime: this.options.runtime,

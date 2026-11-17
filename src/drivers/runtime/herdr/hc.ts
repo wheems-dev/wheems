@@ -138,6 +138,12 @@ export class Hc {
     return version;
   }
 
+  /** \`hc\`'s manual for agents, from \`hc --skill\`: how to use it, for the installed version. */
+  async skill(): Promise<string> {
+    const { stdout } = await this.exec(['--skill'], DEFAULT_TIMEOUT_SECONDS);
+    return stdout;
+  }
+
   /** The running core's status. Starts the core if it is not running. */
   async serverStatus(): Promise<HcServerStatus> {
     return this.json(['server', 'status'], hcServerStatus);

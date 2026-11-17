@@ -5,6 +5,7 @@ import {
   type ReadOptions,
   type ReadResult,
   type RuntimeDriver,
+  type RuntimeSkill,
   type SendOptions,
   type SendResult,
   type SessionInfo,
@@ -80,22 +81,37 @@ export class MemoryRuntime implements RuntimeDriver {
   private nextId = 1;
 
   private readonly waitDelayMs: number;
+  private readonly manual: string | null;
 
   /**
    * `waitDelayMs` holds back each wait's answer, as a slow runtime would, so the session
-   * may have moved on by the time the caller hears.
+   * may have moved on by the time the caller hears. `manual` is its manual for agents.
    */
   constructor(
     programs: Record<string, ProgramFactory> = {},
-    options: { waitDelayMs?: number } = {},
+    options: { waitDelayMs?: number; manual?: string } = {},
   ) {
     this.waitDelayMs = options.waitDelayMs ?? 0;
+    this.manual = options.manual ?? null;
     this.programs = {
       'echo-line': echoLineProgram,
       'echo-env': echoEnvProgram,
       sleep: sleepProgram,
       ...programs,
     };
+  }
+
+  agentSkill(): Promise<RuntimeSkill | null> {
+    return Promise.resolve(
+      this.manual === null
+        ? null
+        : {
+            name: 'wheems-memory',
+            content: `---\nname: wheems-memory\ndescription: The memory runtime.\n---\n\n${this.manual}\n`,
+            when: 'when a program must keep running.',
+            rule: 'Use the memory runtime only for programs.',
+          },
+    );
   }
 
   check(): Promise<HealthCheck[]> {

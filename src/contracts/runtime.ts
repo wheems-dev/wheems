@@ -42,6 +42,24 @@ export interface RuntimeDriver extends Driver<'runtime'> {
 
   /** Removes a finished session. */
   remove(session: string): Promise<void>;
+
+  /**
+   * A skill for agents running in this runtime, built from its own manual for them, or null when
+   * it has none or it can't be read. Wheems gives it to every session.
+   */
+  agentSkill?(): Promise<RuntimeSkill | null>;
+}
+
+/** How agents may use the runtime they run in: a skill, and the rule Wheems always loads. */
+export interface RuntimeSkill {
+  /** Its name, \`wheems-…\`, as Wheems's own skills are. */
+  name: string;
+  /** The whole SKILL.md. */
+  content: string;
+  /** When to use it, for the map of skills in every session's instructions. */
+  when: string;
+  /** What the runtime is for and never for, added to the rules every session always loads. */
+  rule: string;
 }
 
 /** The status an agent program reports about itself. Plain programs report none (`null`). */

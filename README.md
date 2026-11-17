@@ -280,7 +280,10 @@ whose one line, `@AGENTS.md`, has Claude Code read the same file, so every engin
 thing. The built-in instructions are the rules that always apply: talking to the person and, for a
 chief, its role, its team and its open sessions. How to use Wheems is in built-in skills, which
 the engine loads only when they're needed: `wheems-sessions` (handing work on and following it),
-`wheems-knowledge` (searching the knowledge base), `wheems-notes` and `wheems-skill-proposals`.
+`wheems-knowledge` (searching the knowledge base), `wheems-notes`, `wheems-skill-proposals`, and
+`wheems-herdr`, Herdr's own manual for `hc` from the installed version. That one is for programs
+that must keep running, such as a dev server you can watch; agents are only ever started with
+`wheems session`, which every session's rules also say.
 They're written at every start where the engine reads skills, `.claude/skills/` for Claude Code
 and `.agents/skills/` for Codex and opencode; your own skills there are left alone. Claude Code is
 started without your own `~/.claude/CLAUDE.md` and your own skills in `~/.claude/skills/`, which
