@@ -117,7 +117,7 @@ your team instead.
 **How you work:**
 
 - Pick who does it: an agent on your team whose description fits the job, otherwise an ad-hoc
-  session (see Sessions below).
+  session. Hand it on with the \`wheems-sessions\` skill.
 - Brief with a finish line. The purpose says what's wanted, what to hand back and what not to
   touch. \`--done-when\` says what must be true when it's finished, in things you can check: a
   test that passes, a page that loads, a draft saved in a file. Not "it's better".
@@ -179,25 +179,39 @@ export interface OpenSession {
   summary: string;
 }
 
-/** How to start and find sessions, for an agent that may start them. */
-export function sessionsInstructions(options: {
+/** One of Wheems's own skills, written into each session's folder at every start. */
+export interface BuiltinSkill {
+  /** Its folder's name and its `name`: always `wheems-…`. */
+  name: string;
+  /** The whole SKILL.md. */
+  content: string;
+}
+
+function skill(name: string, description: string, body: string): BuiltinSkill {
+  return {
+    name,
+    content: `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n\n<!-- Written by Wheems at every start; edits here are replaced. -->\n\n${body}`,
+  };
+}
+
+/** How to start, brief, follow and end sessions, for an agent that may start them. */
+export function sessionsSkill(options: {
   maxOpen: number;
-  open: OpenSession[];
   /** For a chief, which starts one for any work (its role says so). */
   chief?: boolean;
-}): string {
-  const open =
-    options.open.length === 0
-      ? 'None.'
-      : options.open.map((s) => `- \`${s.id}\` ${s.title} (${s.state}): ${s.summary}`).join('\n');
-  return `## Sessions (built into Wheems)
+}): BuiltinSkill {
+  return skill(
+    'wheems-sessions',
+    'How to hand work to another agent session and follow it, with the wheems command: finding, starting, briefing with a finish line, messaging, waiting on and ending sessions. Use before you start, message or end a session.',
+    `# Sessions
 
 An ad-hoc session is another agent session that works on one thing and stays open until it's
 ended, so you can come back to it. ${
-    options.chief === true
-      ? 'Start one for any work that no agent on your team fits.'
-      : "Start one for work that is long, or that you'll come back to; answer simple things yourself."
-  }
+      options.chief === true
+        ? 'Start one for any work that no agent on your team fits.'
+        : "Start one for work that is long, or that you'll come back to; answer simple things yourself."
+    } Always start and talk to sessions with \`wheems session\`: never start or drive a terminal
+session yourself.
 
 - Search before you start one: one may already be working on it.
 
@@ -205,10 +219,11 @@ ended, so you can come back to it. ${
   wheems session search "packaging suppliers"
   \`\`\`
 
-- Start one with a short title and a purpose that says what to do and what to hand back.
-  ${
+- Start one with a short title and a purpose that says what to do, what to hand back and what not
+  to touch. ${
     options.chief === true ? 'Always give `--done-when` too' : 'Give `--done-when` too when you can'
-  }: what must be true when it's finished, in things you can check.
+  }: what must be true when it's finished, in things you can check, such as a test that passes, a
+  page that loads or a file that exists. Not "it's better".
   It starts working on the purpose at once, and \`create\` prints its id; its answer comes back to
   you as a message from Wheems when it's done. ${
     options.chief === true
@@ -233,6 +248,14 @@ ended, so you can come back to it. ${
   wheems session send 3f2a… "Add delivery times to the shortlist."
   \`\`\`
 
+- An answer to a session with a finish line ends with the line again and a count, such as
+  "Answer 2 from this session". Check the answer's evidence against the line: what was run and
+  what it showed, links, files and commits, not "should work".
+- To send work back, say what you expected, what you saw instead and what's already been tried.
+  Send the same job back twice at most. If it still isn't done, or comes back the same as last
+  time, stop and take it to ${
+    options.chief === true ? 'the person' : 'your owner'
+  }: what was tried and what's missing.
 - \`wheems session list\` shows this workspace's open sessions (\`--mine\` for yours),
   \`wheems session show <id>\` one session's details and latest answer, and
   \`wheems session end <id>\` ends one of yours once its work is done. It's asked for its note
@@ -241,16 +264,14 @@ ended, so you can come back to it. ${
   tells the person what they need to know, in its own conversation with them.
 - You may have ${String(options.maxOpen)} open at once. End the ones you're done with.
 - Titles and purposes appear in search. Never put passwords, tokens or other secrets in them.
-
-### Your open sessions
-
-As they were when this session started.
-
-${open}
-`;
+`,
+  );
 }
 
-export const NOTES_INSTRUCTIONS = `## Notes and the knowledge base (built into Wheems)
+export const NOTES_SKILL = skill(
+  'wheems-notes',
+  "How to write a note for this workspace's knowledge base with wheems knowledgebase note. Use when something worth keeping happens, such as a decision and why, something learned, finished or blocked, and when Wheems asks for your note.",
+  `# Notes
 
 This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never edit anything in
 \`knowledge/\` or \`about-you.md\` yourself: write a note, and Wheems's filing job does the rest.
@@ -270,17 +291,21 @@ This workspace keeps a knowledge base in \`knowledge/\`, built from notes. Never
 - Write lessons, not logs. Leave out one-off failures, such as a command that failed once.
 - Cover only what happened since your last note in this conversation.
 - Never put passwords, tokens or other secrets in a note.
-- If the person tells you something that belongs in "About the person" below, say so in a note.
-  They approve every change to it.
-- Wheems may send you a message asking for your note, when a conversation has gone quiet. Write
-  one if anything since your last note is worth keeping, then answer just "done". That answer is
-  not sent to the person.
-`;
+- If the person tells you something that belongs in "About the person" in your instructions, say
+  so in a note. They approve every change to it.
+- Wheems may send you a message asking for your note, when a conversation has gone quiet or a
+  session is ending. Write one if anything since your last note is worth keeping, then answer
+  just "done". That answer is not sent to the person.
+`,
+);
 
-export const SEARCH_INSTRUCTIONS = `## Searching the knowledge base (built into Wheems)
+export const KNOWLEDGE_SKILL = skill(
+  'wheems-knowledge',
+  "How to search this workspace's knowledge base with wheems knowledgebase search, and read what it finds. Use before answering about past work, decisions, people, plans or an earlier conversation, and before saying you don't know.",
+  `# Searching the knowledge base
 
-The brief below is a short summary. The knowledge base holds the detail: a page per topic, and
-every note it was built from.
+The brief in your instructions is a short summary. The knowledge base holds the detail: a page
+per topic, and every note it was built from.
 
 - Before you answer about past work, decisions, people, plans or anything from an earlier
   conversation, search it. Search before saying you don't know.
@@ -293,9 +318,13 @@ every note it was built from.
   search finds nothing useful.
 - Each result gives a file. Read the file before relying on it; the passage shown is only part
   of it. Pages say what's true now; notes say what was true when they were written.
-`;
+`,
+);
 
-export const SKILLS_INSTRUCTIONS = `## Proposing skills (built into Wheems)
+export const SKILL_PROPOSALS_SKILL = skill(
+  'wheems-skill-proposals',
+  "How to propose a new or changed skill for the person to review, with wheems skill propose. Use when you've worked out how to do a task you'll be asked to do again.",
+  `# Proposing skills
 
 A skill is how to do a task that comes up again: the steps, the checks, and what to watch out
 for. When you've worked out how to do something you'll be asked to do again, propose it as a
@@ -322,12 +351,72 @@ skill. The person reviews every proposal before any agent can use it.
 - Skills a person wrote can't be changed by an agent. Tell the person what you'd change instead.
 - If the answer says your skill may repeat another, read that one and propose a change to it
   instead, unless the two really are different tasks.
+- Skills named \`wheems-…\` come with Wheems. Don't propose changes to them.
+`,
+);
+
+/** The skills Wheems gives a session, as its built-ins describe it. */
+export function builtinSkills(session: SessionBuiltins = {}): BuiltinSkill[] {
+  return [
+    ...(session.sessions
+      ? [sessionsSkill({ maxOpen: session.sessions.maxOpen, chief: session.chief !== undefined })]
+      : []),
+    KNOWLEDGE_SKILL,
+    NOTES_SKILL,
+    SKILL_PROPOSALS_SKILL,
+  ];
+}
+
+/**
+ * The always-loaded map of Wheems's skills: which to use when, and the rules that hold whether or
+ * not a skill is read. The how-to is in the skills (docs/instructions.md).
+ */
+function skillsMap(session: SessionBuiltins): string {
+  const sessions = session.sessions
+    ? `- \`wheems-sessions\`: before you start, message, wait on or end a session.${
+        session.chief ? ' Every job you hand on goes through it.' : ''
+      }\n`
+    : '';
+  return `## Wheems's skills (built into Wheems)
+
+How to do things with Wheems is in its skills, which come with it. Use the one that fits before you
+act:
+
+${sessions}- \`wheems-knowledge\`: before you answer about past work, decisions, people, plans or an earlier
+  conversation. Search before you say you don't know.
+- \`wheems-notes\`: when something worth keeping happens, such as a decision and why, something
+  learned, finished or blocked, and when Wheems asks for your note.
+- \`wheems-skill-proposals\`: when you've worked out how to do something you'll be asked to do
+  again.
+
+Whatever you're doing:
+
+- Never put passwords, tokens or other secrets in a session's title or purpose, a note or a skill.
+- Never edit \`knowledge/\` or \`about-you.md\` yourself: write a note.
+- Start and talk to other sessions only with \`wheems session\`, never in a terminal yourself.
 `;
+}
+
+/** The chief's or a session's open sessions, as they were when it started. */
+function openSessions(open: OpenSession[]): string {
+  const list =
+    open.length === 0
+      ? 'None.'
+      : open.map((s) => `- \`${s.id}\` ${s.title} (${s.state}): ${s.summary}`).join('\n');
+  return `## Your open sessions (built into Wheems)
+
+As they were when this session started.
+
+${list}
+`;
+}
 
 /** What an agent knows when it starts: the page about the person and the workspace's brief. */
 export interface Knowledge {
   aboutYou: string | null;
   brief: string | null;
+  /** The workspace's GOAL.md, which the person writes. */
+  goal?: string | null;
 }
 
 /** What the built-ins say about the session an agent runs in. */
@@ -360,17 +449,19 @@ export function withBuiltins(
     known.length === 0
       ? ''
       : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
+  const goal =
+    knowledge.goal !== undefined && knowledge.goal !== null
+      ? `\n## What we're working towards (from GOAL.md)\n\n${knowledge.goal}\n`
+      : '';
   const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
   const chief = session.chief ? `\n${CHIEF_ROLE}\n${teamInstructions(session.chief.team)}` : '';
-  const sessions = session.sessions
-    ? `\n${sessionsInstructions({ ...session.sessions, chief: session.chief !== undefined })}`
-    : '';
-  return `${instructions.trim()}\n\n${chat}${chief}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
+  const sessions = session.sessions ? `\n${openSessions(session.sessions.open)}` : '';
+  return `${instructions.trim()}\n${goal}\n${chat}${chief}\n${skillsMap(session)}${sessions}${knows}`;
 }
 
 /** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */
 export const END_NOTE_REQUEST =
-  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done".';
+  'Wheems: this session is being ended. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (the wheems-notes skill). Then answer just "done".';
 
 /** The message Wheems sends when it asks an agent for its note. */
 /**
@@ -381,4 +472,4 @@ export const HANDOVER_REQUEST =
   "Wheems: this conversation is being handed over to a new session of its chief of staff, which won't have your history. Write a handover for it now with `wheems session handover`, in Markdown, on standard input: what the person asked, in their words; what's done, with links, files and commits; what's in progress and what's next; decisions made, and why; open questions, and anything you promised the person; and anything the next chief should know that isn't written down anywhere else. Then answer just \"done\"; that answer is not sent to the person.";
 
 export const NOTE_REQUEST =
-  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (see "Notes and the knowledge base" in your instructions). Then answer just "done"; that answer is not sent to the person.';
+  'Wheems: this conversation has gone quiet. If anything since your last note is worth keeping, write a note now with `wheems knowledgebase note` (the wheems-notes skill). Then answer just "done"; that answer is not sent to the person.';

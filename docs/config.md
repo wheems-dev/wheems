@@ -77,7 +77,7 @@ The folder name is the workspace's id.
 ```yaml
 name: Acme
 description: A small software business.
-chief_of_staff: chief-of-staff # the file in agents/; this is the default
+chief_of_staff: chief-of-staff # the chief's name, for WHEEMS.md; this is the default
 accounts: [claude-subscription, openrouter] # install accounts this workspace may use
 machine: server # where its agents run by default
 isolation: enforced # or hard
@@ -126,10 +126,22 @@ every other workspace chats in a channel, by name or id, that the app has been i
 A rule needs at least one of `deny`, `require` or `approval`; `approval` names a channel and goes
 with `action`.
 
+## workspaces/&lt;id&gt;/WHEEMS.md and GOAL.md
+
+`WHEEMS.md` is the chief of staff: the agent you talk to. It's an agent file like the ones below,
+front matter then instructions, but its name comes from `chief_of_staff` in `workspace.yaml`, so
+leave `name` out. `GOAL.md` is what the workspace is working towards, in plain Markdown; every
+session in the workspace reads it, the chief's and its team's. Only the first 4,000 characters
+are loaded.
+
+At every start Wheems writes `AGENTS.md` beside them, with everything the session needs, and a
+`CLAUDE.md` that has Claude Code read it. Don't edit those: they're replaced, and ignored by git.
+See [instructions.md](instructions.md).
+
 ## workspaces/&lt;id&gt;/agents/&lt;name&gt;.md
 
-YAML front matter, then the agent's instructions in Markdown. The engine driver writes the
-instructions into the engine's own file (`CLAUDE.md`, `AGENTS.md`).
+The chief's team. YAML front matter, then the agent's instructions in Markdown, which Wheems puts
+in the `AGENTS.md` of each session the agent runs.
 
 ```markdown
 ---

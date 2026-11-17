@@ -61,11 +61,18 @@ A session is one long-lived terminal program, usually an agent CLI.
 ### Engine ([`engine.ts`](../src/contracts/engine.ts))
 
 An engine driver turns one agent definition into a **launch plan**: the command that starts it
-with a model, the environment, and the files to write (its instructions file, and later its
-skills, permissions and MCP config). It never touches the disk or starts a process itself; the
-framework writes the files and starts the command through the runtime driver. It declares its
-`capabilities` (`instructionsFile`, `skills`, `mcp`, `hooks`, `permissions`, `resume`), so doctor
-can say what won't work.
+with a model, the environment, and the files to write (its instructions, and later its
+permissions and MCP config). It never touches the disk or starts a process itself; the framework
+writes the files and starts the command through the runtime driver. It declares its
+`capabilities` (`instructionsFile`, `skills`, `skillsFolder`, `mcp`, `hooks`, `permissions`,
+`resume`), so doctor can say what won't work.
+
+Every engine gets `AGENTS.md` with the agent's whole instructions, from `instructionsFiles` in
+`src/drivers/engine/instructions.ts`. An engine whose `instructionsFile` is another file, as
+Claude Code's `CLAUDE.md` is, gets that file too, holding `@AGENTS.md`; the contract tests check
+it. The framework writes Wheems's skills into `skillsFolder` (such as `.claude/skills` or
+`.agents/skills`) at every launch, each as `<name>/SKILL.md`. See
+[instructions.md](instructions.md).
 
 Each launch is for one conversation: the context carries its `session` (a stable UUID, whether
 to `resume` it, the first `task`, and the engine's own id once known), and the agent carries its

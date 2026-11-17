@@ -2,10 +2,20 @@ import { HERDR_MINIMUM_VERSION } from '../drivers/runtime/herdr/herdr-runtime.js
 
 export const INSTALL_GITIGNORE = `# Running state: conversations, the control socket, logs.
 .wheems/
-# Written by Wheems from agents/*.md for each engine.
+# Written by Wheems at every start, from WHEEMS.md, GOAL.md and agents/*.md.
 workspaces/*/CLAUDE.md
 workspaces/*/AGENTS.md
+workspaces/*/.claude/
+workspaces/*/.agents/
 `;
+
+/** The lines a .gitignore needs for what Wheems writes into workspace folders. */
+export const GENERATED_IGNORES = [
+  'workspaces/*/CLAUDE.md',
+  'workspaces/*/AGENTS.md',
+  'workspaces/*/.claude/',
+  'workspaces/*/.agents/',
+];
 
 export function installYaml(): string {
   return `# Wheems install: what every workspace shares. See docs/config.md.
@@ -77,7 +87,8 @@ export const SKILLS_YAML = `# Skills this workspace uses, each pinned to a libra
 skills: {}
 `;
 
-export function chiefOfStaffMd(template: WorkspaceTemplate): string {
+/** A workspace's WHEEMS.md: its chief of staff, which the person talks to. */
+export function wheemsMd(template: WorkspaceTemplate): string {
   return `---
 description: ${yamlString(`The one entry point for ${template.name}, aware of everything going on in it.`)}
 engine: ${template.engine.name}
@@ -97,10 +108,16 @@ the work, and you keep the person informed.
 - Decide what you can. Ask the person only when a decision is genuinely theirs.
 - Be brief. Lead with the answer or the result, then any detail they need.
 - Say plainly what's done, what isn't, and anything that needs them.
+`;
+}
 
-## What we're working towards
-
-<!-- The goal for ${template.name}: what you want your chief of staff and its team to achieve. -->
+/** A workspace's GOAL.md, to fill in: what the chief and its team are working towards. */
+export function goalMd(name: string): string {
+  return `<!--
+The goal for ${name}: what you want your chief of staff and its team to achieve. Every session in
+this workspace reads it when it starts, the chief's and its team's. Keep it short: only the first
+4,000 characters are loaded.
+-->
 `;
 }
 

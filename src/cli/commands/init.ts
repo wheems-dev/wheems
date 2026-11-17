@@ -1,6 +1,6 @@
 import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadInstall } from '../../config/load.js';
+import { CHIEF_FILE, GOAL_FILE, loadInstall } from '../../config/load.js';
 import { nameSchema } from '../../config/schemas.js';
 import { paths } from '../../home.js';
 import { readFile } from 'node:fs/promises';
@@ -8,9 +8,10 @@ import { parseDocument } from 'yaml';
 import { knowledgePaths } from '../../knowledge/notes.js';
 import {
   BRIEF_MD,
-  chiefOfStaffMd,
+  goalMd,
   DEFAULT_ENGINE,
   SKILLS_YAML,
+  wheemsMd,
   workspaceYaml,
   type EngineChoice,
 } from '../templates.js';
@@ -87,7 +88,8 @@ export async function initWorkspace(options: InitOptions): Promise<string> {
   await mkdir(join(dir, 'agents'), { recursive: true });
   await writeFile(join(dir, 'workspace.yaml'), workspaceYaml(template));
   await writeFile(join(dir, 'skills.yaml'), SKILLS_YAML);
-  await writeFile(join(dir, 'agents', 'chief-of-staff.md'), chiefOfStaffMd(template));
+  await writeFile(join(dir, CHIEF_FILE), wheemsMd(template));
+  await writeFile(join(dir, GOAL_FILE), goalMd(template.name));
   const knowledge = knowledgePaths(dir);
   for (const folder of [knowledge.inbox, knowledge.notes, knowledge.pages, knowledge.reports])
     await mkdir(folder, { recursive: true });

@@ -3,12 +3,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   END_NOTE_REQUEST,
+  builtinSkills,
   withBuiltins,
   workerInstructions,
   type OpenSession,
 } from '../agents/builtin.js';
 import { isChief } from '../agents/team.js';
-import type { LoadedAgent, LoadedWorkspace } from '../config/load.js';
+import { GOAL_FILE, type LoadedAgent, type LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import { isDriverError } from '../contracts/driver.js';
 import { conversationTag, type EngineDriver, type FinalMessage } from '../contracts/engine.js';
@@ -16,6 +17,7 @@ import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 import {
   ABOUT_YOU_LIMIT,
   BRIEF_LIMIT,
+  GOAL_LIMIT,
   knowledgePaths,
   looksLikeSecret,
   noteTitle,
@@ -1206,6 +1208,7 @@ export class SessionService {
           ? await readCapped(this.options.aboutYouFile, ABOUT_YOU_LIMIT)
           : null,
       brief: await readCapped(knowledgePaths(workspace.dir).brief, BRIEF_LIMIT),
+      goal: await readCapped(join(workspace.dir, GOAL_FILE), GOAL_LIMIT),
     };
     const startsSessions =
       config !== null && depth < config.sessions.max_depth
@@ -1216,7 +1219,7 @@ export class SessionService {
     const own = isChief(workspace, agent.definition.name)
       ? workerInstructions(config?.name ?? workspace.id)
       : agent.definition.instructions;
-    const instructions = withBuiltins(own, knowledge, {
+    const builtins = {
       adhoc: {
         title: session.title ?? '',
         purpose: session.purpose ?? '',
@@ -1225,11 +1228,13 @@ export class SessionService {
         owner: ownerLabel(sessions, session),
       },
       ...(startsSessions && { sessions: startsSessions }),
-    });
+    };
+    const instructions = withBuiltins(own, knowledge, builtins);
     return launchSession({
       runtime: this.options.runtime,
       engine,
       agent: { ...agent.definition, instructions },
+      skills: builtinSkills(builtins),
       workspace: { id: workspace.id, dir: workspace.dir },
       sessionDir: session.folder ?? workspace.dir,
       account: {

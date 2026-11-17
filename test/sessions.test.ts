@@ -221,8 +221,18 @@ describe('wheems session', () => {
     expect(instructions).toContain("You're a member of Personal's team");
     expect(instructions).not.toContain('chief of staff for Personal');
     expect(instructions).not.toContain('Your role (built into Wheems)');
-    // Started by the person, one level deep: it may start one more level.
-    expect(instructions).toContain('## Sessions (built into Wheems)');
+    // Started by the person, one level deep: it may start one more level, so it has the
+    // sessions skill, where its engine reads skills, beside the others.
+    expect(instructions).toContain('## Your open sessions (built into Wheems)');
+    expect(readdirSync(join(folder, '.agents', 'skills')).sort()).toEqual([
+      'wheems-knowledge',
+      'wheems-notes',
+      'wheems-sessions',
+      'wheems-skill-proposals',
+    ]);
+    expect(
+      readFileSync(join(folder, '.agents', 'skills', 'wheems-sessions', 'SKILL.md'), 'utf8'),
+    ).toContain("Start one for work that is long, or that you'll come back to");
     expect(existsSync(join(home, 'workspaces', 'personal', 'AGENTS.md'))).toBe(false);
 
     await waitFor(async () => (await wheems(['session', 'show', id!])).out.includes('Latest'));
@@ -234,7 +244,7 @@ describe('wheems session', () => {
   it('tells the chief its role and its team, and a team agent keeps its own role', async () => {
     await service?.stop();
     const agents = join(home, 'workspaces', 'personal', 'agents');
-    const chiefFile = readFileSync(join(agents, 'chief-of-staff.md'), 'utf8');
+    const chiefFile = readFileSync(join(home, 'workspaces', 'personal', 'WHEEMS.md'), 'utf8');
     const front = chiefFile.slice(0, chiefFile.indexOf('\n---\n', 4) + 5);
     writeFileSync(
       join(agents, 'developer.md'),
@@ -243,20 +253,30 @@ describe('wheems session', () => {
         'description: Builds and fixes the website. Use for any code.',
       ) + '\n# Developer\n\nYou build and fix the website.\n',
     );
+    writeFileSync(join(home, 'workspaces', 'personal', 'GOAL.md'), 'Sell a thousand boxes.\n');
     await start();
     await chiefThread();
     const chief = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
     expect(chief).toContain('## Your role (built into Wheems)');
+    // The chief and every member of its team read the workspace's goal.
+    expect(chief).toContain(
+      "## What we're working towards (from GOAL.md)\n\nSell a thousand boxes.",
+    );
     expect(chief).toContain('**You read and answer; your team makes and changes things.**');
     expect(chief).toMatch(
       /## Your team \(built into Wheems\)[\s\S]*- \*\*developer\*\* \(claude-code, [^)]+\): Builds and fixes the website\. Use for any code\./,
     );
     expect(chief).not.toContain('answer simple things yourself');
-    expect(chief).toContain('without one, it runs a general member of the team');
+    const skill = readFileSync(
+      join(home, 'workspaces', 'personal', '.agents', 'skills', 'wheems-sessions', 'SKILL.md'),
+      'utf8',
+    );
+    expect(skill).toContain('without one, it runs a general member of the team');
 
     const job = await newSession('checkout fix', {}, ['developer']);
     const own = readFileSync(join(job.folder!, 'AGENTS.md'), 'utf8');
     expect(own).toContain('You build and fix the website.');
+    expect(own).toContain('Sell a thousand boxes.');
     expect(own).not.toContain('Your role (built into Wheems)');
     expect(own).not.toContain('Your team (built into Wheems)');
   });
@@ -295,7 +315,7 @@ describe('wheems session', () => {
     expect((JSON.parse(mine.out) as SessionRecord[]).map((s) => s.id)).toEqual([created.id]);
     // A new thread's session was told about it at launch.
     const instructions = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
-    expect(instructions).toContain('### Your open sessions');
+    expect(instructions).toContain('## Your open sessions');
     expect(instructions).toMatch(
       new RegExp(`\`${created.id}\` packaging \\((working|idle)\\): research packaging`),
     );
@@ -356,7 +376,8 @@ describe('wheems session', () => {
     const child = await newSession('child', asFirst);
     expect(child).toMatchObject({ owner: first.id, parent: first.id });
     const childInstructions = readFileSync(join(child.folder!, 'AGENTS.md'), 'utf8');
-    expect(childInstructions).not.toContain('## Sessions (built into Wheems)');
+    expect(childInstructions).not.toContain('Your open sessions');
+    expect(existsSync(join(child.folder!, '.agents', 'skills', 'wheems-sessions'))).toBe(false);
     const grandchild = await wheems(
       ['session', 'create', '--title', 'grandchild', '--purpose', 'research'],
       { WHEEMS_SESSION: child.id },

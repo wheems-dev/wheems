@@ -189,3 +189,17 @@ It also backed up decisions already made: approvals judged by what it costs to u
 important rule written as both an instruction and a check, and work checked in a context other
 than the one that did it. Left for later: a progress file per session, and traces (what each
 session ran, its retries and its cost) on the Sessions page.
+
+### WHEEMS.md, GOAL.md and Wheems's skills (17 November 2026)
+
+The owner wanted to simplify what each session loads ([instructions.md](../instructions.md)):
+
+- **One instructions file for every engine.** Wheems writes `AGENTS.md`, and `CLAUDE.md` just
+  points to it. Everything goes in `AGENTS.md`, because Codex and opencode can't follow a pointer.
+- **`WHEEMS.md` replaces `agents/chief-of-staff.md`.** To the owner, the chief is Wheems. It keeps
+  the chief's settings in front matter. `agents/` becomes the team.
+- **`GOAL.md` holds the workspace's goal.** Every session reads it, the chief's and its team's.
+  Workers never read `WHEEMS.md`.
+- **Wheems's behaviours become built-in skills** (the owner's idea), so new ones can be added
+  without the always-loaded instructions growing. Rules stay always loaded, because an agent can
+  skip a skill. Only the how-to moves to skills.

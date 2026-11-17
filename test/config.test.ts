@@ -359,7 +359,6 @@ describe('links between files', () => {
       'error workspaces/acme/workspace.yaml: Channel "chat" uses connection "discord", which is not in install.yaml',
       'error workspaces/acme/workspace.yaml: Integration "linear" is not a connection in install.yaml',
       'error workspaces/acme/workspace.yaml: Machine "nowhere" is not in install.yaml',
-      'error workspaces/acme/workspace.yaml: The chief of staff "boss" has no file in agents/',
       'error workspaces/acme/workspace.yaml: Rule "r1" requires a review by "ghost", which has no file in agents/',
       'error workspaces/acme/workspace.yaml: Rule "r2" asks for approval in "approvals", which is not one of its channels',
       'warning workspaces/acme/skills.yaml: 2 skills is over the budget of 1',
@@ -368,6 +367,8 @@ describe('links between files', () => {
       'error workspaces/acme/workflows/broken.yaml: Trigger channel "nowhere" is not one of the workspace\'s channels',
       'error workspaces/acme/workflows/broken.yaml: Step agent "ghost" has no file in agents/',
       'error workspaces/acme/workflows/broken.yaml: Channel "briefs" is not one of the workspace\'s channels',
+      // WHEEMS.md is the chief whatever workspace.yaml names it, so chief-of-staff is gone.
+      'error workspaces/acme/workflows/morning-brief.yaml: Step agent "chief-of-staff" has no file in agents/',
       'error workspaces/acme/workflows/morning-brief.yaml: Channel "briefs" is not one of the workspace\'s channels',
     ]);
   });
@@ -392,7 +393,7 @@ describe('links between files', () => {
       ].join('\n'),
     );
     writeFileSync(
-      join(personal, 'agents/chief-of-staff.md'),
+      join(personal, 'WHEEMS.md'),
       '---\nengine: claude-code\nmodel: m\naccount: claude-subscription\nintegrations: [constructor]\n---\n',
     );
     mkdirSync(join(personal, 'workflows'));

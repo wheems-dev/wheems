@@ -305,7 +305,7 @@ describe('reviewing', () => {
   });
 
   it("adds a skill to an agent file's list and takes it off, keeping the rest of the file", async () => {
-    const file = join(ws(), 'agents', 'chief-of-staff.md');
+    const file = join(ws(), 'WHEEMS.md');
     const before = readFileSync(file, 'utf8');
     await setAgentSkill(file, 'weekly-report', true);
     const after = readFileSync(file, 'utf8');

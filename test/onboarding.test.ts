@@ -112,9 +112,8 @@ describe('setting Wheems up by inviting it to a channel', () => {
     expect(done?.identity?.name).toBe('Marketing chief of staff');
     const yaml = readFileSync(join(home, 'workspaces', 'marketing', 'workspace.yaml'), 'utf8');
     expect(yaml).toContain('chat: { connection: slack, channel: "marketing" }');
-    expect(existsSync(join(home, 'workspaces', 'marketing', 'agents', 'chief-of-staff.md'))).toBe(
-      true,
-    );
+    expect(existsSync(join(home, 'workspaces', 'marketing', 'WHEEMS.md'))).toBe(true);
+    expect(existsSync(join(home, 'workspaces', 'marketing', 'GOAL.md'))).toBe(true);
 
     // No restart: its chief answers in the channel straight away.
     const before = posts('C0MARKET01').length;

@@ -34,6 +34,7 @@ import { requireFullTextSearch } from '../util/sqlite.js';
 import { settingsFiles } from '../web/data.js';
 import { startWeb, type RunningWeb, type WebOptions } from '../web/server.js';
 import { restartSoon } from './launchd.js';
+import { moveToWheemsFiles } from '../config/migrate.js';
 
 export interface ServiceOptions {
   home: string;
@@ -82,6 +83,8 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const where = paths(options.home, env);
   log(`Starting Wheems ${options.version} from ${options.home}`);
 
+  // Workspaces from before WHEEMS.md move over before they're loaded (docs/instructions.md).
+  for (const moved of await moveToWheemsFiles(options.home)) log(moved);
   const install = await loadInstall(options.home);
   const problems = [...install.problems, ...crossCheck(install)].filter((p) => p.level === 'error');
   if (!install.config || problems.length > 0) {

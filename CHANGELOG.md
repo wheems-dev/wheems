@@ -3,6 +3,26 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Changed**
+
+- **The chief of staff is `WHEEMS.md`,** in the workspace's folder, and the workspace's goal is
+  `GOAL.md` beside it. `agents/` holds the chief's team. When the service starts, a workspace
+  from before moves over: `agents/chief-of-staff.md` becomes `WHEEMS.md`, and its "What we're
+  working towards" section, if it has one, becomes `GOAL.md`. Every session in the workspace
+  reads `GOAL.md`, the chief's and its team's.
+- **Every engine reads `AGENTS.md`.** Wheems writes everything a session needs there at every
+  start, and a `CLAUDE.md` whose one line, `@AGENTS.md`, has Claude Code read the same file.
+  See `docs/instructions.md`.
+- **How to use Wheems is now in built-in skills**, loaded only when they're needed:
+  `wheems-sessions`, `wheems-knowledge`, `wheems-notes` and `wheems-skill-proposals`. They're
+  written at every start into `.claude/skills/` for Claude Code and `.agents/skills/` for Codex
+  and opencode, and Wheems clears out its own old ones without touching yours. What must always
+  apply stays in `AGENTS.md`: the chief's role, talking to the person, a worker's job, and a short
+  map of the skills. A chief's instructions go from about 2,800 tokens to 1,700, and a worker's
+  from 2,200 to 1,050.
+
 ## 0.1.10
 
 Released 17 November 2026. Work a chief hands on now has a finish line it can check, answers

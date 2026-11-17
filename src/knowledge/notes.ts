@@ -31,6 +31,7 @@ export function knowledgePaths(workspaceDir: string): KnowledgePaths {
 /** The most of the brief and of `about-you.md` an agent loads; the filing job keeps them under. */
 export const BRIEF_LIMIT = 4000;
 export const ABOUT_YOU_LIMIT = 4000;
+export const GOAL_LIMIT = 4000;
 
 /** The most a single note may hold. A note is a summary, not a transcript. */
 export const NOTE_LIMIT = 32 * 1024;

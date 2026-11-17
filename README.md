@@ -242,9 +242,10 @@ Projects inside a workspace (milestone 4) keep context clean but are never walls
 
 ```text
 workspaces/default/
+├── WHEEMS.md              the chief of staff, the agent you talk to
+├── GOAL.md                what the workspace is working towards
 ├── workspace.yaml         its name, accounts, chat channel, knowledge settings
-├── agents/
-│   └── chief-of-staff.md  the agent you talk to
+├── agents/                the chief's team, an agent file each
 ├── skills.yaml            the skills it uses, pinned to library versions
 └── knowledge/
     ├── brief.md           a short summary every agent here loads at launch
@@ -271,13 +272,19 @@ permissions: auto
 You look after my personal admin. Be brief.
 ```
 
-When Wheems starts an agent, it writes the engine's instructions file in the workspace folder
-(`CLAUDE.md` for Claude Code, `AGENTS.md` for Codex and opencode). The file holds the agent's
-instructions, then Wheems's built-in instructions, then what the agent should know at launch:
-`about-you.md` and the workspace's brief. The built-in instructions cover talking to the person,
-writing notes, searching the knowledge base, proposing skills and, for a chief, its role, its team
-and starting sessions. Don't edit the instructions
-file: it's rewritten at every launch and ignored by git.
+The chief's file is `WHEEMS.md`, and its team's are in `agents/`. When Wheems starts an agent,
+it writes `AGENTS.md` in the session's folder with everything the session needs: the agent's
+instructions, the workspace's `GOAL.md`, Wheems's built-in instructions, then what the agent
+should know at launch, `about-you.md` and the workspace's brief. It writes a `CLAUDE.md` beside it
+whose one line, `@AGENTS.md`, has Claude Code read the same file, so every engine reads the same
+thing. The built-in instructions are the rules that always apply: talking to the person and, for a
+chief, its role, its team and its open sessions. How to use Wheems is in built-in skills, which
+the engine loads only when they're needed: `wheems-sessions` (handing work on and following it),
+`wheems-knowledge` (searching the knowledge base), `wheems-notes` and `wheems-skill-proposals`.
+They're written at every start where the engine reads skills, `.claude/skills/` for Claude Code
+and `.agents/skills/` for Codex and opencode; your own skills there are left alone.
+Don't edit `AGENTS.md` or `CLAUDE.md`: they're rewritten at every launch and ignored by git. See
+[docs/instructions.md](docs/instructions.md).
 
 `permissions` says how much an agent may do without asking:
 
@@ -323,8 +330,10 @@ suggests an agent for it. The chief creating agents itself, and a Team page in t
 planned; see [docs/team.md](docs/team.md).
 
 A chief made before 0.1.9 has an agent file that says "Do what you're asked, end to end". The
-built-in role overrides it, but it's worth editing the file to describe the chief's goal instead,
-as a new one does under **What we're working towards**.
+built-in role overrides it, but it's worth editing `WHEEMS.md` to say who the chief is, and
+`GOAL.md` to say what it and its team are working towards. Workspaces from before 0.1.11 are
+moved over when the service starts: `agents/chief-of-staff.md` becomes `WHEEMS.md`, and its
+**What we're working towards** section, if it has one, becomes `GOAL.md`.
 
 ## Talking to agents
 
@@ -385,8 +394,8 @@ wheems session create --title "Packaging suppliers" \
   chief's from any of its threads. Each new thread's session is told the chief's open sessions
   when it starts.
 - Each ad-hoc session runs in a folder of its own, `.wheems/sessions/<workspace>/adhoc/<id>/`, where
-  its engine's instructions file is written, so it never replaces the chief's. (So no agent can be
-  called `adhoc`.)
+  its `AGENTS.md`, `CLAUDE.md` and skills are written, so they never replace the chief's. (So no
+  agent can be called `adhoc`.)
 - `wheems session list` and `wheems session search "…"` find sessions in the workspace, most
   recently active first. Search looks at titles, purposes, summaries and agent names. A session's
   summary is written by Wheems: its purpose at first, then the title of its latest note.
@@ -601,8 +610,9 @@ wheems skill show weekly-report 1  # an older one
 ### Proposals
 
 When an agent works out how to do something it'll be asked to do again, it proposes a skill. Its
-built-in instructions say to improve an existing skill rather than add another, to read a skill
-before changing it, to write lessons rather than logs, and to leave out one-off failures.
+built-in `wheems-skill-proposals` skill says to improve an existing skill rather than add another,
+to read a skill before changing it, to write lessons rather than logs, and to leave out one-off
+failures.
 
 ```bash
 wheems skill propose weekly-report - <<'EOF'
@@ -1020,11 +1030,11 @@ and channels other than `chat` in `workspace.yaml`; and `workflows/*.yaml`. See
 
 ## Engines
 
-| Engine      | Instructions file | Default model         | Signs in with                                    | Follows each turn by                        |
-| ----------- | ----------------- | --------------------- | ------------------------------------------------ | ------------------------------------------- |
-| Claude Code | `CLAUDE.md`       | `claude-opus-5-5`     | A Claude subscription                            | Its status in Herdr, and its transcript     |
-| Codex       | `AGENTS.md`       | `gpt-6.1-sol`         | A ChatGPT subscription                           | Its status in Herdr, and its session record |
-| opencode    | `AGENTS.md`       | `opencode/big-pickle` | OpenRouter, a provider's key, or its free models | Its answers                                 |
+| Engine      | Reads                                | Skills from       | Default model         | Signs in with                                    | Follows each turn by                        |
+| ----------- | ------------------------------------ | ----------------- | --------------------- | ------------------------------------------------ | ------------------------------------------- |
+| Claude Code | `CLAUDE.md`, which says `@AGENTS.md` | `.claude/skills/` | `claude-opus-5-5`     | A Claude subscription                            | Its status in Herdr, and its transcript     |
+| Codex       | `AGENTS.md`                          | `.agents/skills/` | `gpt-6.1-sol`         | A ChatGPT subscription                           | Its status in Herdr, and its session record |
+| opencode    | `AGENTS.md`                          | `.agents/skills/` | `opencode/big-pickle` | OpenRouter, a provider's key, or its free models | Its answers                                 |
 
 - Every conversation keeps one engine session, and a session that ended is resumed by its id.
   Claude Code takes Wheems's id for it. Codex and opencode choose their own ids, which Wheems

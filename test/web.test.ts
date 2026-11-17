@@ -305,7 +305,7 @@ describe('the web app', () => {
     expect(review.proposals[0]).toMatchObject({ name: 'boat-maintenance' });
     expect(review.proposals[0].agents).toEqual([{ name: 'chief-of-staff', checked: true }]);
     const settings = (await get('/w/default/settings')).json();
-    expect(settings.chief.file).toBe('agents/chief-of-staff.md');
+    expect(settings.chief.file).toBe('WHEEMS.md');
     const connections = await get('/connections');
     expect(connections.json().connections[0]).toMatchObject({ name: 'slack', connected: true });
     expect(connections.body).not.toContain('never-shown');
@@ -361,9 +361,9 @@ describe('the web app', () => {
     expect(readFileSync(join(home, 'workspaces', 'default', 'skills.yaml'), 'utf8')).toContain(
       'ferry-times: 1',
     );
-    expect(
-      readFileSync(join(home, 'workspaces', 'default', 'agents', 'chief-of-staff.md'), 'utf8'),
-    ).toContain('ferry-times');
+    expect(readFileSync(join(home, 'workspaces', 'default', 'WHEEMS.md'), 'utf8')).toContain(
+      'ferry-times',
+    );
     expect(
       (await post('/w/default/review/p2', { decision: 'approve', seen })).json(),
     ).toMatchObject({
@@ -412,7 +412,7 @@ describe('the web app', () => {
     web = await startWeb({ home, env, registry, port: 0, appDir });
     const dir = join(home, 'workspaces', 'default');
     const yamlFile = join(dir, 'workspace.yaml');
-    const chiefFile = join(dir, 'agents', 'chief-of-staff.md');
+    const chiefFile = join(dir, 'WHEEMS.md');
     writeFileSync(yamlFile, `# Kept by hand.\n${readFileSync(yamlFile, 'utf8')}`);
     const chiefBefore = readFileSync(chiefFile, 'utf8');
 

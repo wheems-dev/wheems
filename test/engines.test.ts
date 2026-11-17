@@ -71,6 +71,7 @@ describe('codex engine', () => {
     ]);
     expect(plan.files).toEqual([
       { path: 'AGENTS.md', content: expect.stringContaining('# Chief of staff') as string },
+      { path: 'CLAUDE.md', content: expect.stringMatching(/^@AGENTS\.md$/m) as string },
     ]);
   });
 

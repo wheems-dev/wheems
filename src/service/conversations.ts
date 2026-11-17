@@ -1,15 +1,16 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { holdsCredential } from '../knowledge/notes.js';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   HANDOVER_REQUEST,
   NOTE_REQUEST,
+  builtinSkills,
   withBuiltins,
   type SessionBuiltins,
 } from '../agents/builtin.js';
 import { teamOf } from '../agents/team.js';
-import type { LoadedWorkspace } from '../config/load.js';
+import { GOAL_FILE, type LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import {
   replyThread,
@@ -23,6 +24,7 @@ import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 import {
   ABOUT_YOU_LIMIT,
   BRIEF_LIMIT,
+  GOAL_LIMIT,
   knowledgePaths,
   readCapped,
   writeNote,
@@ -1058,22 +1060,22 @@ export class ConversationManager {
           ? await readCapped(this.options.aboutYouFile, ABOUT_YOU_LIMIT)
           : null,
       brief: await readCapped(knowledgePaths(workspace.dir).brief, BRIEF_LIMIT),
+      goal: await readCapped(join(workspace.dir, GOAL_FILE), GOAL_LIMIT),
     };
     const sessions = this.options.sessionsSection?.(
       workspace,
       `${workspace.id}/${agent.definition.name}`,
     );
+    const builtins = { ...(sessions && { sessions }), chief: { team: teamOf(workspace) } };
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
     const started = await launchSession({
       runtime: this.options.runtime,
       engine,
       agent: {
         ...agent.definition,
-        instructions: withBuiltins(agent.definition.instructions, knowledge, {
-          ...(sessions && { sessions }),
-          chief: { team: teamOf(workspace) },
-        }),
+        instructions: withBuiltins(agent.definition.instructions, knowledge, builtins),
       },
+      skills: builtinSkills(builtins),
       workspace: { id: workspace.id, dir: workspace.dir },
       sessionDir: workspace.dir,
       account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },
