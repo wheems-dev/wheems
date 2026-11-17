@@ -558,6 +558,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
             const session = await sessions.create(sessions.caller(request.caller), {
               title: request.title,
               purpose: request.purpose,
+              ...(request.doneWhen !== undefined && { doneWhen: request.doneWhen }),
               ...(request.agent !== undefined && { agent: request.agent }),
               ...(request.project !== undefined && { project: request.project }),
             });

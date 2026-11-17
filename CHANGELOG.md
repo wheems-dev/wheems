@@ -3,6 +3,26 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+**Added**
+
+- **Finish lines for delegated work.** `wheems session create --done-when "…"` gives a session what
+  must be true when its job is finished, in things that can be checked. A chief's session must
+  have one. The session sees it in its instructions, `session show` prints it, and each answer
+  handed back shows it again, with a count, so the chief checks the answer against it.
+- Ad-hoc sessions are told to hand back evidence (what they ran and what it showed, links,
+  files, commits) rather than "should work", and to say so rather than retry when they get the
+  same result twice.
+- The chief sends a job back at most twice, saying what it expected and what it saw; then it
+  brings the job to the person. From a session's third answer, the hand-back says so.
+
+**Changed**
+
+- The session store moves to schema version 6, adding each session's finish line. The service
+  updates it when it starts; back up `.wheems/state.sqlite` first if you want to be able to go
+  back to 0.1.9.
+
 ## 0.1.9
 
 Released 17 November 2026. The chief of staff now manages and delegates instead of doing the work

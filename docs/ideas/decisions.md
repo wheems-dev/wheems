@@ -172,3 +172,20 @@ Answered the same day:
 - **What the chief may decide:** anything that can be undone and stays inside the ask. The person
   decides money, speaking for them, what can't be undone, access, and anything outside the ask;
   a workspace can hand a category to the chief, and the chief posts a daily list of its decisions.
+
+### Finish lines and evidence (17 November 2026)
+
+The owner asked what Wheems could take from a widely shared article on the harness, loop and graph
+layers of an agent. The owner chose three things to build first, before approvals:
+
+- **A finish line on every delegated job.** A chief must give `--done-when`. Without one, a worker
+  can quietly solve an easier version and call it done.
+- **Evidence, not confidence.** Workers hand back what they ran and what it showed. The chief
+  checks that against the finish line, not the worker's say-so.
+- **A limit on sending back.** Twice at most, then the job goes to the person. That stops a chief
+  and a worker going round in circles.
+
+It also backed up decisions already made: approvals judged by what it costs to undo, every
+important rule written as both an instruction and a check, and work checked in a context other
+than the one that did it. Left for later: a progress file per session, and traces (what each
+session ran, its retries and its cost) on the Sessions page.

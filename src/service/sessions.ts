@@ -61,6 +61,8 @@ export interface NewSessionRequest {
   agent?: string;
   title: string;
   purpose: string;
+  /** What must be true when the job is done, in things that can be checked. A chief must give it. */
+  doneWhen?: string;
   project?: string;
 }
 
@@ -146,6 +148,9 @@ export interface SessionServiceOptions {
 
 const TITLE_LIMIT = 80;
 const PURPOSE_LIMIT = 2000;
+const DONE_WHEN_LIMIT = 1000;
+/** From this many answers to the same sender, its hand-back says to stop sending the job back. */
+const SEND_BACK_ANSWERS = 3;
 const MESSAGE_LIMIT = 20_000;
 const LONGEST_WAIT_SECONDS = 3600;
 
@@ -287,6 +292,14 @@ export class SessionService {
     const purpose = request.purpose.trim();
     checkText('title', title, TITLE_LIMIT);
     checkText('purpose', purpose, PURPOSE_LIMIT);
+    const doneWhen = request.doneWhen?.trim() ?? '';
+    if (doneWhen !== '') checkText('done-when line', doneWhen, DONE_WHEN_LIMIT);
+    // A chief hands every job on, so each one needs a finish line to check the answer against.
+    if (doneWhen === '' && caller.session?.kind === 'thread') {
+      throw new Error(
+        "A chief of staff's session needs --done-when: what must be true when the job is finished, in things you can check, such as a test that passes, a page that loads or a file that exists.",
+      );
+    }
     if (title.includes('\n')) throw new Error('The title is one line.');
     if (request.project !== undefined) {
       throw new Error('Projects arrive in milestone 4; leave out --project for now.');
@@ -328,6 +341,7 @@ export class SessionService {
       // The person's ask carries down from the session that started this one. When the person
       // starts it themselves, its purpose is their ask.
       ask: caller.session ? caller.session.ask : purpose,
+      doneWhen: doneWhen === '' ? null : doneWhen,
       herdrName: `${workspace.id.slice(0, 20)}-s${id.slice(0, 8)}`,
       folder,
       createdAt: now.toISOString(),
@@ -1031,7 +1045,12 @@ export class SessionService {
     }
     const text =
       outcome.answer !== null
-        ? `Wheems: answer from ${who}:\n\n${outcome.answer}`
+        ? answerText(
+            who,
+            outcome.answer,
+            target?.doneWhen ?? null,
+            sessions.handbackCount(targetId, fromId) + 1,
+          )
         : `Wheems: no answer from ${who}, because ${outcome.problem}. See it with wheems session show ${targetId}.`;
     await this.passBack(workspace, from, targetId, text);
   }
@@ -1199,6 +1218,7 @@ export class SessionService {
         title: session.title ?? '',
         purpose: session.purpose ?? '',
         ask: session.ask,
+        doneWhen: session.doneWhen,
         owner: ownerLabel(sessions, session),
       },
       ...(startsSessions && { sessions: startsSessions }),
@@ -1509,6 +1529,24 @@ function timeout(ms: number): { done: Promise<null>; cancel: () => void } {
       clearTimeout(timer);
     },
   };
+}
+
+/**
+ * An answer handed back to its sender. With a finish line, it's shown again to check the answer
+ * against, and from the third answer on, the sender is told to stop sending the job back.
+ */
+export function answerText(
+  who: string,
+  answer: string,
+  doneWhen: string | null,
+  count: number,
+): string {
+  if (doneWhen === null) return `Wheems: answer from ${who}:\n\n${answer}`;
+  const stop =
+    count >= SEND_BACK_ANSWERS
+      ? `\n\nThis is its answer ${String(count)}. If the job still isn't done, don't send it back again: bring it to the person, saying what was tried and what's missing.`
+      : '';
+  return `Wheems: answer from ${who} (answer ${String(count)}):\n\n${answer}\n\n---\n\nIt's done when: ${doneWhen}\n\nCheck its evidence against that before you report.${stop}`;
 }
 
 function describe(error: unknown): string {

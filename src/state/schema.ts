@@ -141,6 +141,11 @@ export const MIGRATIONS: readonly string[] = [
   ) STRICT;
   CREATE INDEX handovers_session ON handovers (workspace, session, written_at);
   `,
+  // 6: an ad-hoc session's finish line: what must be true when its job is done, in things that
+  // can be checked. A chief must give one; its hand-backs show it, to check the answer against.
+  `
+  ALTER TABLE sessions ADD COLUMN done_when TEXT;
+  `,
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

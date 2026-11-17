@@ -54,6 +54,7 @@ export const requestSchema = z.discriminatedUnion('op', [
     agent: z.string().min(1).optional(),
     title: z.string(),
     purpose: z.string(),
+    doneWhen: z.string().optional(),
     project: z.string().min(1).optional(),
   }),
   z.object({

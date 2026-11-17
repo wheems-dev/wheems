@@ -178,7 +178,7 @@ person needs to hear. Without an `updates` channel, posts go to the chat channel
 ## Kept in the store
 
 Approvals live in the session store, `.wheems/state.sqlite`, in a new `approvals` table, moving
-it to schema version 6. Each one keeps:
+it to schema version 7. Each one keeps:
 
 - **Who's involved:** its id, the workspace, and the agent and session that asked. Later, its
   project and task too.

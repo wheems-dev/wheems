@@ -96,6 +96,8 @@ export interface SessionRecord {
    * by every session started for it. Null when unknown, such as for sessions from before 0.2.
    */
   ask: string | null;
+  /** What must be true when its job is done, in things that can be checked. Null when none. */
+  doneWhen: string | null;
   summary: string | null;
   state: SessionState;
   herdrName: string | null;
@@ -120,6 +122,7 @@ export interface NewSession {
   title: string;
   purpose: string;
   ask: string | null;
+  doneWhen?: string | null;
   herdrName: string;
   folder: string;
   createdAt: string;
@@ -270,8 +273,11 @@ export class StateStore {
         const version = schemaVersion(db);
         if (options.olderSchema === true && version >= 2 && version < SCHEMA_VERSION) {
           // Temporary views take the tables' place for this connection only; nothing is written.
-          if (version < 3) {
-            db.exec('CREATE TEMP VIEW sessions AS SELECT *, NULL AS ask FROM main.sessions');
+          if (version < 6) {
+            // No session had an ask before version 3, nor a finish line before version 6.
+            db.exec(
+              `CREATE TEMP VIEW sessions AS SELECT *, ${version < 3 ? 'NULL AS ask, ' : ''}NULL AS done_when FROM main.sessions`,
+            );
           }
           if (version < 4) {
             // No chat was recorded before version 4: an empty view stands in for the table.
@@ -761,8 +767,8 @@ export class WorkspaceSessions {
     this.db
       .prepare(
         `INSERT INTO sessions (id, workspace, project, agent, kind, owner, parent, title, purpose,
-           ask, summary, state, herdr_name, folder, created_at, last_active_at)
-         VALUES (?, ?, ?, ?, 'adhoc', ?, ?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?)`,
+           ask, done_when, summary, state, herdr_name, folder, created_at, last_active_at)
+         VALUES (?, ?, ?, ?, 'adhoc', ?, ?, ?, ?, ?, ?, ?, 'starting', ?, ?, ?, ?)`,
       )
       .run(
         session.id,
@@ -774,6 +780,7 @@ export class WorkspaceSessions {
         session.title,
         session.purpose,
         session.ask,
+        session.doneWhen ?? null,
         // The summary is written by code: the purpose at first, then the latest note's title.
         session.purpose,
         session.herdrName,
@@ -935,6 +942,17 @@ export class WorkspaceSessions {
     }));
   }
 
+  /** How many hand-backs one session has had from another: its answers, and notices about it. */
+  handbackCount(from: string, to: string): number {
+    const row = this.db
+      .prepare(
+        `SELECT count(*) AS n FROM messages
+         WHERE workspace = ? AND kind = 'handback' AND sender = ? AND receiver = ?`,
+      )
+      .get(this.workspace, from, to) as { n: number } | undefined;
+    return row?.n ?? 0;
+  }
+
   /** A session's latest messages, sent or received, newest first. */
   messages(sessionId: string, limit = 5): MessageRecord[] {
     return this.db
@@ -995,7 +1013,7 @@ const THREAD_SELECT = `SELECT t.key, t.workspace, t.connection, t.channel, t.thr
   FROM threads t JOIN sessions s ON s.id = t.session`;
 
 const SESSION_SELECT = `SELECT id, workspace, project, agent, kind, owner, parent, title, purpose,
-  ask, summary, state, herdr_name, engine_session_id, folder, launch_started_at, launch_tag,
+  ask, done_when, summary, state, herdr_name, engine_session_id, folder, launch_started_at, launch_tag,
   launched_at, created_at, last_active_at, ended_at FROM sessions`;
 
 function toConversation(row: Row): Conversation {
@@ -1086,6 +1104,7 @@ function toSession(row: Row): SessionRecord {
     title: text(row.title),
     purpose: text(row.purpose),
     ask: text(row.ask),
+    doneWhen: text(row.done_when),
     summary: text(row.summary),
     state: String(row.state) as SessionState,
     herdrName: text(row.herdr_name),

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withBuiltins } from '../src/agents/builtin.js';
+import { answerText } from '../src/service/sessions.js';
 import { BRIEF_MD } from '../src/cli/templates.js';
 import { knowledgePaths, noteTitle, readCapped, writeNote } from '../src/knowledge/notes.js';
 
@@ -108,6 +109,11 @@ describe('notes', () => {
     expect(alone).toContain('No agents yet: hand work to ad-hoc sessions for now.');
     expect(alone).toContain('Start one for any work that no agent on your team fits.');
     expect(alone).not.toContain('answer simple things yourself');
+    // It briefs with a finish line, checks evidence, and stops sending a job back after two tries.
+    expect(alone).toContain('Brief with a finish line.');
+    expect(alone).toContain('Always give `--done-when` too');
+    expect(alone).toContain('Check the evidence, not the claim');
+    expect(alone).toContain('Send the same job back twice at most.');
     // The role comes before the sessions it relies on.
     expect(alone.indexOf('Your role')).toBeLessThan(alone.indexOf('## Sessions'));
     const team = withBuiltins('# Chief', undefined, {
@@ -116,5 +122,21 @@ describe('notes', () => {
       },
     });
     expect(team).toContain('- **writer** (codex, gpt-6.1-sol): no description yet');
+  });
+});
+
+describe('answers handed back', () => {
+  it('shows a finish line to check against, and says to stop sending back from the third', () => {
+    expect(answerText('session s ("t")', 'Found three.', null, 5)).toBe(
+      'Wheems: answer from session s ("t"):\n\nFound three.',
+    );
+    const first = answerText('session s ("t")', 'Done: tests pass.', 'npm test passes', 1);
+    expect(first).toContain('Wheems: answer from session s ("t") (answer 1):');
+    expect(first).toContain("It's done when: npm test passes");
+    expect(first).toContain('Check its evidence against that before you report.');
+    expect(first).not.toContain("don't send it back again");
+    expect(answerText('session s ("t")', 'Still red.', 'npm test passes', 3)).toContain(
+      "This is its answer 3. If the job still isn't done, don't send it back again: bring it to the person",
+    );
   });
 });
