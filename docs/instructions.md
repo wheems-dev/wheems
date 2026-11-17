@@ -1,6 +1,6 @@
 # What a session loads
 
-**Status: built, in Unreleased.** This is how a Wheems agent session gets its instructions: which files
+**Status: built, in 0.1.11.** This is how a Wheems agent session gets its instructions: which files
 you write, which Wheems writes, and which of Wheems's own behaviours are loaded every time and
 which only when they're needed. Decided by the owner on 17 November 2026
 ([ideas/decisions.md](ideas/decisions.md)).
