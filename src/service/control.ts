@@ -94,6 +94,18 @@ export const requestSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('conversations-restart'),
     caller: callerSchema,
+    /**
+     * Then restart the service, once every conversation is set up: for a change to the chief,
+     * whose new settings only a restart brings in. Until then, the old service starts no session
+     * for a conversation set to start afresh.
+     */
+    restart: z.boolean().optional(),
+    /**
+     * With `restart`: the fingerprint of the workspace's settings (workspace.yaml and the chief's
+     * agent file) the choices were made for. If they've changed since, nothing restarts: the
+     * choices may no longer fit them.
+     */
+    settings: z.string().min(1).optional(),
     choices: z
       .array(
         z.object({
@@ -101,7 +113,7 @@ export const requestSchema = z.discriminatedUnion('op', [
           choice: z.enum(['carry-on', 'hand-over', 'fresh']),
         }),
       )
-      .min(1)
+      // None, with a restart: every conversation is set up already, or there are none.
       .max(200),
   }),
   /** Restarts the service with the latest config, once it has answered (the web app's Restart). */
@@ -136,6 +148,13 @@ export type ControlResponse =
       conversations?: OpenConversation[];
       /** For `conversations-restart`: how each went. */
       restarted?: RestartOutcome[];
+      /** For `conversations-restart` with `restart`: whether the service is restarting. */
+      restarting?: boolean;
+      /**
+       * For `conversations-restart` with `restart`: the workspace's conversations changed since
+       * the choices were made (one opened, or one set up started), so nothing was done.
+       */
+      stale?: boolean;
       /** The answer to a `session send --wait`. */
       answer?: string;
       sent?: MessageRecord;

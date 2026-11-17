@@ -147,6 +147,17 @@ export class ConversationManager {
   };
   private readonly queues = new Map<string, Promise<void>>();
   private readonly watches = new Map<string, Watch>();
+  /**
+   * Workspaces whose conversations are being set up for a restart that's coming: until it, the
+   * old service starts no session in them, new or resumed, so none starts on the old settings.
+   */
+  private readonly held = new Set<string>();
+  /** Messages from Wheems waiting for a workspace's hold to end. */
+  private waitingForRelease: {
+    workspace: string;
+    resolve: () => void;
+    reject: (error: Error) => void;
+  }[] = [];
   /** Conversations whose agent was asked for a handover, and the handover once it came. */
   private readonly handingOver = new Map<string, string | null>();
   /** The latest `wheems chat reply` in each conversation. */
@@ -325,6 +336,32 @@ export class ConversationManager {
       });
     }
     return open.sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
+  }
+
+  /**
+   * Holds a workspace's conversations until the coming restart: the old service starts no session
+   * in it meanwhile, for a new thread or an old one. `release` lets them go, when the restart
+   * doesn't happen.
+   */
+  async hold(workspace: string, settleMs = 150_000): Promise<boolean> {
+    this.held.add(workspace);
+    // Work already under way in it, such as a session starting for a message that came just
+    // before, must finish first, so what's listed next is what will be. A session's start can
+    // take a minute and a half; work still going after this long means the hold has failed.
+    const pending = [...this.queues].filter(([key]) => key.startsWith(`${workspace}:`));
+    const settled = await Promise.race([
+      Promise.allSettled(pending.map(([, work]) => work)).then(() => true),
+      sleep(settleMs).then(() => false),
+    ]);
+    if (!settled) this.release(workspace);
+    return settled;
+  }
+
+  release(workspace: string): void {
+    this.held.delete(workspace);
+    const waiting = this.waitingForRelease.filter((w) => w.workspace === workspace);
+    this.waitingForRelease = this.waitingForRelease.filter((w) => w.workspace !== workspace);
+    for (const w of waiting) w.resolve();
   }
 
   /**
@@ -657,6 +694,10 @@ export class ConversationManager {
   /** Stops watching sessions. Sessions themselves keep running. */
   async stop(): Promise<void> {
     this.stopped = true;
+    // Messages from Wheems held for the restart: their senders keep them, to deliver after it.
+    for (const w of this.waitingForRelease.splice(0)) {
+      w.reject(new Error('The service stopped for its restart'));
+    }
     clearInterval(this.sweepTimer);
     await Promise.allSettled([...this.watchers]);
   }
@@ -668,10 +709,19 @@ export class ConversationManager {
    * posted to the conversation's thread as any answer is.
    */
   tell(key: string, text: string): Promise<void> {
-    return this.options.store.get(key).then((conversation) => {
+    return this.options.store.get(key).then(async (conversation) => {
       if (!conversation) throw new Error(`No conversation ${key}`);
       const binding = this.bindingFor(conversation);
       if (!binding) throw new Error(`Conversation ${key}'s workspace or connection isn't running`);
+      // Held for a restart: it waits outside the conversation's queue, which setting the
+      // conversation up needs, until the hold ends, then goes in. If the service stops first,
+      // the caller keeps it, and it's delivered after the restart.
+      if (this.held.has(binding.workspace.id)) {
+        await this.untilReleased(binding.workspace.id);
+        return this.tell(key, text);
+      }
+      // Set inside the queued work, so an object TypeScript can't see change.
+      const meanwhile = { held: false };
       const event: InboundEvent & { type: 'message' } = {
         type: 'message',
         channel: conversation.channel,
@@ -682,8 +732,13 @@ export class ConversationManager {
         direct: false,
         receivedAt: new Date(),
       };
-      return this.enqueue(key, () =>
-        this.deliver(key, binding, event, null).catch((error: unknown) => {
+      await this.enqueue(key, async () => {
+        // Held after it was queued: it leaves the queue at once, and waits as above.
+        if (this.held.has(binding.workspace.id)) {
+          meanwhile.held = true;
+          return;
+        }
+        await this.deliver(key, binding, event, null).catch((error: unknown) => {
           this.options.log(`Conversation ${key}: ${describe(error)}`);
           return this.notice(
             key,
@@ -691,8 +746,16 @@ export class ConversationManager {
             conversation.thread,
             `Something went wrong passing a message on to the agent: ${describe(error)}`,
           );
-        }),
-      );
+        });
+      });
+      if (meanwhile.held) return this.tell(key, text);
+    });
+  }
+
+  /** Resolves when a workspace's hold ends; rejects when the service stops first. */
+  private untilReleased(workspace: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.waitingForRelease.push({ workspace, resolve, reject });
     });
   }
 
@@ -720,6 +783,17 @@ export class ConversationManager {
   ): Promise<void> {
     if (this.retired.has(binding.workspace.id)) {
       this.options.log(`Conversation ${key}: its workspace is no longer served`);
+      return;
+    }
+    // A message from Wheems never gets here while held: tell() keeps it waiting outside.
+    if (this.held.has(binding.workspace.id) && seen !== null) {
+      this.options.log(`Conversation ${key}: a message came while it waits for the restart`);
+      await this.notice(
+        key,
+        binding,
+        replyThread(event),
+        'Your chief of staff is restarting with new settings. Send that again in a moment.',
+      );
       return;
     }
     const channel = this.channel(binding.connection);

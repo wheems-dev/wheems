@@ -80,7 +80,10 @@ in the session store as they're posted) and messages sent to it through Wheems. 
 seems to hold a password, token or key is kept only as a line saying so. You can send it a
 message, watch it in Herdr or end it; ending asks first, in the page, since it can't be undone.
 Only sessions started on purpose (by you, the chief or another session) take messages and can be
-ended here. A chat thread's session hears you in its thread, so the page says to reply there. Sessions you started yourself with `wheems session create` are a group of their
+ended here. A chat thread's session hears you in its thread, so the page says to reply there,
+and offers **Hand over** and **Start fresh**, each asking first, with its handovers listed:
+who wrote each, from which engine and model, and whether a new session has taken it over.
+Sessions you started yourself with `wheems session create` are a group of their
 own. A session you end stays in view, with how it went, even while ended sessions are hidden.
 
 Showing the original ask on every session follows a lesson from running many agents: work drifts
@@ -115,11 +118,22 @@ it was made from the old name, as `wheems workspace rename` does. The service us
 it restarts, so a save offers **Restart now**: the service answers, then has launchd restart it. A
 Wheems that launchd doesn't run (`wheems service run`) says to restart it where it runs.
 
-The chief's engine, model, account and permissions are shown, not edited: they're in its agent
-file, and a chat thread's chief keeps running in Herdr across a restart as it started, so a change
-reaches only new conversations, and an engine change would break the open ones. Editing them
-here waits on deciding what a change does to open conversations. Still commands: the chat
-channel, accounts, archive and remove.
+The chief's engine, model, account and permissions are edited too, in its agent file. A chat
+thread's chief keeps running in Herdr across a restart as it started, so saving a change to them
+lists the conversations already open, each with a choice ([session-handover.md](session-handover.md)):
+**Carry on** resumes it with the new settings and its memory, and is the default when the engine
+stays the same; **Hand over** starts a new session from a handover its chief writes, the default
+for a thread active in the last week when the engine changes; **Start fresh** starts one with only
+the ask, the default for older threads then. **Apply and restart** sets each up while the old
+service still runs, so the old chiefs can write their handovers, and says how each went. The
+service restarts itself in the same step, and only once every conversation is set up: one left
+as it was (answering a message, say) would run on with its old session, so then nothing restarts
+and **Try again** sets up the rest. While it works, the old service starts no session in the
+workspace: a message, in a new thread or an old one, is answered with a line asking to send it
+again in a moment. If a conversation opened after the page listed them, nothing is done and the
+page lists them again. Saving waits while it works, and if the chief's settings change some other
+way meanwhile (another tab, or the file by hand), nothing restarts and the choices are asked
+again. Still commands: the chat channel, accounts, archive and remove.
 
 **Connections this workspace may use:** a switch for each of the install's connections, with
 read-only or full access where an integration offers both. The chat channel is always on, because

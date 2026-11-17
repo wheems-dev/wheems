@@ -31,6 +31,7 @@ import { SessionService } from './sessions.js';
 import { writeNote } from '../knowledge/notes.js';
 import { StateStore, type MessageRecord, type StandingAgent } from '../state/store.js';
 import { requireFullTextSearch } from '../util/sqlite.js';
+import { settingsFiles } from '../web/data.js';
 import { startWeb, type RunningWeb, type WebOptions } from '../web/server.js';
 import { restartSoon } from './launchd.js';
 
@@ -413,21 +414,92 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
           }
           case 'conversations-restart': {
             const workspace = personsWorkspace(request.caller);
-            const restarted = await Promise.all(
-              request.choices.map(({ session, choice }) => {
-                const key = state.threadKeyOf(session);
-                const thread = key === undefined ? undefined : state.conversation(key);
-                if (key === undefined || thread?.workspace !== workspace) {
-                  return Promise.resolve({
-                    key: session,
-                    done: false,
-                    text: `There's no chat thread with session ${session} in ${workspace}.`,
-                  });
-                }
-                return manager.restart(key, choice);
-              }),
+            if (request.restart !== true && request.choices.length === 0) {
+              throw new Error('Say which conversations, and how each restarts.');
+            }
+            const lookUp = (session: string) => {
+              const key = state.threadKeyOf(session);
+              const thread = key === undefined ? undefined : state.conversation(key);
+              return key !== undefined && thread?.workspace === workspace ? key : undefined;
+            };
+            const apply = () =>
+              Promise.all(
+                request.choices.map(({ session, choice }) => {
+                  const key = lookUp(session);
+                  return key === undefined
+                    ? Promise.resolve({
+                        key: session,
+                        done: false,
+                        text: `There's no chat thread with session ${session} in ${workspace}.`,
+                      })
+                    : manager.restart(key, choice);
+                }),
+              );
+            if (request.restart !== true) return { ok: true, restarted: await apply() };
+            // With a restart to follow: the old service starts no session in the workspace until
+            // it, and every conversation must be covered, by a choice or by being set up already,
+            // so none runs on after the restart with its old session and the new settings.
+            if (!(await manager.hold(workspace))) {
+              return {
+                ok: true,
+                restarted: [],
+                restarting: false,
+                stale: true,
+                message:
+                  'Something in the workspace was still starting, so nothing was done. Try again in a minute.',
+              };
+            }
+            // The settings the choices were made for, as the files say now.
+            const settingsNow = async () => {
+              const loaded = (await loadInstall(options.home)).workspaces.find(
+                (w) => w.id === workspace,
+              );
+              return loaded ? (await settingsFiles(options.home, loaded)).seen : null;
+            };
+            const changedSettings = {
+              ok: true as const,
+              restarted: [],
+              restarting: false,
+              stale: true,
+              message:
+                "The chief's settings changed after these choices were made, so the service wasn't restarted. Look at the choices again, then apply.",
+            };
+            if (request.settings !== undefined && (await settingsNow()) !== request.settings) {
+              manager.release(workspace);
+              return changedSettings;
+            }
+            const chosen = new Set(request.choices.map((c) => c.session));
+            const uncovered = (await manager.openConversations(workspace)).filter(
+              (c) => !c.startsAfresh && !chosen.has(c.session),
             );
-            return { ok: true, restarted };
+            if (uncovered.length > 0) {
+              manager.release(workspace);
+              return {
+                ok: true,
+                restarted: [],
+                restarting: false,
+                stale: true,
+                message: `The conversations changed since the page listed them (${String(uncovered.length)} not chosen for), so nothing was done. Look again, then apply.`,
+              };
+            }
+            const restarted = await apply();
+            if (restarted.some((outcome) => !outcome.done)) {
+              manager.release(workspace);
+              return { ok: true, restarted, restarting: false };
+            }
+            // Saved again while the choices were applied, here or by hand: they may not fit.
+            if (request.settings !== undefined && (await settingsNow()) !== request.settings) {
+              manager.release(workspace);
+              return { ...changedSettings, restarted };
+            }
+            const why = await (options.restart ?? restartSoon)();
+            if (why !== null) {
+              manager.release(workspace);
+              return { ok: true, restarted, restarting: false, message: why };
+            }
+            log(`Restarting, as asked from the web app, with ${workspace}'s conversations set up`);
+            // The workspace stays held: this service stops in a moment.
+            return { ok: true, restarted, restarting: true };
           }
           case 'note': {
             const from = speaker(request);

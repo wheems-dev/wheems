@@ -699,7 +699,10 @@ The service serves it whenever it runs, so `wheems start` starts it too, on `127
 (`$WHEEMS_WEB_PORT` or `--port` to change it). From it you can approve or decline what your agents
 propose, send a message to a session or end it (ending and declining ask first), and edit a
 workspace's settings, then restart the service to use them. A chat
-thread's session hears you in its thread, so for those the page says to reply there. When the
+thread's session hears you in its thread, so for those the page says to reply there, and offers
+**Hand over** and **Start fresh** instead. Changing the chief's engine, model, account or
+permissions asks what happens to each conversation already open, as `wheems session restart`
+does, before the restart. When the
 service stops, the page says it can't reach Wheems. For anything else, use the commands it
 names. Only this computer can reach it, and only with the link `wheems web open`
 gives, which carries a token kept in `.wheems/web-token`. What comes next is in

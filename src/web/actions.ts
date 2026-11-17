@@ -10,6 +10,7 @@ import {
   withReviewLock,
 } from '../review/review.js';
 import { request } from '../service/control.js';
+import type { OpenConversation, RestartOutcome } from '../service/conversations.js';
 import { listProposals } from '../skills/proposals.js';
 import { findSession, fingerprint, type WebContext } from './data.js';
 
@@ -252,6 +253,115 @@ export async function actOnSession(
 }
 
 /** 'slow' after a while, so a page needn't wait for the service longer than that. */
+/** How restarting a workspace's chat threads went: in all, and for each. */
+export interface ConversationsFlash extends Flash {
+  outcomes: RestartOutcome[];
+  /** With `then: restart`: the service is restarting, every conversation set up. */
+  restarting?: boolean;
+}
+
+const CHOICES = new Set(['carry-on', 'hand-over', 'fresh']);
+
+/**
+ * Restarts a workspace's chat threads as the person chose, each named `s:<session id>` with its
+ * choice, through the service, as `wheems session restart` does. Each waits for its thread's turn,
+ * and a handover can take as long as a note turn, so this can take minutes.
+ */
+export async function restartConversations(
+  context: WebContext,
+  workspace: string,
+  form: Form,
+): Promise<ConversationsFlash> {
+  const choices: { session: string; choice: 'carry-on' | 'hand-over' | 'fresh' }[] = [];
+  const thenRestart = form.get('then')?.[0] === 'restart';
+  const settings = form.get('settings')?.[0];
+  for (const [name, values] of form) {
+    if (!name.startsWith('s:')) continue;
+    const choice = values[0] ?? '';
+    if (!CHOICES.has(choice)) {
+      return { ok: false, text: `Choose carry on, hand over or start fresh.`, outcomes: [] };
+    }
+    choices.push({ session: name.slice(2), choice: choice as 'carry-on' | 'hand-over' | 'fresh' });
+  }
+  if (choices.length === 0 && !thenRestart) {
+    return { ok: true, text: 'No conversations to restart.', outcomes: [] };
+  }
+  const where = paths(context.home, context.env);
+  try {
+    const answer = await request(
+      where.socket,
+      {
+        op: 'conversations-restart',
+        caller: { workspace },
+        choices,
+        ...(thenRestart && { restart: true }),
+        ...(thenRestart && settings !== undefined && settings !== '' && { settings }),
+      },
+      15 * 60_000,
+    );
+    if (!answer.ok) return { ok: false, text: `Not restarted: ${answer.error}`, outcomes: [] };
+    const outcomes = answer.restarted ?? [];
+    const left = outcomes.filter((o) => !o.done).length;
+    const set = `${String(outcomes.length - left)} ${outcomes.length - left === 1 ? 'conversation' : 'conversations'} set up`;
+    if (thenRestart) {
+      if (answer.stale === true) {
+        return {
+          ok: false,
+          text: answer.message ?? 'The conversations changed: look again.',
+          outcomes,
+          restarting: false,
+        };
+      }
+      if (answer.restarting === true) {
+        return {
+          ok: true,
+          text: `${outcomes.length > 0 ? `${set}. ` : ''}Restarting with the new settings. The page comes back in a few seconds.`,
+          outcomes,
+          restarting: true,
+        };
+      }
+      return {
+        ok: false,
+        text:
+          left > 0
+            ? `${set}, ${String(left)} left as ${left === 1 ? 'it was' : 'they were'}, so the service wasn't restarted: one left would run on with its old session. Try again once ${left === 1 ? 'it has' : "they've"} answered.`
+            : `${set}, but the service wasn't restarted: ${answer.message ?? 'it said no'}`,
+        outcomes,
+        restarting: false,
+      };
+    }
+    return {
+      ok: left === 0,
+      text:
+        left === 0
+          ? `Done: ${set}.`
+          : `${String(outcomes.length - left)} done, ${String(left)} left as ${left === 1 ? 'it was' : 'they were'}.`,
+      outcomes,
+    };
+  } catch (error) {
+    return { ok: false, text: notReached(error as Error), outcomes: [] };
+  }
+}
+
+/** A workspace's chat threads, newest first, from the service, for choosing how each restarts. */
+export async function openConversations(
+  context: WebContext,
+  workspace: string,
+): Promise<{ conversations: OpenConversation[]; problem: string | null }> {
+  const where = paths(context.home, context.env);
+  try {
+    const answer = await request(
+      where.socket,
+      { op: 'conversations', caller: { workspace } },
+      10_000,
+    );
+    if (!answer.ok) return { conversations: [], problem: answer.error };
+    return { conversations: answer.conversations ?? [], problem: null };
+  } catch (error) {
+    return { conversations: [], problem: notReached(error as Error) };
+  }
+}
+
 /**
  * Restarts the service, so it uses changed settings. It answers first, then restarts, so the
  * page sees a moment when nothing answers, and then the new service.
