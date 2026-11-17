@@ -124,7 +124,8 @@ lists the conversations already open, each with a choice ([session-handover.md](
 **Carry on** resumes it with the new settings and its memory, and is the default when the engine
 stays the same; **Hand over** starts a new session from a handover its chief writes, the default
 for a thread active in the last week when the engine changes; **Start fresh** starts one with only
-the ask, the default for older threads then. **Apply and restart** sets each up while the old
+the ask, the default for older threads then. Carry on isn't offered across an engine change, and
+the service refuses it then even if a page sends it. **Apply and restart** sets each up while the old
 service still runs, so the old chiefs can write their handovers, and says how each went. The
 service restarts itself in the same step, and only once every conversation is set up: one left
 as it was (answering a message, say) would run on with its old session, so then nothing restarts

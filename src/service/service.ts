@@ -301,6 +301,13 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
       signedInAt.delete(engine);
       return `${entry.label} isn't signed in, so I can't answer. At the Mac, run \`${setup.signIn.join(' ')}\` and sign in (or wheems setup, then Engines), then send your message again.`;
     },
+    savedChiefEngine: async (id) => {
+      const workspace = (await loadInstall(options.home)).workspaces.find((w) => w.id === id);
+      const chief = workspace?.config?.chief_of_staff;
+      const agent = workspace?.agents.find((a) => a.definition.name === chief);
+      if (!agent) throw new Error(`the chief of staff's agent file for ${id} can't be read`);
+      return agent.definition.engine;
+    },
     aboutYouFile: where.aboutYou,
     noteSweepMs: options.noteSweepMs ?? 60_000,
     sessionEnv,

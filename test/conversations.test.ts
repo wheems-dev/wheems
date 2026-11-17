@@ -41,6 +41,7 @@ describe('conversations', () => {
       noteTurnSeconds?: number;
       trustProblem?: (engine: string, dir: string) => Promise<string | null>;
       signInProblem?: (engine: string) => Promise<string | null>;
+      savedChiefEngine?: (workspace: string) => Promise<string>;
     } = {},
   ) => {
     const engine = new StubEngine({ command: ['fake-agent'], answers });
@@ -61,6 +62,9 @@ describe('conversations', () => {
       ...(options.noteTurnSeconds !== undefined && { noteTurnSeconds: options.noteTurnSeconds }),
       ...(options.trustProblem !== undefined && { trustProblem: options.trustProblem }),
       ...(options.signInProblem !== undefined && { signInProblem: options.signInProblem }),
+      ...(options.savedChiefEngine !== undefined && {
+        savedChiefEngine: options.savedChiefEngine,
+      }),
       aboutYouFile: join(home, 'about-you.md'),
     });
   };
@@ -995,6 +999,43 @@ describe('conversations', () => {
         'answer: draft the post',
         'answer: shorter please',
       ]);
+    });
+
+    it("won't carry on across an engine change, and leaves the session running", async () => {
+      make({ savedChiefEngine: () => Promise.resolve('codex') });
+      behaviour = () => 'answer';
+      const { key } = await threadOf('draft the post');
+      const [old] = await sessionsNow();
+      const running = install.workspaces[0]!.agents[0]!.definition.engine;
+      expect(await manager.restart(key, 'carry-on')).toEqual({
+        key,
+        done: false,
+        text: `Its chief of staff now runs on codex, not ${running}, so its session can't carry on. Choose Hand over or Start fresh.`,
+      });
+      expect((await runtime.get(old!.id))?.state).toBe('live');
+      expect(state.conversation(key)?.generation).toBeUndefined();
+      // Hand over and Start fresh still work across the change.
+      expect(await manager.restart(key, 'fresh')).toMatchObject({ done: true });
+    });
+
+    it("won't carry on when the chief's agent file can't be read", async () => {
+      make({ savedChiefEngine: () => Promise.reject(new Error('agent file is not valid YAML')) });
+      behaviour = () => 'answer';
+      const { key } = await threadOf('draft the post');
+      const [old] = await sessionsNow();
+      expect(await manager.restart(key, 'carry-on')).toMatchObject({
+        done: false,
+        text: expect.stringContaining('agent file is not valid YAML') as string,
+      });
+      expect((await runtime.get(old!.id))?.state).toBe('live');
+    });
+
+    it('carries on when the engine stays the same', async () => {
+      const running = install.workspaces[0]!.agents[0]!.definition.engine;
+      make({ savedChiefEngine: () => Promise.resolve(running) });
+      behaviour = () => 'answer';
+      const { key } = await threadOf('draft the post');
+      expect(await manager.restart(key, 'carry-on')).toMatchObject({ done: true });
     });
 
     it("leaves a conversation that's answering alone, and refuses a handover nobody asked for", async () => {

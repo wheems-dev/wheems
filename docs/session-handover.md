@@ -38,6 +38,12 @@ When a change reaches open conversations, each gets one of three:
 just does it now. It closes gap 1 without losing anything, so it's the default for a change of
 model, account or permissions.
 
+The service refuses **Carry on** when the chief's agent file names a different engine from the one
+it runs, whoever asks: the web app, `wheems session restart --carry-on`, or a page whose choices
+were made before another tab changed the engine. It reads the agent file at that moment, not when
+the choice was made, and leaves the thread as it was, saying to choose **Hand over** or **Start
+fresh**. When it can't read the agent file, it refuses too.
+
 ## Handing over
 
 ### The handover note
