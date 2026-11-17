@@ -3,7 +3,12 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.11
+
+Released 17 November 2026. The chief of staff is now `WHEEMS.md` and the workspace's goal is
+`GOAL.md`; every engine reads one `AGENTS.md`; and how to use Wheems is in built-in skills,
+loaded only when they're needed. Workspaces move over when the service starts. No change to the
+session store. Still an early preview.
 
 **Changed**
 
