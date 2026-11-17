@@ -77,12 +77,22 @@ same mechanism.
 
 ## What the engines add by themselves
 
-Claude Code also loads your own `~/.claude/CLAUDE.md`, your user skills, plugins and MCP servers
-into every Wheems session on it. Those are written for your own work, not for a chief. `--bare`
-would stop them but also stops Claude Code reading the keychain, which breaks a subscription
-sign-in. `--setting-sources project,local` may stop them; it needs trying before it's used, since
-it also drops your user settings. Milestone 6's Claude Code config folder per workspace would
-stop them too, since Claude Code then reads its user files from there, if a subscription sign-in
-carries over to it. Open.
+Left alone, Claude Code would also load your own `~/.claude/CLAUDE.md` and your own skills
+(`~/.claude/skills/`) into every Wheems session on it. Those are written for your own work, not
+for a chief: they can tell it to write notes somewhere else, or run your own review steps. So
+Wheems starts Claude Code with `--settings` that leave them out:
+
+- **`claudeMdExcludes`** lists your `~/.claude/CLAUDE.md`, and every `CLAUDE.md`,
+  `CLAUDE.local.md` and `.claude/CLAUDE.md` in a folder above the session's, as absolute paths.
+  The `CLAUDE.md` Wheems writes in the session's folder is never on the list.
+- **`skillOverrides`** turns off each skill in `~/.claude/skills/`, by its folder name and its
+  `name`, read at every start. Never a `wheems-…` one, since those names are Wheems's.
+
+Your plugins, MCP servers, claude.ai connectors (such as Gmail and Calendar), hooks and other
+settings stay, so a chief can still read an email. Checked on 17 November 2026 with Claude Code
+2.1.326. Ruled out: `--bare`, which stops Claude Code reading the keychain and so breaks a
+subscription sign-in; and `--setting-sources project,local`, which also drops your connectors,
+MCP servers and auto mode's settings. A wildcard in `claudeMdExcludes` didn't match in a test,
+so the paths are listed in full.
 
 Codex reads `~/.codex/AGENTS.md` and `~/.codex/skills/`; opencode has no global file.

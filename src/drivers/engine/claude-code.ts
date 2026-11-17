@@ -1,6 +1,6 @@
 import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import type { HealthCheck } from '../../contracts/driver.js';
 import type { EngineSetup } from '../../contracts/setup.js';
 import {
@@ -150,8 +150,51 @@ export class ClaudeCodeEngine implements EngineDriver {
     };
   }
 
-  prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan> {
+  /**
+   * Every CLAUDE.md Claude Code would load into a session in \`sessionDir\` besides the one Wheems
+   * writes there: the person's own (\`~/.claude/CLAUDE.md\`), and any in a folder above the
+   * session's. Absolute paths, since Claude Code's \`claudeMdExcludes\` matches those.
+   */
+  othersInstructions(sessionDir: string): string[] {
+    const files = [join(this.configDir, 'CLAUDE.md')];
+    let dir = resolve(sessionDir);
+    for (let parent = dirname(dir); parent !== dir; dir = parent, parent = dirname(dir)) {
+      for (const name of FOLDER_INSTRUCTIONS) files.push(join(parent, name));
+    }
+    return files;
+  }
+
+  /**
+   * The person's own skills, in \`~/.claude/skills/\`, by name: written for their own work, so
+   * hidden from Wheems's sessions. Never one of Wheems's, which share the names it gives them.
+   */
+  async ownSkills(): Promise<string[]> {
+    const dir = join(this.configDir, 'skills');
+    const names = new Set<string>();
+    for (const entry of await readdir(dir).catch(() => [] as string[])) {
+      let text: string;
+      try {
+        text = await readFile(join(dir, entry, 'SKILL.md'), 'utf8');
+      } catch {
+        continue;
+      }
+      const named = /^---\r?\n[\s\S]*?^name:\s*["']?([^"'\r\n]+?)["']?\s*$/m.exec(text)?.[1];
+      for (const name of [entry, named]) {
+        if (name !== undefined && !name.startsWith('wheems-')) names.add(name);
+      }
+    }
+    return [...names].sort();
+  }
+
+  async prepare(agent: AgentDefinition, context: EngineContext): Promise<LaunchPlan> {
     const { session } = context;
+    // Only Wheems's instructions and skills: none of the person's own CLAUDE.md files or skills,
+    // which are written for their own work (docs/instructions.md). Their plugins, MCP servers,
+    // connectors and other settings stay.
+    const settings = {
+      claudeMdExcludes: this.othersInstructions(context.sessionDir),
+      skillOverrides: Object.fromEntries((await this.ownSkills()).map((name) => [name, 'off'])),
+    };
     const command = [
       this.binary,
       '--model',
@@ -160,10 +203,12 @@ export class ClaudeCodeEngine implements EngineDriver {
       '--name',
       `${context.workspace.id}-${agent.name}`,
       ...PERMISSION_ARGS[agent.permissions],
+      '--settings',
+      JSON.stringify(settings),
       // After --, so a task that starts with a dash is still the first message.
       ...(session.task !== null ? ['--', session.task] : []),
     ];
-    return Promise.resolve({
+    return {
       command,
       cwd: context.sessionDir,
       env: {
@@ -172,9 +217,12 @@ export class ClaudeCodeEngine implements EngineDriver {
         CLAUDE_CODE_FORCE_SESSION_PERSISTENCE: '1',
       },
       files: instructionsFiles(agent.instructions),
-    });
+    };
   }
 }
+
+/** The instruction files Claude Code reads by itself, in a folder or one of its parents. */
+const FOLDER_INSTRUCTIONS = ['CLAUDE.md', 'CLAUDE.local.md', join('.claude', 'CLAUDE.md')];
 
 async function isFile(path: string): Promise<boolean> {
   return stat(path).then(

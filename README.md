@@ -282,7 +282,9 @@ chief, its role, its team and its open sessions. How to use Wheems is in built-i
 the engine loads only when they're needed: `wheems-sessions` (handing work on and following it),
 `wheems-knowledge` (searching the knowledge base), `wheems-notes` and `wheems-skill-proposals`.
 They're written at every start where the engine reads skills, `.claude/skills/` for Claude Code
-and `.agents/skills/` for Codex and opencode; your own skills there are left alone.
+and `.agents/skills/` for Codex and opencode; your own skills there are left alone. Claude Code is
+started without your own `~/.claude/CLAUDE.md` and your own skills in `~/.claude/skills/`, which
+are written for your own work; your plugins, MCP servers, connectors and hooks stay.
 Don't edit `AGENTS.md` or `CLAUDE.md`: they're rewritten at every launch and ignored by git. See
 [docs/instructions.md](docs/instructions.md).
 
