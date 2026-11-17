@@ -849,8 +849,9 @@ describe('wheems session', () => {
       behave = (line) => (line.includes('permission') ? 'block' : 'answer');
       const blocked = await wheems(['session', 'send', session.id, 'Needs permission.', '--wait']);
       expect(blocked.err).toContain(
-        'it was waiting for an answer at the Mac, so Wheems stopped it',
+        'it was waiting for an answer at the Mac, such as a permission its engine asked for, so Wheems stopped it',
       );
+      expect(blocked.err).toContain("that's theirs to decide");
       expect(await stored((s) => s.workspace('personal').session(session.id)?.state)).toBe(
         'stopped',
       );

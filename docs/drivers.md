@@ -99,7 +99,17 @@ say whether they are `direct` messages. Drivers declare whether they support `th
 `buttons`, `reactions` and `identities` (posting under a per-workspace name and icon); a driver
 without buttons or reactions refuses them with `unsupported` rather than dropping them silently,
 and one without identities ignores them. To keep a conversation together, reply in
-`replyThread(event)`.
+`replyThread(event)`. A message may name people to `mentions`, such as the person an approval
+waits for, and the driver mentions them in its own way. The optional `update(message, change)`
+changes a post in place, its text and buttons, as an approval's post does once it's answered; a
+driver without it gets a reply under the post instead. A button's `id` comes back on its press,
+and is all Wheems needs: approvals carry only their id and the choice. On a channel without
+buttons, the person answers an approval in words, as `approve a1b2c3`.
+
+The Slack driver sends buttons as an `actions` block and mentions as a section under the post's
+Markdown, takes presses from Socket Mode's `interactive` envelopes (`block_actions`), and changes
+posts with `chat.update`. Its manifest has always turned interactivity on; a Slack app set up by
+hand needs **Interactivity** switched on in its settings, or presses never arrive.
 
 Milestone 1 ships the Slack driver (Socket Mode, so no public address) and the engine drivers for
 Claude Code, Codex and opencode. Each engine also brings its setup steps (`EngineSetup`): how to

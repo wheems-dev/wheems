@@ -96,6 +96,9 @@ sessions: # limits on ad-hoc sessions; each defaults as shown
 
 identity: { name: Acme chief of staff, icon: ':office:' } # how its posts appear, where supported
 
+approvals: # which decisions the chief makes, and which it brings to you (docs/approvals.md)
+  chief_decides: [] # left to the chief: money, speaking, irreversible, access, outside
+
 channels: # chat, approvals and updates are built in; add any others
   chat: { connection: slack, channel: acme-chat } # or { connection: slack, direct: true }
   approvals: { connection: slack, channel: acme-approvals }
@@ -122,6 +125,17 @@ workspace; beyond it, `wheems session create` is refused (from milestone 5, task
 
 `direct: true` means the app's direct messages. Only one workspace per connection can have them;
 every other workspace chats in a channel, by name or id, that the app has been invited to.
+
+`approvals` is where an approval goes when the work came from no chat conversation, such as a
+session you started yourself; `updates` takes `wheems chat post updates` and the chief's daily
+list of decisions. Without either, those go to the chat channel, as new posts. Approvals for work
+from a conversation are always posted in that conversation's thread. Other channels, such as
+`briefs`, are for workflows (milestone 7), and `wheems chat post` takes them by name.
+
+`approvals.chief_decides` leaves kinds of decision that are usually yours to the chief:
+`money`, `speaking` (for you, to anyone outside), `irreversible`, `access` and `outside` (what
+you didn't ask for). The chief's built-in instructions list what's still yours. Only you change
+this: it's your file, and the chief can't widen its own authority.
 
 A rule needs at least one of `deny`, `require` or `approval`; `approval` names a channel and goes
 with `action`.
@@ -172,8 +186,10 @@ asks.
 | codex       | `gpt-6.1-sol`                                   | `--approve-for-me`                               | `--dangerously-bypass-approvals-and-sandbox` |
 | opencode    | `openrouter/x-ai/grok-5`, `opencode/big-pickle` | `--auto` (approves what its config doesn't deny) | `--auto`                                     |
 
-Until approvals arrive, a prompt means someone has to answer it at the machine, so a chief of
-staff you talk to from your phone usually runs on `auto`.
+An engine's own prompt still means someone has to answer it at the machine: approvals are for
+decisions agents ask for with `wheems approval request`, not the engine's permission prompts. So
+a chief of staff you talk to from your phone usually runs on `auto`. A team member stopped at a
+prompt is stopped by Wheems, and its chief is told.
 
 Every agent also gets Wheems's built-in instructions: its last message of each turn is posted to
 the chat thread for it, and `wheems chat reply "..."` sends a progress note during long work.

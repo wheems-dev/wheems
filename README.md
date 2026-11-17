@@ -41,6 +41,7 @@ Wheems was formerly called Opinr.
 - [Workspaces and agents](#workspaces-and-agents)
 - [Talking to agents](#talking-to-agents)
 - [Sessions](#sessions)
+- [Approvals and updates](#approvals-and-updates)
 - [The knowledge loop](#the-knowledge-loop)
 - [Search](#search)
 - [Skills and review](#skills-and-review)
@@ -448,6 +449,70 @@ answers its owner instead.
 Sessions don't depend on Slack: they live in Wheems's core, and only a chief's conversation
 reaches you, through whatever channel it uses.
 
+## Approvals and updates
+
+Some decisions are yours, and an agent asks before acting on one. Your chief decides what can
+be undone and stays inside what you asked. **You decide five things:** money (any purchase or
+anything that adds to a bill), speaking for you (an email or message to anyone outside,
+publishing, replying to a customer), what can't be undone (deploying to production, deleting
+data, force-pushing), access (sharing, granting access, new credentials or integrations), and
+anything you didn't ask for. A workspace can leave some of those to its chief:
+
+```yaml
+approvals:
+  chief_decides: [speaking] # money, speaking, irreversible, access, outside
+```
+
+- **A team member asks its chief**, with `wheems approval request "Merge the fix to staging?"`.
+  The chief answers it (`wheems approval answer <id> Approve`) or, when it's yours, brings it to
+  you with its note (`wheems approval escalate <id> --note "…"`).
+- **The chief asks you** the same way. You see a post in the conversation the work came from,
+  in the chief's name, mentioning you so your phone buzzes, with a button for each choice:
+
+  > **Approval needed** · _Personal chief of staff_
+  >
+  > Deploy storefront to production?
+  >
+  > The checkout fix is on `fix/checkout-total`; tests pass on staging.
+  >
+  > _Open until 18 Nov, 14:02. Approval a1b2c3._
+  >
+  > [Approve] [Decline]
+
+- **One tap answers it.** The post changes to show your answer and its buttons go. The first
+  answer counts; a later press changes nothing. The answer goes to the agent that asked, as a
+  message from Wheems, and to the chief when it brought you a team member's request, so the work
+  carries on in the same conversation. Only the people in the connection's `allowed_users` can
+  answer.
+- **Or answer elsewhere:** from the web app's Review page, with
+  `wheems approval answer <id> <choice> [--reason …]` at a terminal, or on a channel without
+  buttons by replying `approve a1b2c3`. `wheems approval list` shows what's waiting (`--all` for
+  the history), and `show <id>` one in full.
+- **Choices** are Approve and Decline, or up to four given with `--choices "Now,Tonight,Neither"`.
+  An approval is open for 24 hours (`--expires 2h`, at most a week). When it runs out, the asker
+  is told it expired and the post says so: silence is never a yes. The asker can take it back
+  with `wheems approval withdraw <id>`, and ending a session withdraws its requests.
+- **Work that came from no conversation**, such as a session you started, posts to the
+  workspace's `approvals` channel if `workspace.yaml` names one, otherwise to its chat channel.
+- **You see every decision the chief made.** Each evening after six, a list of them ("Decisions
+  I made since my last list") goes to the workspace's `updates` channel, or its chat channel
+  without one.
+- **Limits:** a session may have five approvals waiting at once. The question is one line, and
+  details are cut to 3,000 characters. Anything that looks like a password or token is refused,
+  since approvals are posted in chat.
+- **Answers survive a restart.** Approvals are kept in the session store; buttons carry only an
+  approval's id. Whatever expired while the service was down is expired when it starts, and an
+  answer that hadn't reached its agent is delivered then.
+
+An approval is **a promise the agents keep**, for now: nothing stops an agent that acts without
+asking, or one that ignores a no. The broker (milestone 9) makes it a gate, since agents won't
+hold the credentials to act without it. See [docs/approvals.md](docs/approvals.md).
+
+**Updates** are one-way posts that need no answer, such as a routine's results:
+`wheems chat post updates "Nightly backup finished."` posts to the workspace's `updates` channel,
+or its chat channel without one. Only a chief (or you) posts; a team member's results go back to
+its chief, which decides what you need to hear.
+
 ## The knowledge loop
 
 Agents are told never to write the knowledge base themselves. They write **notes**, and a
@@ -749,7 +814,8 @@ file, or remove it to start its threads afresh, then run `wheems restart`.
 A page in your browser for seeing what Wheems is doing: pick a workspace at the top of the
 sidebar, then its **Overview** (its chief of staff with the sessions working for it as a tree,
 the knowledge base and skills), its **Sessions** (each one's state, what you originally asked,
-its purpose and latest messages, including its chat thread's), its **Review** (skills its agents proposed) and its
+its purpose and latest messages, including its chat thread's), its **Review** (approvals waiting
+for you and their history, and skills its agents proposed) and its
 **Settings**. For the whole install there are **Connections** (chat channels, integrations and
 engine accounts, and which workspaces use each), **About you** (`about-you.md` and the changes
 suggested for it) and **Setup and health** (doctor's checks). It follows your computer's light or
@@ -761,8 +827,8 @@ wheems web run            # serve it on its own in this terminal, until Ctrl+C
 ```
 
 The service serves it whenever it runs, so `wheems start` starts it too, on `127.0.0.1` port 4317
-(`$WHEEMS_WEB_PORT` or `--port` to change it). From it you can approve or decline what your agents
-propose, send a message to a session or end it (ending and declining ask first), and edit a
+(`$WHEEMS_WEB_PORT` or `--port` to change it). From it you can answer approvals, approve or
+decline what your agents propose, send a message to a session or end it (ending and declining ask first), and edit a
 workspace's settings, then restart the service to use them. A chat
 thread's session hears you in its thread, so for those the page says to reply there, and offers
 **Hand over** and **Start fresh** instead. Changing the chief's engine, model, account or
@@ -861,6 +927,8 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`              |
 | `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note |
 | `wheems session restart <id> [--fresh] [--carry-on]`                | Starts a chat thread's session over: from a handover its chief writes, afresh, or just resumed       |
+| `wheems approval list [--all]`, `show <id>`                         | What's waiting for a decision, and the history                                                       |
+| `wheems approval answer <id> <choice> [--reason]`                   | Answers an approval (the chief for its team's, you for any)                                          |
 | `wheems knowledgebase search <query...> [--workspace] [--limit]`    | Searches a workspace's knowledge base (`$WHEEMS_WORKSPACE`, or the only one; 5 results)              |
 | `wheems knowledgebase reindex [--workspace]`                        | Rebuilds search indexes, every workspace's by default                                                |
 | `wheems skill list`, `show <name> [version]`                        | Lists the library and waiting proposals, or prints a skill's `SKILL.md`                              |
@@ -887,6 +955,9 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 | Command                                                          | What it does                                                  |
 | ---------------------------------------------------------------- | ------------------------------------------------------------- |
 | `wheems chat reply "…"` or `wheems chat reply -`                 | Posts a progress note to the conversation's thread            |
+| `wheems chat post <channel> "…"`                                 | A chief posts to a named channel, such as `updates`           |
+| `wheems approval request "…" [--details] [--choices] [--wait]`   | Asks for a decision: a team member its chief, a chief you     |
+| `wheems approval escalate <id> [--note]`, `withdraw <id>`        | The chief brings a request to you; the asker takes one back   |
 | `wheems knowledgebase note "…"` or `wheems knowledgebase note -` | Saves a note to the workspace's inbox                         |
 | `wheems knowledgebase search "…"`                                | Searches the agent's own workspace                            |
 | `wheems skill propose <name> [-]`                                | Proposes a skill, read from standard input, for you to review |
@@ -976,11 +1047,15 @@ accounts: [claude-subscription] # install accounts this workspace may use
 chief_of_staff: chief-of-staff # the file in agents/; this is the default
 channels:
   chat: { connection: slack, direct: true } # or { connection: slack, channel: acme-chat }
+  # approvals: { connection: slack, channel: acme-approvals } # approvals from no conversation
+  # updates: { connection: slack, channel: acme-updates } # chat post updates, the daily list
 identity: { name: Chief of staff, icon: ':house:' } # how its posts appear
 skill_budget: 20 # doctor warns past this many skills
 sessions: # limits on ad-hoc sessions; each defaults as shown
   max_open_per_owner: 3 # open sessions one owner (a chief, a session or you) may have
   max_depth: 2 # a chief's session starts one level, and those one more
+approvals:
+  chief_decides: [] # kinds of decision left to the chief: money, speaking, irreversible, access, outside
 knowledge:
   note_after_idle: 30 # minutes quiet before the agent is asked for a note; 0 is off
   tidy_at: '03:00' # the nightly tidy, local time; false is off
@@ -1030,7 +1105,8 @@ skills:
 
 These are validated now, so config written today keeps working, but nothing acts on them yet:
 machines beyond the local one in `install.yaml`; `rules`, `integrations`, `isolation`, `machine`
-and channels other than `chat` in `workspace.yaml`; and `workflows/*.yaml`. See
+and channels other than `chat`, `approvals` and `updates` in `workspace.yaml`; and
+`workflows/*.yaml`. See
 [docs/config.md](docs/config.md) for their formats.
 
 ## Engines
@@ -1101,24 +1177,27 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
   those providers see each conversation, and what agents load or read: `about-you.md`, the
   brief, and, for the filer, notes and pages. Search by meaning is local: with Ollama, nothing
   you index is sent anywhere to be embedded.
+- **Approvals are a promise the agents keep**, until the broker (milestone 9): nothing stops an
+  agent acting without asking. Who's calling the control socket is taken from the session ids in
+  the environment, which is convenience, not proof.
 - **The control socket** is a Unix socket only you can open.
 
 ## What's not built yet
 
 Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 
-| Milestone | What it brings                                                                                                                                                                                                                                                                                                                         |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                                                                                                                                                                                                        |
-| 3         | Sessions, approvals and updates: a record of every session, so a chief can start sessions, find them and talk to them; a chief that delegates to its team rather than doing the work; approvals that sub-agents ask their chief for, with buttons on your phone for what's yours to decide; updates; and a first version of the broker |
-| 4         | Projects: any body of work as a project, with its own knowledge base and an optional lead on the chief's team, and the chief routing questions and work to them                                                                                                                                                                        |
-| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                                                                                                                                                                                                                |
-| 6         | A second workspace, kept apart                                                                                                                                                                                                                                                                                                         |
-| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                                                                                                                                    |
-| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                                                                                                                                             |
-| 9         | Integrations, guardrails and the vault: `integration connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                                                                                                                                       |
-| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                                                                                                                                   |
-| 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                                                                                                                                 |
+| Milestone | What it brings                                                                                                                                                                                                                                                                                                                                        |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                                                                                                                                                                                                                       |
+| 3         | Built: sessions, a chief that delegates to its team, approvals with buttons on your phone, and updates. Still to come: its test in daily use (a developer asks before merging, and one tap answers it). The first version of the broker is still listed here; [docs/approvals.md](docs/approvals.md) suggests designing it on its own for milestone 9 |
+| 4         | Projects: any body of work as a project, with its own knowledge base and an optional lead on the chief's team, and the chief routing questions and work to them                                                                                                                                                                                       |
+| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                                                                                                                                                                                                                               |
+| 6         | A second workspace, kept apart                                                                                                                                                                                                                                                                                                                        |
+| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                                                                                                                                                   |
+| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                                                                                                                                                            |
+| 9         | Integrations, guardrails and the vault: `integration connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                                                                                                                                                      |
+| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                                                                                                                                                  |
+| 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                                                                                                                                                |
 
 Alongside them comes **the web app**: a local page from the service, organised by workspace. Its
 pages are built, and you can review proposals and talk to sessions from it; editing settings and
@@ -1198,7 +1277,7 @@ yet:
 - [Roadmap](docs/roadmap.md): the milestones and open questions
 - [The web app](docs/web-app.md): the planned local page, organised by workspace
 - [The chief of staff and its team](docs/team.md): you only talk to the chief, which delegates and manages the work (proposal)
-- [Approvals and updates](docs/approvals.md): asking and waiting for a decision, through the chief (proposal)
+- [Approvals and updates](docs/approvals.md): asking and waiting for a decision, through the chief
 - [Session handover](docs/session-handover.md): handing a chat thread over to a new session
 - [Milestone 2 plan](docs/plans/milestone-2.md) and its [research](docs/research/knowledge-loop.md)
 - [Architecture ideas](docs/ideas/architecture.md), the [two design proposals](docs/ideas/proposal-claude.md) ([and the other](docs/ideas/proposal-codex.md)) and [the decisions taken](docs/ideas/decisions.md)

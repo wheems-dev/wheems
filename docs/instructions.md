@@ -47,9 +47,11 @@ which is needed only now and then. So Wheems's behaviours are split in two, whic
 to about 1,700 tokens and a worker to about 1,050, before your own files:
 
 - **Rules, always in `AGENTS.md`.** What must apply on every turn, whether or not the agent
-  thinks of it: the chief's role (manage, never do the work), how to talk to the person, a
-  worker's job with its finish line and the evidence to hand back, and never putting secrets in
-  anything. Plus a short map: each Wheems skill and when to use it.
+  thinks of it: the chief's role (manage, never do the work), the chief's **Decisions** (the five
+  kinds that are the person's, asked with an approval, never in words), how to talk to the person,
+  a worker's job with its finish line, the evidence to hand back and asking before anything that
+  isn't its to decide, and never putting secrets in anything. Plus a short map: each Wheems skill
+  and when to use it.
 
   Neither `WHEEMS.md` nor the rules name a chat channel, since Slack is one of many to come. The
   chief doesn't need to know which it's on: the channel's driver turns its Markdown into what the
@@ -61,13 +63,14 @@ to about 1,700 tokens and a worker to about 1,050, before your own files:
 | Skill                    | What it covers                                                                                                        | Who gets it                                 |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `wheems-sessions`        | Finding, starting, briefing (`--done-when`), messaging, waiting on and ending sessions; sending work back; the limits | The chief, and sessions that may start more |
+| `wheems-approvals`       | Asking for a decision and waiting for it; for a chief, answering or escalating its team's, and posting updates        | Everyone, worded for a chief or a worker    |
 | `wheems-notes`           | Writing a note: when, what goes in it, the format, and answering Wheems's note requests                               | Everyone                                    |
 | `wheems-knowledge`       | Searching the knowledge base, and reading what it finds                                                               | Everyone                                    |
 | `wheems-skill-proposals` | Proposing a new or changed skill for review                                                                           | Everyone                                    |
 | `wheems-herdr`           | Running programs that must keep running, such as a dev server, in Herdr terminals with `hc`; never agents             | Everyone, when Herdr can print its manual   |
 
-New behaviours go in as skills the same way: creating team agents, approvals and reporting back
-when they come.
+New behaviours go in as skills the same way, as approvals did: creating team agents and reporting
+back when they come.
 
 ### Herdr
 

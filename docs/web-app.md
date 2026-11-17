@@ -5,7 +5,8 @@ they propose. Designed on 16 November 2026 from a clickable mockup. Chat stays t
 your chiefs: the web app is for looking things over and changing settings, the way `wheems setup`,
 `wheems status` and `wheems review` are today.
 
-**Built so far (stage 1):** the workspace switcher; each workspace's Overview, Sessions, Review and
+**Built so far (stages 1 and 2):** approvals on Review, waiting and answered (stage 2); the
+workspace switcher; each workspace's Overview, Sessions, Review and
 Settings; and the install's Connections, About you, and Setup and health; in light and dark. From
 the page you can approve or decline skills (choosing which agents get each, and editing it first)
 and changes to `about-you.md`, and send a message to a session or end it (ending and declining ask
@@ -95,8 +96,12 @@ What the workspace's agents propose, waiting for your yes: new skills and new ve
 each with why it's proposed and the text itself. Approve or decline; declining asks first, in the
 page. Asking the chief why, and undoing a decision, are still to come.
 
-When agents ask before acting (milestone 3), each request and your answer are kept here as the
-approvals history, with what the agent knew when it asked.
+**Approvals** come first: each one waiting, with its question and details, the agent that asked
+and what it was working on, the chief's note when it brought it to you, and your original ask.
+One button per choice answers it, with an optional reason, through the service, as
+`wheems approval answer` does; whoever asked is told. Those still with the chief say so, and you
+can answer them yourself. Below the proposals, the **approvals history**: the latest answered,
+expired and withdrawn, with who answered and why.
 
 Changes to `about-you.md` are install-wide, because every agent in every workspace reads it, so
 they're reviewed under Install rather than in one workspace.
@@ -169,7 +174,7 @@ then remembers it.
 | Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                              |
 | Sessions         | The session store: tree, detail, messages, send and end                         | Sub-agents read-only, with End as a stop ([team.md](team.md))   |
 | Team             | The chief and the workspace's agents, from `agents/`                            | Creating and editing agents, project teams ([team.md](team.md)) |
-| Review           | Skill proposals, approve and decline                                            | Approvals waiting and their history (milestone 3)               |
+| Review           | Approvals waiting and their history; skill proposals, approve and decline       | Asking the chief why, and undoing a decision                    |
 | Settings         | Everything in `workspace.yaml`, archive and remove (most of it editable now)    | Connection switches (milestone 9)                               |
 | Connections      | Slack and engine accounts                                                       | Integrations and MCP servers (milestones 7 and 9)               |
 | Setup and health | Setup's steps and doctor's checks and fixes                                     |                                                                 |

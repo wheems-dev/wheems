@@ -976,12 +976,16 @@ export class SessionService {
     const minutes = Math.round(this.options.answerWaitSeconds / 60);
     const why =
       live?.status === 'blocked'
-        ? 'it was waiting for an answer at the Mac'
+        ? 'it was waiting for an answer at the Mac, such as a permission its engine asked for'
         : `it gave no answer within ${String(minutes)} minutes`;
     if (await this.stopRuntimeSession(name)) {
       sessions.update(targetId, { state: 'stopped' }, 'working');
       this.options.log(`Stopped session ${targetId} mid-turn: ${why}`);
-      return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it`;
+      return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it${
+        live?.status === 'blocked'
+          ? ", perhaps another way; if it needs something only the person can allow, that's theirs to decide"
+          : ''
+      }`;
     }
     this.options.log(`Session ${targetId} didn't finish its turn, and couldn't be stopped`);
     // Held until that turn is over, or it can be stopped: see untilFree.
