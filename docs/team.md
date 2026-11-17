@@ -34,13 +34,10 @@ has three parts:
    `wheems init` writes both from `wheemsMd` and `goalMd` in `src/cli/templates.ts`. They're the
    person's to edit, and the web app's Settings page edits `WHEEMS.md`'s front matter.
 2. **Wheems's built-in instructions**, appended by `withBuiltins` in `src/agents/builtin.ts`:
-   - talking to the person;
-   - notes;
-   - searching the knowledge base;
-   - proposing skills;
-   - starting and talking to sessions, with a list of its open ones.
-
-   These teach the agent the `wheems` commands, and every agent gets them.
+   talking to the person, the chief's role and team, its open sessions, and a short map of
+   Wheems's skills (`wheems-sessions`, `wheems-knowledge`, `wheems-notes`,
+   `wheems-skill-proposals`). The skills, written beside it at every start by `builtinSkills`,
+   teach the `wheems` commands, and are loaded only when they're needed.
 
 3. **What it knows**: `about-you.md` and the workspace's brief.
 

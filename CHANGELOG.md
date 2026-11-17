@@ -15,6 +15,13 @@ change anything, including commands and config formats, without a migration path
 - **Every engine reads `AGENTS.md`.** Wheems writes everything a session needs there at every
   start, and a `CLAUDE.md` whose one line, `@AGENTS.md`, has Claude Code read the same file.
   See `docs/instructions.md`.
+- **How to use Wheems is now in built-in skills**, loaded only when they're needed:
+  `wheems-sessions`, `wheems-knowledge`, `wheems-notes` and `wheems-skill-proposals`. They're
+  written at every start into `.claude/skills/` for Claude Code and `.agents/skills/` for Codex
+  and opencode, and Wheems clears out its own old ones without touching yours. What must always
+  apply stays in `AGENTS.md`: the chief's role, talking to the person, a worker's job, and a short
+  map of the skills. A chief's instructions go from about 2,800 tokens to 1,700, and a worker's
+  from 2,200 to 1,050.
 
 ## 0.1.10
 

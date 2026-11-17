@@ -42,6 +42,7 @@ export class ClaudeCodeEngine implements EngineDriver {
   readonly capabilities: EngineCapabilities = {
     instructionsFile: 'CLAUDE.md',
     skills: true,
+    skillsFolder: '.claude/skills',
     mcp: true,
     hooks: true,
     permissions: true,

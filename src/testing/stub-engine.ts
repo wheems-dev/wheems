@@ -21,6 +21,7 @@ export class StubEngine implements EngineDriver {
   capabilities: EngineCapabilities = {
     instructionsFile: 'AGENTS.md',
     skills: false,
+    skillsFolder: '.agents/skills',
     mcp: false,
     hooks: false,
     permissions: false,

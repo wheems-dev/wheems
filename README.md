@@ -277,8 +277,12 @@ it writes `AGENTS.md` in the session's folder with everything the session needs:
 instructions, the workspace's `GOAL.md`, Wheems's built-in instructions, then what the agent
 should know at launch, `about-you.md` and the workspace's brief. It writes a `CLAUDE.md` beside it
 whose one line, `@AGENTS.md`, has Claude Code read the same file, so every engine reads the same
-thing. The built-in instructions cover talking to the person, writing notes, searching the
-knowledge base, proposing skills and, for a chief, its role, its team and starting sessions.
+thing. The built-in instructions are the rules that always apply: talking to the person and, for a
+chief, its role, its team and its open sessions. How to use Wheems is in built-in skills, which
+the engine loads only when they're needed: `wheems-sessions` (handing work on and following it),
+`wheems-knowledge` (searching the knowledge base), `wheems-notes` and `wheems-skill-proposals`.
+They're written at every start where the engine reads skills, `.claude/skills/` for Claude Code
+and `.agents/skills/` for Codex and opencode; your own skills there are left alone.
 Don't edit `AGENTS.md` or `CLAUDE.md`: they're rewritten at every launch and ignored by git. See
 [docs/instructions.md](docs/instructions.md).
 

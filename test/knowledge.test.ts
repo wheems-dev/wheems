@@ -2,7 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { withBuiltins } from '../src/agents/builtin.js';
+import { builtinSkills, withBuiltins } from '../src/agents/builtin.js';
 import { finishLine } from '../src/service/sessions.js';
 import { BRIEF_MD } from '../src/cli/templates.js';
 import { knowledgePaths, noteTitle, readCapped, writeNote } from '../src/knowledge/notes.js';
@@ -90,9 +90,14 @@ describe('notes', () => {
     expect(await readCapped(file, 10)).toBe('abcdefghij\n\n[Cut at 10 characters.]');
   });
 
-  it("gives agents the notes instructions, and what they know when there's something to know", () => {
+  it("gives agents the notes skill, and what they know when there's something to know", () => {
     const bare = withBuiltins('# Agent');
-    expect(bare).toContain('wheems knowledgebase note');
+    // The map says when; the skill says how.
+    expect(bare).toContain('- `wheems-notes`: when something worth keeping happens');
+    expect(bare).not.toContain('wheems knowledgebase note -');
+    const notes = builtinSkills().find((s) => s.name === 'wheems-notes');
+    expect(notes?.content).toMatch(/^---\nname: wheems-notes\ndescription: "How to write a note/);
+    expect(notes?.content).toContain('wheems knowledgebase note - <<');
     expect(bare).not.toContain('What you know');
     const known = withBuiltins('# Agent', { aboutYou: 'Prefers short answers.', brief: null });
     expect(known).toContain('### About the person\n\nPrefers short answers.');
@@ -107,15 +112,32 @@ describe('notes', () => {
     });
     expect(alone).toContain('## Your role (built into Wheems)');
     expect(alone).toContain('No agents yet: hand work to ad-hoc sessions for now.');
-    expect(alone).toContain('Start one for any work that no agent on your team fits.');
-    expect(alone).not.toContain('answer simple things yourself');
-    // It briefs with a finish line, checks evidence, and stops sending a job back after two tries.
+    // It briefs with a finish line, checks evidence, and stops sending a job back after two tries:
+    // rules, so always loaded.
     expect(alone).toContain('Brief with a finish line.');
-    expect(alone).toContain('Always give `--done-when` too');
     expect(alone).toContain('Check the evidence, not the claim');
     expect(alone).toContain('Send the same job back twice at most.');
-    // The role comes before the sessions it relies on.
-    expect(alone.indexOf('Your role')).toBeLessThan(alone.indexOf('## Sessions'));
+    expect(alone).toContain(
+      '- `wheems-sessions`: before you start, message, wait on or end a session. Every job you hand on goes through it.',
+    );
+    // The role comes before the map of skills it relies on, and the open sessions after.
+    expect(alone.indexOf('Your role')).toBeLessThan(alone.indexOf("## Wheems's skills"));
+    expect(alone).toContain(
+      '## Your open sessions (built into Wheems)\n\nAs they were when this session started.\n\nNone.',
+    );
+    // How to start sessions is the skill, worded for a chief.
+    const sessions = builtinSkills({ chief: { team: [] }, sessions: { maxOpen: 3, open: [] } })[0];
+    expect(sessions?.name).toBe('wheems-sessions');
+    expect(sessions?.content).toContain('Start one for any work that no agent on your team fits.');
+    expect(sessions?.content).toContain('Always give `--done-when` too');
+    expect(sessions?.content).not.toContain('answer simple things yourself');
+    // Without sessions, there's no sessions skill, and no mention of it.
+    expect(builtinSkills().map((s) => s.name)).toEqual([
+      'wheems-knowledge',
+      'wheems-notes',
+      'wheems-skill-proposals',
+    ]);
+    expect(withBuiltins('# Agent')).not.toContain('wheems-sessions');
     const team = withBuiltins('# Chief', undefined, {
       chief: {
         team: [{ name: 'writer', description: null, engine: 'codex', model: 'gpt-6.1-sol' }],

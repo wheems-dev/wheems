@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import {
   HANDOVER_REQUEST,
   NOTE_REQUEST,
+  builtinSkills,
   withBuiltins,
   type SessionBuiltins,
 } from '../agents/builtin.js';
@@ -1065,17 +1066,16 @@ export class ConversationManager {
       workspace,
       `${workspace.id}/${agent.definition.name}`,
     );
+    const builtins = { ...(sessions && { sessions }), chief: { team: teamOf(workspace) } };
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
     const started = await launchSession({
       runtime: this.options.runtime,
       engine,
       agent: {
         ...agent.definition,
-        instructions: withBuiltins(agent.definition.instructions, knowledge, {
-          ...(sessions && { sessions }),
-          chief: { team: teamOf(workspace) },
-        }),
+        instructions: withBuiltins(agent.definition.instructions, knowledge, builtins),
       },
+      skills: builtinSkills(builtins),
       workspace: { id: workspace.id, dir: workspace.dir },
       sessionDir: workspace.dir,
       account: { name: agent.definition.account, driver: account?.driver ?? 'unknown' },

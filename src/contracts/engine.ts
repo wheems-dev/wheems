@@ -56,6 +56,11 @@ export interface EngineCapabilities {
   instructionsFile: string;
   /** Loads skills from a folder the framework controls. */
   skills: boolean;
+  /**
+   * Where in a session's folder the engine finds skills, each a \`<name>/SKILL.md\`, such as
+   * \`.claude/skills\` or \`.agents/skills\`.
+   */
+  skillsFolder: string;
   /** Can reach MCP servers. */
   mcp: boolean;
   /** Has hooks the framework can use to refuse risky actions early. */

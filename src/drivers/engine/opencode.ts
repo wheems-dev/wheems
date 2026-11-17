@@ -41,6 +41,7 @@ export class OpencodeEngine implements EngineDriver {
   readonly capabilities: EngineCapabilities = {
     instructionsFile: 'AGENTS.md',
     skills: true,
+    skillsFolder: '.agents/skills',
     mcp: true,
     hooks: false,
     permissions: true,

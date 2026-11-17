@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   END_NOTE_REQUEST,
+  builtinSkills,
   withBuiltins,
   workerInstructions,
   type OpenSession,
@@ -1218,7 +1219,7 @@ export class SessionService {
     const own = isChief(workspace, agent.definition.name)
       ? workerInstructions(config?.name ?? workspace.id)
       : agent.definition.instructions;
-    const instructions = withBuiltins(own, knowledge, {
+    const builtins = {
       adhoc: {
         title: session.title ?? '',
         purpose: session.purpose ?? '',
@@ -1227,11 +1228,13 @@ export class SessionService {
         owner: ownerLabel(sessions, session),
       },
       ...(startsSessions && { sessions: startsSessions }),
-    });
+    };
+    const instructions = withBuiltins(own, knowledge, builtins);
     return launchSession({
       runtime: this.options.runtime,
       engine,
       agent: { ...agent.definition, instructions },
+      skills: builtinSkills(builtins),
       workspace: { id: workspace.id, dir: workspace.dir },
       sessionDir: session.folder ?? workspace.dir,
       account: {

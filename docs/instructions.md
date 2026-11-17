@@ -1,6 +1,6 @@
 # What a session loads
 
-**Status: being built.** This is how a Wheems agent session gets its instructions: which files
+**Status: built, in Unreleased.** This is how a Wheems agent session gets its instructions: which files
 you write, which Wheems writes, and which of Wheems's own behaviours are loaded every time and
 which only when they're needed. Decided by the owner on 17 November 2026
 ([ideas/decisions.md](ideas/decisions.md)).
@@ -39,9 +39,10 @@ The install's `.gitignore` gets the generated files. Until the service has start
 
 ## What's always loaded, and what's a skill
 
-Today every built-in behaviour is written out in full in every session's instructions: about
-2,800 tokens for a chief, most of it how to use `wheems` commands. Most of it is needed only now
-and then. So Wheems's behaviours are split in two:
+Until 0.1.11 every built-in behaviour was written out in full in every session's instructions:
+about 2,800 tokens for a chief and 2,200 for a worker, most of it how to use `wheems` commands,
+which is needed only now and then. So Wheems's behaviours are split in two, which brings a chief
+to about 1,700 tokens and a worker to about 1,050, before your own files:
 
 - **Rules, always in `AGENTS.md`.** What must apply on every turn, whether or not the agent
   thinks of it: the chief's role (manage, never do the work), how to talk to the person, a

@@ -17,6 +17,7 @@ import { crossCheck } from '../src/config/check.js';
 import { loadInstall } from '../src/config/load.js';
 import { moveToWheemsFiles, splitGoal } from '../src/config/migrate.js';
 import { instructionsFiles } from '../src/drivers/engine/instructions.js';
+import { writeSkills } from '../src/service/launch.js';
 
 describe("a workspace's files", () => {
   let home: string;
@@ -146,5 +147,43 @@ describe('the instructions files', () => {
     const text = withBuiltins('# Chief', { aboutYou: null, brief: null, goal: 'Boxes.' });
     expect(text).toContain("# Chief\n\n## What we're working towards (from GOAL.md)\n\nBoxes.\n");
     expect(withBuiltins('# Chief')).not.toContain('working towards');
+  });
+});
+
+describe("Wheems's skills in a session's folder", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'sk-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const write = async (path: string, content: string) => {
+    writeFileSync(path, content);
+    await Promise.resolve();
+  };
+  const skillFile = (folder: string, name: string) => join(dir, folder, name, 'SKILL.md');
+
+  it('writes them where the engine reads skills, and clears only its own old ones', async () => {
+    // Someone's own skill, and Wheems's from an earlier start on another engine.
+    mkdirSync(join(dir, '.claude', 'skills', 'my-skill'), { recursive: true });
+    writeFileSync(skillFile('.claude/skills', 'my-skill'), 'mine');
+    mkdirSync(join(dir, '.claude', 'skills', 'wheems-notes'), { recursive: true });
+    writeFileSync(skillFile('.claude/skills', 'wheems-notes'), 'old');
+    mkdirSync(join(dir, '.agents', 'skills', 'wheems-gone'), { recursive: true });
+    writeFileSync(skillFile('.agents/skills', 'wheems-gone'), 'old');
+
+    await writeSkills(dir, '.agents/skills', [{ name: 'wheems-notes', content: 'new' }], write);
+    expect(readFileSync(skillFile('.agents/skills', 'wheems-notes'), 'utf8')).toBe('new');
+    expect(existsSync(join(dir, '.agents', 'skills', 'wheems-gone'))).toBe(false);
+    expect(existsSync(join(dir, '.claude', 'skills', 'wheems-notes'))).toBe(false);
+    expect(readFileSync(skillFile('.claude/skills', 'my-skill'), 'utf8')).toBe('mine');
+  });
+
+  it("refuses a skill that isn't Wheems's, and a folder outside the session's", async () => {
+    await expect(
+      writeSkills(dir, '.agents/skills', [{ name: 'mine', content: '' }], write),
+    ).rejects.toThrow("Not one of Wheems's skills: mine");
+    await expect(writeSkills(dir, '../skills', [], write)).rejects.toThrow('outside its folder');
   });
 });
