@@ -270,11 +270,9 @@ describe('wheems session', () => {
     await chiefThread();
     const chief = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
     expect(chief).toContain('## Your role (built into Wheems)');
-    // Where the person talks to it comes from the workspace's config; nothing else names a channel.
-    expect(chief).toContain(
-      'The person talks to you through a chat channel, on Slack, in direct messages.',
-    );
-    expect(chief.match(/Slack/g)).toHaveLength(1);
+    // Nothing it reads names a channel: the channel's driver handles the differences.
+    expect(chief).toContain('The person talks to you through a chat channel.');
+    expect(chief).not.toMatch(/slack/i);
     // The chief and every member of its team read the workspace's goal.
     expect(chief).toContain(
       "## What we're working towards (from GOAL.md)\n\nSell a thousand boxes.",

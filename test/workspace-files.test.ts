@@ -17,7 +17,6 @@ import { crossCheck } from '../src/config/check.js';
 import { loadInstall, validateFile } from '../src/config/load.js';
 import { moveToWheemsFiles, splitGoal } from '../src/config/migrate.js';
 import { instructionsFiles } from '../src/drivers/engine/instructions.js';
-import { chatPlace } from '../src/service/conversations.js';
 import { writeSkills } from '../src/service/launch.js';
 
 describe("a workspace's files", () => {
@@ -215,32 +214,5 @@ describe("Wheems's skills in a session's folder", () => {
       writeSkills(dir, '.agents/skills', [{ name: 'mine', content: '' }], write),
     ).rejects.toThrow("Not one of Wheems's skills: mine");
     await expect(writeSkills(dir, '../skills', [], write)).rejects.toThrow('outside its folder');
-  });
-});
-
-describe('where the person talks to a chief', () => {
-  it('is named from the workspace config: direct messages or a channel, on its service', async () => {
-    const home = mkdtempSync(join(tmpdir(), 'wc-'));
-    try {
-      writeFileSync(join(home, 'install.yaml'), installYaml());
-      await initWorkspace({ home, id: 'personal' });
-      await initWorkspace({ home, id: 'marketing', channel: 'marketing' });
-      const install = await loadInstall(home);
-      const ws = (id: string) => install.workspaces.find((w) => w.id === id)!;
-      expect(
-        chatPlace(
-          { workspace: ws('personal'), connection: 'slack', channel: null },
-          install.config!,
-        ),
-      ).toBe('on Slack, in direct messages');
-      expect(
-        chatPlace(
-          { workspace: ws('marketing'), connection: 'slack', channel: 'C1' },
-          install.config!,
-        ),
-      ).toBe('on Slack, in #marketing');
-    } finally {
-      rmSync(home, { recursive: true, force: true });
-    }
   });
 });

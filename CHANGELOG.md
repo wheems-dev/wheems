@@ -7,10 +7,10 @@ change anything, including commands and config formats, without a migration path
 
 **Changed**
 
-- **Nothing a chief reads ties it to Slack.** A new `WHEEMS.md` says only who the chief is, with
-  no channel in it, and the built-in "Talking to the person" section no longer names one. Wheems
-  adds where the person talks to the chief today, from the workspace's config, such as "on
-  Slack, in direct messages", so it follows the channel when that changes or others arrive.
+- **Nothing a chief reads names a channel.** A new `WHEEMS.md` says only who the chief is, and
+  the built-in "Talking to the person" section no longer mentions Slack. The channel's driver
+  turns the chief's Markdown into what its service shows, so the chief doesn't need to know
+  which channel it's on.
 
 ## 0.1.12
 

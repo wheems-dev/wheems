@@ -6,15 +6,13 @@
 import type { RuntimeSkill } from '../contracts/runtime.js';
 
 /**
- * How a chief talks to the person, whatever the channel: \`where\` says which one it is today, as
- * Wheems knows it at launch (such as "on Slack, in direct messages"), so nothing else names one.
+ * How a chief talks to the person. It names no channel: the channel's driver turns the chief's
+ * Markdown into what its service shows, so the chief doesn't need to know which one it is.
  */
-export function chatInstructions(where?: string): string {
-  return `## Talking to the person (built into Wheems)
+export const CHAT_INSTRUCTIONS = `## Talking to the person (built into Wheems)
 
-The person talks to you through a chat channel${
-    where !== undefined ? `, ${where}` : ''
-  }. They can't see this terminal, and they may be reading on their phone.
+The person talks to you through a chat channel. They can't see this terminal, and they may be
+reading on their phone.
 
 - Answer normally. When you finish working on a message, your last message is sent to them for
   you, in the same conversation, in Markdown.
@@ -36,7 +34,6 @@ The person talks to you through a chat channel${
 - If you need a decision before going on, ask it in a reply and stop. Their answer arrives as
   the next message.
 `;
-}
 
 /** Instead of the chat instructions, for an ad-hoc session: what it's for and who it answers. */
 export function adhocInstructions(session: {
@@ -447,8 +444,6 @@ export interface SessionBuiltins {
     ask?: string | null;
     doneWhen?: string | null;
   };
-  /** For a chief: where the person talks to it today, such as "on Slack, in direct messages". */
-  chat?: { where: string };
   /** For an agent that may start sessions. */
   sessions?: { maxOpen: number; open: OpenSession[] };
   /** For a workspace's chief: its role, and its team. */
@@ -475,9 +470,7 @@ export function withBuiltins(
     knowledge.goal !== undefined && knowledge.goal !== null
       ? `\n## What we're working towards (from GOAL.md)\n\n${knowledge.goal}\n`
       : '';
-  const chat = session.adhoc
-    ? adhocInstructions(session.adhoc)
-    : chatInstructions(session.chat?.where);
+  const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
   const chief = session.chief ? `\n${CHIEF_ROLE}\n${teamInstructions(session.chief.team)}` : '';
   const sessions = session.sessions ? `\n${openSessions(session.sessions.open)}` : '';
   return `${instructions.trim()}\n${goal}\n${chat}${chief}\n${skillsMap(session)}${sessions}${knows}`;

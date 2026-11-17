@@ -228,5 +228,5 @@ behaviour, so that editing it can't break anything.
 
 The owner pointed out that `WHEEMS.md` said the person talks to the chief "from Slack", while Slack
 is one of many channels to come. `WHEEMS.md` stays channel-agnostic: it says who the chief is. The
-built-in instructions don't name a channel either. Wheems generates one line saying where the
-person reaches this chief today, from the workspace's config.
+built-in instructions don't name a channel either, not even a generated line saying which one,
+since the chief doesn't need to know: the channel's driver handles the differences.
