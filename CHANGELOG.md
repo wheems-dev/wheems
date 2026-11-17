@@ -3,7 +3,12 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.8
+
+Released 17 November 2026. A chat thread can hand over to a new session, or start afresh,
+when its chief changes or its context has grown long, from the command line or the web app, which
+edits the chief's engine, model, account and permissions again. The session store moves to schema
+version 5: back it up first, as an older Wheems won't open it afterwards. Still an early preview.
 
 **Added**
 
