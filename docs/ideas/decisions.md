@@ -136,3 +136,26 @@ What it decides (designed in [architecture.md](../architecture.md#a-projects-fol
 - **Starting outside the project means its own hooks and settings don't run by themselves.** That's the safe default, since a folder's hooks run code; Wheems tells the agent to read the project's own `CLAUDE.md` or `AGENTS.md`. `start_in: folder` in `project.yaml` starts sessions inside the folder instead, with Wheems marking it trusted when it's linked.
 - **Code tasks work in git worktrees under `.wheems/`**, which the install's trust covers.
 - **Before a child session starts or resumes**, Wheems checks its engine trusts the session's folder, as it checks chiefs, and refuses with a plain reason the chief can pass on, rather than start a session that waits at a question nobody sees.
+
+## You talk only to the chief, and the chief only delegates (17 November)
+
+The owner: "The user interacts with the chief officer. The user should never interact with any
+sub-agents beneath that." And: "I never want the chief officer to do any work. The chief officer's
+role is to delegate and manage work."
+
+What it decides (designed in [team.md](../team.md) and [approvals.md](../approvals.md)):
+
+- **The person talks only to each workspace's chief.** Defined agents, project leads and ad-hoc
+  sessions are its team and never post to, ask or chat with the person.
+- **The chief manages and never does the work**, not even a small fix. It hands work to a defined
+  agent whose role fits, or to an ad-hoc session for one-offs, checks the result and reports.
+- **It knows its team.** A generated section of its instructions lists the workspace's agents and
+  when to use each. Each agent picks its own engine.
+- **The team grows.** The chief proposes an agent for work that keeps repeating, and the person
+  can build the team in the web app's Team page. Starter sets ship a recommended team.
+- **Approvals go through the chief.** Sub-agents ask their chief. The chief answers within its
+  authority or brings the decision to the person, in the thread the work came from. Some
+  approvals are the person's by rule, and the chief carries those but can't answer them.
+- **Project leads have no channel.** They're on the chief's team, and milestone 4's test changes
+  from chatting with a lead to the chief routing work to it.
+- **Sub-agents are read-only in the web app**, with End as an emergency stop.

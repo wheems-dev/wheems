@@ -68,7 +68,8 @@ appears without being added there on purpose. Everything else goes under an area
 | `workspace` (`ws` for short) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
 | `session`                    | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
 | `knowledgebase`              | ✓ `search`, `note`, `reindex`                                                     |
-| `chat`                       | ✓ `reply`; ○ `post <channel>`, `ask <channel>` (M3)                               |
+| `chat`                       | ✓ `reply`; ○ `post <channel>` (M3, chiefs only)                                   |
+| `approval`                   | ○ `list`, `show`, `request`, `answer`, `escalate`, `withdraw` (M3)                |
 | `skill`                      | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
 | `channel`                    | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
 | `engine`                     | ✓ `list`, `install`, `login`, `trust`                                             |
@@ -98,7 +99,7 @@ differently; the docs now use these names:
 | `wheems task new`       | `wheems task create`                |
 | `wheems step`           | `wheems task step`                  |
 | `wheems post updates`   | `wheems chat post updates`          |
-| `wheems ask approvals`  | `wheems chat ask approvals`         |
+| `wheems ask approvals`  | `wheems approval request`           |
 | `wheems connect github` | `wheems integration connect github` |
 | `wheems grant github`   | `wheems integration grant github`   |
 | `wheems do deploy`      | `wheems action run deploy`          |

@@ -1,209 +1,221 @@
 # Approvals and updates
 
-**Status: proposal, not built.** This is the design for the second half of milestone 3: an agent
-asks the person something and waits for a tap on their phone before acting, and an agent posts
-an update that needs no answer. The first half is built: the session store, `wheems session` and
-handovers, and onboarding by inviting the app to a channel.
+**Status: proposal, not built.** This is the design for the second half of milestone 3: work that
+waits for a decision before going on, and updates that need no answer. The first half is built:
+the session store, `wheems session` and handovers, and onboarding by inviting the app to a
+channel.
+
+The one rule it follows: **the person only ever deals with the chief of staff.** Sub-agents
+(defined agents, project leads and ad-hoc sessions) never post to, ask or chat with the person.
+They ask their chief, and the chief decides what to bring to the person. See
+[team.md](team.md).
 
 ## The problem
 
-Today an agent has two ways to reach the person, and neither can wait for a decision:
+Today nothing can wait for a decision:
 
-- **Its chat thread.** A chief asks "shall I deploy?" in its answer, and the person replies in
-  words. Nothing records that a decision is pending, nothing binds the reply to the question, and
-  an ad-hoc session has no thread at all: only chiefs talk to people.
-- **A prompt at the Mac.** An engine running with `permissions: ask` stops at its own permission
-  prompt. Wheems says so in the thread (`hc attach …`), but it can only be answered at the
-  machine. That's why a chief you talk to from your phone usually runs on `auto`
-  ([config.md](config.md)).
+- **A chief asks in words.** It says "shall I deploy?" in its answer, and the person replies in
+  the thread. Nothing records that a decision is pending, nothing ties the reply to the question,
+  and nothing stops an old "yes" being read as the answer to a newer question.
+- **A sub-agent can only send its chief a message.** `wheems session send` delivers it, but the
+  chief has no record of what's waiting on it, and no way to pass the question on to the person
+  and route the answer back.
+- **An engine's own prompt** (with `permissions: ask`) stops the session until someone answers it
+  at the Mac. That's why chiefs usually run on `auto` ([config.md](config.md)).
 
-Later milestones need a real "ask and wait" too. The broker asks before a risky action, workflows
-have `ask` steps, a purchase asks every time, and linking a project's folder is "a yes in chat"
-([architecture.md](architecture.md#a-projects-folder-approved-once-never-at-the-mac)). All of
-them should use the same mechanism, and this design builds it once.
+Later milestones need "ask and wait" too:
+
+- the broker asks before a risky action;
+- workflows have `ask` steps;
+- a purchase asks every time;
+- linking a project's folder needs a yes from the person
+  ([architecture.md](architecture.md#a-projects-folder-approved-once-never-at-the-mac)).
+
+They should all use one mechanism, and this design builds it once.
+
+## Two kinds of approval
+
+| Kind                    | Who decides                                                     | Examples                                                                                                                   |
+| ----------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **The chief's to make** | The chief, within the authority it's been given                 | A developer asks "merge the fix to the staging branch?"; a writer asks which draft to send                                 |
+| **The person's only**   | The person, by a rule. The chief carries it but can't answer it | Deploying to production, spending money, linking a folder, anything a rule in `workspace.yaml` marks as needing the person |
+
+A sub-agent asks with `wheems approval request`. It never chooses who decides:
+
+- **A request goes to the asker's owner**, which is the chief that started it, or later the project
+  lead that sent it the task.
+- **The chief either answers it, or passes it to the person**, who sees it in the chief's voice,
+  in the conversation the work came from.
+- **Approvals that are the person's only** come from rules, not from the asker: the broker
+  (milestone 9), purchases and folder links. The chief is told about one, and passes it on, but
+  `wheems approval answer` refuses it. Nothing in milestone 3 creates one yet. Folder links in
+  milestone 4 are the first.
 
 ## What the person sees
 
-An approval is a post in the workspace's `approvals` channel:
+When the chief brings a decision to the person, it's a post **in the chat thread the work came
+from**, where the person was already talking to the chief, with buttons:
 
-> **Approval** · _Chief of staff_ · Personal
+> **Approval needed** · _Personal chief of staff_
 >
 > Deploy storefront to staging?
 >
-> The checkout fix is on `fix/checkout-total`; tests pass. Staging only, not production.
+> The developer has the checkout fix on `fix/checkout-total`; tests pass. Staging only, not
+> production.
 >
 > [Approve] [Decline]
 >
-> _Asks until 18 Nov, 14:02. @Mike_
+> _Open until 18 Nov, 14:02. @Mike_
 
-- **It mentions the person.** The post mentions the connection's `allowed_users`, so the phone
-  buzzes even when the channel is muted for ordinary posts.
-- **It says who asks.** That means the agent and, for an ad-hoc session, its title and its chief.
-  Each post is tagged with its project once projects arrive (milestone 4).
-- **One tap answers it.** The post is then changed in place to say who answered, what they chose
-  and when, and the buttons are removed. The first answer counts. A later press, from a second
-  phone or after it expired, changes nothing; the post is just redrawn as it stands.
-- **The answer reaches the agent as a message from Wheems**, the way a session's answer does
-  today:
-  `Wheems: approval a1b2 answered: Approve (Mike, 14:05). Your question was: Deploy storefront to staging?`
-  A chief then carries on in its own thread, so the person sees "Deploying now" where they were
-  talking.
+- **It mentions the person,** meaning the connection's `allowed_users`, so their phone buzzes.
+- **It's always from the chief.** When a sub-agent asked, the post says which agent the chief is
+  asking for, but the person never deals with the agent itself.
+- **One tap answers it.** The post is changed in place to show who answered, what they chose and
+  when, and its buttons go. The first answer counts. A later press changes nothing, and the post
+  is redrawn as it stands.
+- **Then the chief carries on in the same thread,** so the next thing the person sees is "Deploying
+  now", where they were talking.
+- **Work that came from no thread** (a routine, a workflow, or a session the chief started on its
+  own initiative) posts to the workspace's `approvals` channel if there is one, otherwise to its
+  chat channel as a new top-level post. Either way it's still from the chief.
 
-**Without an `approvals` channel** (a new install has only `chat`), approvals go to the chat
-channel as new top-level posts, not into a thread, so they're easy to see. Doctor suggests
-adding an `approvals` channel. Updates fall back the same way.
+## Asking and answering
 
-## Asking: `wheems chat ask`
+| Command                                              | Who                                                       | What it does                                                                                                |
+| ---------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `wheems approval request "<question>" [--details …]` | Any agent                                                 | Asks its decider: a sub-agent's owner, or for the chief, the person. Returns at once with the approval's id |
+| `wheems approval answer <id> <choice> [--reason …]`  | The chief, for requests made to it; the person            | Answers it. The chief can't answer an approval that's the person's only, or one it asked itself             |
+| `wheems approval escalate <id> [--note …]`           | The chief                                                 | Passes a request from its team to the person, posted as above with the chief's note                         |
+| `wheems approval list`, `show <id>`                  | The chief (what's waiting on it); the person (everything) | What's waiting, and the history                                                                             |
+| `wheems approval withdraw <id>`                      | The agent that asked                                      | Takes a request back, for example when it's no longer needed                                                |
 
-```sh
-wheems chat ask approvals "Deploy storefront to staging?" \
-  --details "The checkout fix is on fix/checkout-total; tests pass. Staging only."
+`answer`, `escalate` and `withdraw` are domain verbs, like `session end` (see [cli.md](cli.md)).
+`request` replaces the `chat ask` planned in the CLI docs: the asker no longer picks a channel,
+because who decides picks where it goes.
+
+**Choices** default to Approve and Decline. `--choices "Staging,Production,Neither"` gives up to
+four. The last choice is the no for a workflow's `ask` step.
+
+**`--details`** (or `-` to read stdin) is shown under the question, cut to a few thousand
+characters. The question itself is one line.
+
+**`--expires`** defaults to 24 hours, with a maximum of a week. When it runs out, the asker is
+told it expired with no answer, and any post says so. Silence never counts as a yes.
+
+**The answer comes back as a message from Wheems**, through the same durable hand-back that session
+answers use (`passBack` in `src/service/sessions.ts`):
+
+```
+Wheems: approval a1b2 answered: Approve (by the person, 14:05). Your question was: Deploy storefront to staging?
 ```
 
-- **Choices** default to Approve and Decline. `--choices "Staging,Production,Neither"` gives up
-  to four, which suits a question with a few answers, not only a yes or no. The last choice is
-  treated as the no for workflows' `ask` step.
-- **`--details`** (or `-` to read stdin) is shown under the question, cut to a few thousand
-  characters. The question itself is one line.
-- **`--expires`** defaults to 24 hours, with a maximum of a week. When it runs out, the post says
-  so, and the agent is told it expired with no answer. Silence never counts as a yes.
-- **It returns at once** with the approval's id. The answer comes back later as a message. With
-  `--wait`, it waits for the answer and prints it, for up to ten minutes (`--timeout`). After that
-  it comes back as without `--wait`. This mirrors `wheems session send --wait`, and the reason is
-  the same: an engine's tool call can't wait for hours.
-- **The channel** is any named channel in `workspace.yaml`. `approvals` is the usual one. A
-  workflow may ask in `briefs` or elsewhere.
-- **Limits.** A session may have at most five approvals waiting at once. A sixth is refused, so a
-  confused agent can't flood the person's phone.
+When the chief escalated a sub-agent's request, the chief is told the answer too, so it stays in
+charge of the work. `--wait` waits for the answer and prints it, for up to ten minutes. After that
+it comes back as without `--wait`, as `wheems session send --wait` does, because an engine's tool
+call can't wait for hours.
 
-Every agent's built-in instructions get a short section on this command: when to ask (anything
-outside the thread's ask that can't be undone, or that spends money or speaks for the person),
-and to wait for the answer before acting.
+**Limits.** An agent may have at most five requests waiting at once, so a confused agent can't
+flood its chief or the person.
 
-## Posting: `wheems chat post`
+**The person answers** from the buttons in Slack (only the connection's `allowed_users` count),
+from the web app's Review page (web app stage 2), or with `wheems approval answer` at a terminal.
+A channel without buttons says how to answer in words, and a reply `approve a1b2` counts. That's
+for Telegram and email later.
+
+Recording an answer is one update in the store, from waiting to answered, so two answers at once
+can't both count.
+
+## Updates: `wheems chat post`
 
 ```sh
 wheems chat post updates "Nightly backup finished: 3 sites, 1.2 GB."
 ```
 
-`post` is a one-way post to a named channel: no answer, no thread, and nothing is recorded beyond
-the session's own record. It's tagged with who posted it, like an approval. Its main users are
-routines and tasks (milestone 5), whose results don't belong in any one conversation. A chief
-that's talking to the person keeps answering in its thread.
-
-## Answering
-
-The same code records an answer, wherever it comes from:
-
-| From           | How                                                                                                                                                                     |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Slack          | The buttons. Only the connection's `allowed_users` count; anyone else's press is ignored                                                                                |
-| The web app    | Review lists approvals waiting, with the same choices, and a history (web app stage 2)                                                                                  |
-| A terminal     | `wheems approval list`, `wheems approval show <id>`, `wheems approval answer <id> <choice>`                                                                             |
-| Other channels | Any driver with the `buttons` capability. Without buttons, the post says how to answer in words, and a reply `approve a1b2` counts. That's for Telegram and email later |
-
-Recording an answer is one update in the store, from waiting to answered, so two answers at once
-can't both count. **An agent can't answer an approval.** `wheems approval answer` refuses any
-caller that has a session's identity, as `wheems session restart` does.
+Only a chief posts. A one-way post to a named channel suits results that belong in no thread, such
+as a routine's morning brief. A sub-agent's results go back to its chief, which decides what the
+person needs to hear. Without an `updates` channel, posts go to the chat channel.
 
 ## Kept in the store
 
-Approvals live in the session store, `.wheems/state.sqlite`, in a new `approvals` table. That
-moves the store to schema version 6. Each approval keeps:
+Approvals live in the session store, `.wheems/state.sqlite`, in a new `approvals` table, moving
+it to schema version 6. Each one keeps:
 
-- its id, workspace, the session that asked and, later, its project and task;
-- what it's for: `ask` now, and later `action`, `purchase`, `folder` or `workflow`. It also
-  keeps a fingerprint of what was approved, such as the question and details, or the broker's
-  exact action and arguments, or a purchase's quote;
-- the question, details and choices, which are never changed once asked;
-- where it was posted: the connection, channel and message;
-- its state (`waiting`, `answered`, `expired` or `withdrawn`), the answer, who answered and how
-  (Slack, the web app or a terminal);
-- when it was asked, when it expires, when it was answered and when the answer reached the agent.
-
-The answer goes back through the same durable hand-back that session answers use
-(`passBack` in `src/service/sessions.ts`):
-
-- **A chief's thread** gets the message told into its conversation, resuming it if it had
-  stopped.
-- **An ad-hoc session** gets it typed in, resuming it if it had stopped.
-- **A session that ended after the answer came**, but before it was delivered, has the message
-  go to its owner, the chief that started it, with a note that the asker had ended. Ending a
-  session withdraws any approvals it still has waiting (below).
+- **Who's involved:** its id, the workspace, and the agent and session that asked. Later, its
+  project and task too.
+- **Who decides,** the chief or the person, and whether it's the person's only.
+- **What it's for:** `request` now, and later `action`, `purchase`, `folder` or `workflow`. It
+  also keeps a fingerprint of exactly what was approved. That's the question and details, or the
+  broker's action and arguments, or a purchase's quote.
+- **The question, details and choices,** never changed once asked.
+- **Where it was posted,** if it was: the connection, channel, thread and message.
+- **What happened:**
+  - its state: `waiting`, `escalated`, `answered`, `expired` or `withdrawn`;
+  - the answer and any reason;
+  - who answered (the chief or the person) and how (Slack, the web app or a terminal);
+  - when it was asked, escalated, answered and delivered, and when it expires.
 
 **After a restart** nothing is lost. The buttons carry only the approval's id and the choice, and
-everything else is read from the store. An approval that's still waiting can still be answered.
-One that expired while the service was down is expired when it starts. An answer that hadn't
-reached its agent is delivered again.
+everything else is read from the store. Requests still waiting can still be answered. Any that
+expired while the service was down are expired when it starts. Answers that hadn't reached their
+agent are delivered again.
 
-**Withdrawing.** The agent can withdraw its own approval: `wheems approval withdraw <id>`, with
-`withdraw` as a domain verb. Ending a session withdraws its waiting approvals. The post then says
-it was withdrawn.
+**Ending a session** withdraws the requests it has waiting. An answer that arrives after its asker
+ended goes to the asker's owner instead.
 
-## What the approval does and doesn't enforce
+## What it does and doesn't enforce
 
-In milestone 3 an approval is **a promise the agent keeps**. The agent asks, waits and acts on
-the answer. Nothing yet stops an agent that acts without asking, or one that ignores a no. The
-caller check on the control socket is also convenience, not proof: an agent running as the same
-user could claim to be the person.
+In milestone 3 an approval is **a promise the agents keep**. Nothing yet stops an agent that acts
+without asking, or one that ignores a no. The caller check on the control socket is convenience,
+not proof: an agent running as the same user could claim to be its chief, or the person.
 
-That's deliberate, and the design keeps the record ready for real enforcement:
+The design keeps the record ready for real enforcement:
 
 - **The broker (milestone 9)** asks through this same store before acting, with the fingerprint
-  set to the exact action and arguments. The agent never holds the credential, so the approval
-  becomes the gate, not a courtesy.
-- **Task credentials (milestone 5)** make "who's calling" proof rather than an environment
-  variable. Answering can then require a person's identity, not just the absence of a session's.
+  set to the exact action. The agent never holds the credential, so the approval is the gate.
+- **Task credentials (milestone 5)** make "who's calling" proof, so "the chief can't answer the
+  person's approvals" is checked rather than trusted.
 
-The docs and the built-in instructions say this plainly, so nobody believes a guardrail exists
-before it does ([architecture.md](architecture.md#guardrails-that-work-with-any-engine)).
+The docs and the built-in instructions say this plainly
+([architecture.md](architecture.md#guardrails-that-work-with-any-engine)).
 
 ## What it needs
 
-1. **The Slack driver's buttons.** Posts get an `actions` block. The Socket Mode transport passes
-   `interactive` envelopes on as well as events, and a `block_actions` press becomes a `button`
-   event. The app manifest already turns interactivity on. Apps made from an older manifest
-   need it switched on, which doctor can't check, so `wheems channel connect slack` says so and
-   the first approval tests it.
-2. **Changing a post.** The channel contract gets an optional `update(message, change)`, which
-   Slack does with `chat.update`. Drivers without it post the outcome as a reply under the post
-   instead.
-3. **The store and the service.** The `approvals` table and its migration, asking and answering,
-   expiry checked each minute and at start, and delivery through the hand-back.
-4. **The CLI.** `chat ask`, `chat post`, and `approval list`, `show`, `answer` and `withdraw`,
-   with the built-in instructions and the README.
-5. **The web app, stage 2.** Approvals waiting and their history on Review, answered with the
-   same code.
-6. **Notices for sessions stuck at a prompt.** When Herdr says a session is `blocked`, Wheems
-   posts to `approvals` with its `hc attach` line, as the task design already says, rather than
-   only in the thread. It has no buttons yet (see the open questions).
+1. **The store and the service.** The `approvals` table and its migration, asking, answering,
+   escalating and withdrawing, expiry checked each minute and at start, and delivery through the
+   hand-back.
+2. **The CLI.** The `approval` area, `chat post`, the built-in instructions for chiefs and for
+   sub-agents, and the README.
+3. **The Slack driver's buttons.** Posts get an `actions` block, the Socket Mode transport passes
+   `interactive` envelopes on, and a `block_actions` press becomes a `button` event. The app
+   manifest already turns interactivity on. Apps made from an older manifest need it switched on,
+   which doctor can't check, so the first approval tests it.
+4. **Changing a post.** The channel contract gets an optional `update(message, change)`, which
+   Slack does with `chat.update`. Drivers without it reply under the post instead.
+5. **The web app, stage 2.** What's waiting and the history, on Review.
+6. **Sub-agents stuck at a prompt.** When Herdr says a sub-agent's session is `blocked`, its
+   chief is told, with the `hc attach` line, and decides whether the person needs to know. A
+   chief stuck at a prompt already says so in its thread.
 
 ### In pull requests
 
-1. The store, asking, answering from a terminal, expiry and delivery, tested with the memory
+1. The store and the CLI: request, answer, escalate, withdraw and expiry, tested with the memory
    channel, which already has buttons.
 2. Slack buttons and changing a post, then a live test on wheems-live.
-3. `chat post`, the fallback to `chat`, notices for stuck sessions, and doctor's suggestion.
+3. `chat post`, the `approvals` and chat fallbacks, and notices for stuck sub-agents.
 4. Web app stage 2.
 
-Then milestone 3's test: an agent waits for a tap on the phone before acting.
+Milestone 3's test then becomes: a developer agent asks before merging, the chief brings it to the
+person's phone, one tap answers it, and the work carries on.
 
 ## Open questions
 
-1. **Can an ad-hoc session ask the person directly?** This design says yes. An approval is a
-   structured question with fixed answers, not chat, and the post names the session and its
-   chief. The alternative is that only chiefs ask, and an ad-hoc session asks its chief, which
-   decides whether to ask the person. That's stricter, but every approval then waits on two
-   agents.
-2. **Should the chat thread show anything** while its chief waits, such as "Waiting for your
-   approval in #approvals"? It helps when the approvals channel is muted, and it's noise when it
-   isn't.
-3. **Answering engine permission prompts from the phone.** This would let a chief run on `ask`
-   rather than `auto`. It needs either typing into the prompt through Herdr, which depends on each
-   engine's screen and is easy to get wrong, or an engine's own hook for permission decisions,
-   which not every engine has. The suggestion is to leave it until after the broker. By then most
-   risky actions go through the broker, where approvals are enforced.
-4. **The broker in milestone 3.** The roadmap lists "the first version of the broker" here. This
-   design builds the approvals it will use, but no actions. The suggestion is to design the
-   broker, which covers actions, rules and credentials, on its own before milestone 9, and to
-   count milestone 3 done without it.
+1. **How much may a chief approve by itself?** This design lets it answer anything not marked as
+   the person's only, and records every answer it gives. A stricter start is a list in
+   `workspace.yaml` of what the chief may approve, with everything else escalated.
+2. **Engine prompts from the phone.** Answering an engine's own permission prompt remotely would
+   let agents run on `ask`, but it means typing into each engine's screen through Herdr, which is
+   easy to get wrong. The suggestion is to leave it until after the broker, through which most
+   risky actions will go.
+3. **The broker in milestone 3.** The roadmap lists "the first version of the broker" here. This
+   design builds the approvals it will use, but no actions. The suggestion is to design the broker
+   on its own before milestone 9, and count milestone 3 done without it.

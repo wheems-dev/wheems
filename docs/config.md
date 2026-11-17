@@ -244,14 +244,13 @@ These are designed and will change as they're built; nothing reads them yet. See
 
 ### workspaces/&lt;id&gt;/projects/&lt;name&gt;/project.yaml (milestone 4)
 
-A project is any body of work, with an optional lead, its own knowledge base, team list and
-channel. Only workspaces are confidentiality walls.
+A project is any body of work, with an optional lead (an agent on the chief's team, with no
+channel of its own), its own knowledge base and team list. Only workspaces are confidentiality walls.
 
 ```yaml
 name: Reviews
 description: Replies to reviews from the reviews service.
-lead: lead # agents/lead.md in this project; leave out and the workspace chief covers it
-channel: { connection: slack, channel: acme-reviews }
+lead: lead # agents/lead.md in this project; leave out and the chief hands work to the team itself
 team: [writer] # workspace agents this project may use, besides its own agents/
 skills: [review-replies] # narrows the workspace's skills.yaml
 integrations: [reviews] # narrows the workspace's integrations
@@ -274,7 +273,7 @@ so they do load, and Wheems marks the folder trusted when it's linked. See
 ### Agent front matter (milestones 5 and 10)
 
 ```yaml
-lifetime: task # thread (chiefs and leads) or task (everyone else, fresh per task)
+lifetime: task # thread (chiefs) or task (everyone else, fresh per task)
 machine: lab-server # where it runs; defaults to its project's, then its workspace's
 ```
 

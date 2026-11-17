@@ -1044,18 +1044,18 @@ it was tested with. See [docs/drivers.md](docs/drivers.md) for each contract and
 
 Wheems is being built in milestones (see the [roadmap](docs/roadmap.md)):
 
-| Milestone | What it brings                                                                                                                                                                                                          |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                                                                                         |
-| 3         | Sessions, approvals and updates: a record of every session, so a chief can start sessions, find them and talk to them; buttons on your phone, the `approvals` and `updates` channels, and a first version of the broker |
-| 4         | Projects and leads: any body of work as a project, with a lead in its own channel and its own knowledge base, and the chief routing questions to them                                                                   |
-| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                                                                                                 |
-| 6         | A second workspace, kept apart                                                                                                                                                                                          |
-| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                     |
-| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                              |
-| 9         | Integrations, guardrails and the vault: `integration connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                        |
-| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                    |
-| 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                  |
+| Milestone | What it brings                                                                                                                                                                                                                                                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0 to 2    | Done: the skeleton, talking to a chief of staff from Slack, and the knowledge loop (their tests in daily use are still to come)                                                                                                                                                                                                        |
+| 3         | Sessions, approvals and updates: a record of every session, so a chief can start sessions, find them and talk to them; a chief that delegates to its team rather than doing the work; approvals that sub-agents ask their chief for, with buttons on your phone for what's yours to decide; updates; and a first version of the broker |
+| 4         | Projects: any body of work as a project, with its own knowledge base and an optional lead on the chief's team, and the chief routing questions and work to them                                                                                                                                                                        |
+| 5         | Tasks and a team: the hand-off between agents, evaluated in code, by a judge and by you; routines; pairs; more accounts                                                                                                                                                                                                                |
+| 6         | A second workspace, kept apart                                                                                                                                                                                                                                                                                                         |
+| 7         | Workflows and evals: DAGs, triggers from email and other services, classify then act, shadow mode, and creating workflows by asking                                                                                                                                                                                                    |
+| 8         | Data and blueprints: small data apps such as a CRM, built from a blueprint                                                                                                                                                                                                                                                             |
+| 9         | Integrations, guardrails and the vault: `integration connect` and `grant`, the Keychain, GitHub rules, and purchases you approve                                                                                                                                                                                                       |
+| 10        | Always on, more channels, more machines: a server, laptops collecting work, `wheems machine run`, Telegram and email                                                                                                                                                                                                                   |
+| 11        | Plugins and release: `create` commands for every area, npm plugins, and the open-source release on npm                                                                                                                                                                                                                                 |
 
 Alongside them comes **the web app**: a local page from the service, organised by workspace. Its
 pages are built, and you can review proposals and talk to sessions from it; editing settings and
@@ -1134,6 +1134,9 @@ yet:
 - [The Herdr runtime driver](docs/herdr.md)
 - [Roadmap](docs/roadmap.md): the milestones and open questions
 - [The web app](docs/web-app.md): the planned local page, organised by workspace
+- [The chief of staff and its team](docs/team.md): you only talk to the chief, which delegates and manages the work (proposal)
+- [Approvals and updates](docs/approvals.md): asking and waiting for a decision, through the chief (proposal)
+- [Session handover](docs/session-handover.md): handing a chat thread over to a new session
 - [Milestone 2 plan](docs/plans/milestone-2.md) and its [research](docs/research/knowledge-loop.md)
 - [Architecture ideas](docs/ideas/architecture.md), the [two design proposals](docs/ideas/proposal-claude.md) ([and the other](docs/ideas/proposal-codex.md)) and [the decisions taken](docs/ideas/decisions.md)
 

@@ -61,7 +61,7 @@ library of agent templates, skills and workflow templates.
 Each business or area of life is a **workspace** inside the install, cut off from the others.
 A workspace is an entity with its own people, knowledge and confidentiality. A **project** is
 any body of work inside one, such as "Customer support", "Reviews", "Sales leads" or a website,
-with an optional lead you can talk to in its own channel and a knowledge base of its own.
+with an optional lead on the chief's team and a knowledge base of its own.
 Projects keep context clean; they aren't walls, because only workspaces are. Make something a
 separate workspace when it has different people, should keep its knowledge private, or may be
 handed to someone else one day.
@@ -74,11 +74,13 @@ Wheems decides these so users don't have to. Each can be renamed or tuned, but n
 
 **Built in, in every workspace**
 
-- A chief of staff: the one entry point, aware of every project and agent in its workspace.
+- A chief of staff: the one entry point, aware of every project and agent in its workspace. You
+  only ever talk to it. It manages and delegates to its team, and never does the work itself
+  ([team.md](team.md)).
 - The knowledge loop and its knowledge base.
 - A chat channel with the chief of staff, plus an `approvals` channel and an `updates` channel.
-- Built-in skills every agent gets: post to a channel, ask for approval, write a note, read
-  the knowledge base. This is how agents learn to use the framework.
+- Built-in skills every agent gets: ask for approval (sub-agents ask their chief), write a
+  note, read the knowledge base. Chiefs also post to channels. This is how agents learn to use the framework.
 
 **Optional, switched on from templates.** Business roles such as support, reviews, sales,
 bookkeeping, researcher, writer and marketer, and code roles such as developer and reviewer,

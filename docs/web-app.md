@@ -164,14 +164,15 @@ then remembers it.
 
 ## What can be built when
 
-| Page             | Can show now (0.1.8)                                                            | Waits for                                                     |
-| ---------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                            |
-| Sessions         | The session store: tree, detail, messages, send and end                         | Nothing: who started what, and the person's ask, are recorded |
-| Review           | Skill proposals, approve and decline                                            | Approvals history (milestone 3)                               |
-| Settings         | Everything in `workspace.yaml`, archive and remove (most of it editable now)    | Connection switches (milestone 9)                             |
-| Connections      | Slack and engine accounts                                                       | Integrations and MCP servers (milestones 7 and 9)             |
-| Setup and health | Setup's steps and doctor's checks and fixes                                     |                                                               |
+| Page             | Can show now (0.1.8)                                                            | Waits for                                                       |
+| ---------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                              |
+| Sessions         | The session store: tree, detail, messages, send and end                         | Sub-agents read-only, with End as a stop ([team.md](team.md))   |
+| Team             | The chief and the workspace's agents, from `agents/`                            | Creating and editing agents, project teams ([team.md](team.md)) |
+| Review           | Skill proposals, approve and decline                                            | Approvals waiting and their history (milestone 3)               |
+| Settings         | Everything in `workspace.yaml`, archive and remove (most of it editable now)    | Connection switches (milestone 9)                               |
+| Connections      | Slack and engine accounts                                                       | Integrations and MCP servers (milestones 7 and 9)               |
+| Setup and health | Setup's steps and doctor's checks and fixes                                     |                                                                 |
 
 ## Open questions
 
