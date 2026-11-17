@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,6 +20,8 @@ describe('approvals', () => {
   let home: string;
   let env: NodeJS.ProcessEnv;
   let channel: MemoryChannel;
+  /** A second connection's channel, for a test that adds one. */
+  let other: MemoryChannel | undefined;
   let runtime: MemoryRuntime;
   let service: RunningService | undefined;
   let received: Map<string, string[]>;
@@ -46,12 +48,14 @@ describe('approvals', () => {
     }
   };
 
-  const start = async () => {
+  const start = async (extra: { approvalTickMs?: number } = {}) => {
     const stub = new StubEngine({ command: ['fake-agent'], answers });
     const registry = new DriverRegistry()
       .register('runtime', 'herdr', () => runtime)
       .register('engine', 'claude-code', () => stub, { label: 'Claude Code', description: 'x' })
-      .register('channel', 'slack', () => channel);
+      .register('channel', 'slack', (options) =>
+        (options as { second?: string }).second === 'yes' && other ? other : channel,
+      );
     service = await runService({
       home,
       registry,
@@ -64,6 +68,7 @@ describe('approvals', () => {
       startupSeconds: 2,
       noteSweepMs: 0,
       approvalTickMs: 20,
+      ...extra,
     });
   };
 
@@ -150,6 +155,7 @@ describe('approvals', () => {
     await initWorkspace({ home, id: 'personal' });
     await writeSecret(env.WHEEMS_SECRETS!, 'slack', { bot_token: 'x', app_token: 'y' });
     channel = new MemoryChannel();
+    other = undefined;
     behave = (line) => (line.startsWith('hello') ? 'reply' : 'answer');
     received = new Map();
     answers = new Map();
@@ -518,6 +524,61 @@ describe('approvals', () => {
     // A channel that can't change a post gets a reply under it instead.
     const reply = channel.sent.slice(before).find((m) => m.text.includes('Decline, by you'));
     expect(reply?.threadId).toBe(asked.post?.thread);
+  });
+
+  it("won't take an answer once an approval has run out, even before it's marked expired", async () => {
+    await service?.stop();
+    await start({ approvalTickMs: 0 });
+    const chief = await chiefThread();
+    const asked = await ask(chief, 'Order the boxes?');
+    write(
+      'UPDATE approvals SET expires_at = ? WHERE id = ?',
+      new Date(Date.now() - 1000).toISOString(),
+      asked.id,
+    );
+    expect((await wheems(['approval', 'answer', asked.id, 'Approve'])).err).toContain(
+      'was expired already',
+    );
+    expect((await approval(asked.id)).state).toBe('expired');
+  });
+
+  it('posts to an approvals channel on a connection of its own, and takes answers there', async () => {
+    await service?.stop();
+    writeFileSync(
+      join(home, 'install.yaml'),
+      `${installYaml().replace('allowed_users: []', 'allowed_users: [UME]')}  second:\n    driver: slack\n    allowed_users: [UME]\n`,
+    );
+    await writeSecret(env.WHEEMS_SECRETS!, 'second', { second: 'yes' });
+    const yaml = join(home, 'workspaces', 'personal', 'workspace.yaml');
+    writeFileSync(
+      yaml,
+      readFileSync(yaml, 'utf8').replace(
+        /^channels:\n/m,
+        'channels:\n  approvals: { connection: second, channel: C-APPROVALS }\n',
+      ),
+    );
+    other = new MemoryChannel();
+    await start();
+    // A session you started has no conversation to ask in: it asks you in the approvals channel.
+    const started = await wheems([
+      'session',
+      'create',
+      '--title',
+      'Tidy',
+      '--purpose',
+      'Tidy the files.',
+      '--json',
+    ]);
+    const session = JSON.parse(started.out) as SessionRecord;
+    const asked = await ask({ WHEEMS_SESSION: session.id }, 'Delete the old drafts?');
+    expect(asked.decider).toBe('person');
+    const post = other.sent.find((m) => m.messageId === asked.post?.message);
+    expect(post).toMatchObject({ channel: 'C-APPROVALS', mentions: ['UME'] });
+    expect(post?.threadId).toBeUndefined();
+    // An answer in words there is the person deciding, not someone setting up a workspace.
+    await other.receive({ channel: 'C-APPROVALS', text: `decline ${asked.id}`, userId: 'UME' });
+    expect(await approval(asked.id)).toMatchObject({ answer: 'Decline', answeredVia: 'chat' });
+    expect(other.sent.some((m) => m.text.includes('set up'))).toBe(false);
   });
 
   it('posts updates from the chief to the chat channel without an updates channel', async () => {

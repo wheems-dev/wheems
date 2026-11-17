@@ -176,7 +176,8 @@ export const MIGRATIONS: readonly string[] = [
     asked_at TEXT NOT NULL,
     escalated_at TEXT,
     answered_at TEXT,              -- answered, expired or withdrawn
-    delivered_at TEXT,             -- when the outcome was kept for its asker, to be delivered
+    delivered_at TEXT,             -- when the outcome was kept for everyone who must hear it
+    delivered_to TEXT NOT NULL DEFAULT '[]', -- a JSON array of the sessions it's kept for so far
     expires_at TEXT NOT NULL,
     reported_at TEXT               -- when a chief's decision went in its daily list
   ) STRICT;

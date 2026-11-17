@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { crossCheck } from '../config/check.js';
 import { loadInstall, type LoadedInstall, type LoadedWorkspace } from '../config/load.js';
 import { nameSchema, type InstallConfig } from '../config/schemas.js';
-import type { ChannelDriver } from '../contracts/channel.js';
+import type { ChannelDriver, InboundEvent } from '../contracts/channel.js';
 import type { EngineDriver } from '../contracts/engine.js';
 import type { SessionInfo } from '../contracts/runtime.js';
 import type { DriverRegistry } from '../contracts/registry.js';
@@ -173,6 +173,15 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
     log(
       `Workspace ${workspace.id}: chat on ${chat.connection} ${channelId === null ? '(direct messages)' : channelId}`,
     );
+  }
+
+  // The connections a workspace's approvals and updates channels use are connected too, so a
+  // post there doesn't find its connection not running.
+  for (const workspace of install.workspaces) {
+    for (const [name, named] of Object.entries(workspace.config?.channels ?? {})) {
+      if (name === 'chat' || !config.connections[named.connection]) continue;
+      channelFor(named.connection);
+    }
   }
 
   const engines = new Map<string, EngineDriver>();
@@ -362,20 +371,25 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
         workspaceReport.push({ id: binding.workspace.id, chat: place });
       }
     },
-    // A press of an approval's button, or a reply that answers one in words, is the person
-    // deciding; everything else goes to the conversation it belongs to.
-    deliver: async (connection, event) => {
-      try {
-        if (event.type === 'button' && (await approvals.press(connection, event))) return;
-        if (event.type === 'message' && (await approvals.replyInWords(connection, event))) return;
-      } catch (error) {
-        log(`Approvals: ${error instanceof Error ? error.message : String(error)}`);
-        if (event.type === 'button') return;
-      }
-      await manager.handle(connection, event);
-    },
+    deliver: (connection, event) => manager.handle(connection, event),
     log,
   });
+
+  /**
+   * Every event from a channel. A press of an approval's button, or a reply that answers one in
+   * words, is the person deciding, wherever it was posted, even in a channel no conversation is
+   * bound to; everything else goes on through onboarding to the conversation it belongs to.
+   */
+  const inbound = async (connection: string, event: InboundEvent): Promise<void> => {
+    try {
+      if (event.type === 'button' && (await approvals.press(connection, event))) return;
+      if (event.type === 'message' && (await approvals.replyInWords(connection, event))) return;
+    } catch (error) {
+      log(`Approvals: ${error instanceof Error ? error.message : String(error)}`);
+      if (event.type === 'button') return;
+    }
+    await onboarding.handle(connection, event);
+  };
 
   // Connect every channel first, then open the control socket: a service that answers
   // ping is one that is connected. If anything fails, undo what started, so the process
@@ -387,7 +401,7 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   let web: RunningWeb | null = null;
   try {
     for (const [connection, channel] of channels) {
-      await channel.start((event) => onboarding.handle(connection, event));
+      await channel.start((event) => inbound(connection, event));
       started.push(channel);
       log(`Connected ${connection}`);
     }

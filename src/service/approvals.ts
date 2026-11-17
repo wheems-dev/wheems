@@ -110,15 +110,20 @@ export class ApprovalService {
     this.waiters.clear();
   }
 
+  /** Expires the approvals that have run out, and changes their posts to say so. */
+  private async expireOverdue(): Promise<void> {
+    for (const approval of this.options.state.expireApprovals(this.now())) {
+      this.log(`Approval ${approval.id} in ${approval.workspace} expired with no answer`);
+      await this.redraw(approval);
+    }
+  }
+
   /** Expires approvals that ran out, delivers outcomes not yet delivered, and the daily list. */
   async tick(): Promise<void> {
     if (this.ticking || this.stopped) return;
     this.ticking = true;
     try {
-      for (const approval of this.options.state.expireApprovals(this.now())) {
-        this.log(`Approval ${approval.id} in ${approval.workspace} expired with no answer`);
-        await this.redraw(approval);
-      }
+      await this.expireOverdue();
       for (const approval of this.options.state.undeliveredApprovals()) {
         await this.settle(approval);
       }
@@ -282,11 +287,14 @@ export class ApprovalService {
       { answer, reason: reason === '' ? null : reason, by, via, at: this.now().toISOString() },
       by === 'chief' ? ['waiting'] : OPEN,
     );
-    const now = sessions.approval(id) ?? approval;
     if (!counted) {
-      // Someone else's answer came first; it stands.
-      throw new Error(`Approval ${id} was ${describeState(now)} already.`);
+      // Someone else's answer came first, and it stands; or it had run out, and is expired now.
+      await this.expireOverdue();
+      throw new Error(
+        `Approval ${id} was ${describeState(sessions.approval(id) ?? approval)} already.`,
+      );
     }
+    const now = sessions.approval(id) ?? approval;
     this.log(`Approval ${id} in ${caller.workspace.id}: ${answer}, by the ${by} (${via})`);
     await this.redraw(now);
     await this.settle(now);
@@ -315,6 +323,7 @@ export class ApprovalService {
     }
     const sessions = this.options.state.workspace(caller.workspace.id);
     if (!sessions.escalateApproval(id, text === '' ? null : text, this.now().toISOString())) {
+      await this.expireOverdue();
       throw new Error(
         `Approval ${id} was ${describeState(sessions.approval(id) ?? approval)} already.`,
       );
@@ -537,7 +546,10 @@ export class ApprovalService {
     // Marked delivered once each message is kept, which delivers it again after a restart if
     // need be. One not kept because the service is stopping is tried again when it next starts.
     let again = false;
+    const done = new Set(sessions.approval(approval.id)?.deliveredTo ?? []);
     for (const send of sends) {
+      // Kept for it on an earlier try: a retry doesn't send it twice.
+      if (done.has(send.to)) continue;
       try {
         const kept = await this.options.sessions.notify(
           approval.workspace,
@@ -545,6 +557,7 @@ export class ApprovalService {
           send.about,
           send.text,
         );
+        if (kept) sessions.markApprovalDeliveredTo(approval.id, send.to);
         if (!kept && this.stopped) again = true;
         else if (!kept)
           this.log(`Approval ${approval.id}'s outcome couldn't reach session ${send.to}`);

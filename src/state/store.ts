@@ -245,8 +245,10 @@ export interface ApprovalRecord {
   escalatedAt: string | null;
   /** When it was answered, expired or withdrawn. */
   answeredAt: string | null;
-  /** When its outcome was kept for whoever must hear it, to be delivered (again after a restart). */
+  /** When its outcome was kept for everyone who must hear it, to be delivered (again after a restart). */
   deliveredAt: string | null;
+  /** The sessions its outcome has been kept for so far, so a retry skips them. */
+  deliveredTo: string[];
   expiresAt: string;
   /** When a chief's decision went in its daily list to the person. */
   reportedAt: string | null;
@@ -1173,15 +1175,16 @@ export class WorkspaceSessions {
   }
 
   /**
-   * Records an answer, in one update from an open state, so two answers at once can't both
-   * count. True when this one counted.
+   * Records an answer, in one update from an open state and before its deadline, so two answers
+   * at once can't both count, and none counts once it has run out. True when this one counted.
    */
   answerApproval(id: string, answer: ApprovalAnswer, from: readonly ApprovalState[]): boolean {
     const result = this.db
       .prepare(
         `UPDATE approvals SET state = 'answered', answer = ?, reason = ?, answered_by = ?,
            answered_via = ?, answered_at = ?
-         WHERE workspace = ? AND id = ? AND state IN (${from.map(() => '?').join(', ')})`,
+         WHERE workspace = ? AND id = ? AND expires_at > ?
+         AND state IN (${from.map(() => '?').join(', ')})`,
       )
       .run(
         answer.answer,
@@ -1191,18 +1194,22 @@ export class WorkspaceSessions {
         answer.at,
         this.workspace,
         id,
+        answer.at,
         ...from,
       );
     return Number(result.changes) === 1;
   }
 
-  /** Passes a request waiting on the chief to the person. True when it was still waiting. */
+  /**
+   * Passes a request waiting on the chief to the person. True when it was still waiting, and
+   * hadn't run out.
+   */
   escalateApproval(id: string, note: string | null, at: string): boolean {
     const result = this.db
       .prepare(
-        "UPDATE approvals SET state = 'escalated', note = ?, escalated_at = ? WHERE workspace = ? AND id = ? AND state = 'waiting'",
+        "UPDATE approvals SET state = 'escalated', note = ?, escalated_at = ? WHERE workspace = ? AND id = ? AND state = 'waiting' AND expires_at > ?",
       )
-      .run(note, at, this.workspace, id);
+      .run(note, at, this.workspace, id, at);
     return Number(result.changes) === 1;
   }
 
@@ -1226,7 +1233,19 @@ export class WorkspaceSessions {
       .run(post.connection, post.channel, post.thread, post.message, this.workspace, id);
   }
 
-  /** Marks an approval's outcome as kept for delivery. True the first time only. */
+  /** Records that an approval's outcome is kept for one session, so a retry skips it. */
+  markApprovalDeliveredTo(id: string, session: string): void {
+    this.db
+      .prepare(
+        `UPDATE approvals SET delivered_to = json_insert(delivered_to, '$[#]', ?)
+         WHERE workspace = ? AND id = ? AND NOT EXISTS (
+           SELECT 1 FROM json_each(approvals.delivered_to) WHERE value = ?
+         )`,
+      )
+      .run(session, this.workspace, id, session);
+  }
+
+  /** Marks an approval's outcome as kept for everyone. True the first time only. */
   markApprovalDelivered(id: string, at: string): boolean {
     const result = this.db
       .prepare(
@@ -1390,22 +1409,28 @@ const APPROVAL_COLUMNS = [
   'escalated_at',
   'answered_at',
   'delivered_at',
+  'delivered_to',
   'expires_at',
   'reported_at',
 ] as const;
 
 const APPROVAL_SELECT = `SELECT ${APPROVAL_COLUMNS.join(', ')} FROM approvals`;
 
+/** A JSON array of strings from a column; an empty list for one that's empty or unreadable. */
+function jsonList(value: SQLOutputValue | undefined): string[] {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 function toApproval(row: Row): ApprovalRecord {
   const text = (value: SQLOutputValue | undefined) =>
     value === null || value === undefined ? null : String(value);
-  let choices: string[] = [];
-  try {
-    const parsed: unknown = JSON.parse(String(row.choices));
-    if (Array.isArray(parsed)) choices = parsed.map(String);
-  } catch {
-    // Never written unreadable: an empty list stands in.
-  }
+  const choices = jsonList(row.choices);
   const message = text(row.post_message);
   return {
     id: String(row.id),
@@ -1439,6 +1464,7 @@ function toApproval(row: Row): ApprovalRecord {
     escalatedAt: text(row.escalated_at),
     answeredAt: text(row.answered_at),
     deliveredAt: text(row.delivered_at),
+    deliveredTo: jsonList(row.delivered_to),
     expiresAt: String(row.expires_at),
     reportedAt: text(row.reported_at),
   };

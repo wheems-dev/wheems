@@ -603,6 +603,17 @@ describe('session store', () => {
     sessions.markReported(['aaaaaa'], answer.at);
     expect(sessions.unreportedDecisions()).toEqual([]);
 
+    // An answer after the deadline doesn't count, even before the approval is marked expired.
+    expect(
+      sessions.answerApproval('bbbbbb', { ...answer, at: '2026-11-17T11:30:00.000Z' }, ['waiting']),
+    ).toBe(false);
+    expect(sessions.escalateApproval('bbbbbb', null, '2026-11-17T11:30:00.000Z')).toBe(false);
+    // Delivery is kept per session, once each.
+    sessions.markApprovalDeliveredTo('aaaaaa', 's1');
+    sessions.markApprovalDeliveredTo('aaaaaa', 's1');
+    sessions.markApprovalDeliveredTo('aaaaaa', 't1');
+    expect(sessions.approval('aaaaaa')?.deliveredTo).toEqual(['s1', 't1']);
+
     const expired = state.expireApprovals(new Date('2026-11-17T12:00:00.000Z'));
     expect(expired.map((a) => [a.id, a.state])).toEqual([['bbbbbb', 'expired']]);
     expect(state.expireApprovals(new Date('2026-11-17T12:00:00.000Z'))).toEqual([]);
