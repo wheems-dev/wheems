@@ -77,6 +77,8 @@ export class ApprovalService {
   private readonly now: () => Date;
   /** Askers waiting on an answer with `request --wait`, by approval id. */
   private readonly waiters = new Map<string, (approval: ApprovalRecord | null) => void>();
+  /** Approvals whose outcome is being delivered now. */
+  private readonly settling = new Set<string>();
   private timer: NodeJS.Timeout | undefined;
   private ticking = false;
   private stopped = false;
@@ -199,7 +201,7 @@ export class ApprovalService {
           workspace.id,
           chief.id,
           asker.id,
-          this.forChief(workspace, approval, asker),
+          this.forChief(approval, asker),
         );
         if (!kept) throw new Error("your chief of staff's conversation can't be reached");
       } else {
@@ -481,8 +483,19 @@ export class ApprovalService {
    */
   private async settle(approval: ApprovalRecord): Promise<void> {
     if (approval.state !== 'answered' && approval.state !== 'expired') return;
+    // One at a time: an answer and the minute's check could otherwise both deliver it.
+    if (this.settling.has(approval.id)) return;
+    this.settling.add(approval.id);
+    try {
+      await this.settleNow(approval);
+    } finally {
+      this.settling.delete(approval.id);
+    }
+  }
+
+  private async settleNow(approval: ApprovalRecord): Promise<void> {
     const sessions = this.options.state.workspace(approval.workspace);
-    if (!sessions.markApprovalDelivered(approval.id, this.now().toISOString())) return;
+    if (sessions.approval(approval.id)?.deliveredAt !== null) return;
     const asker =
       approval.askerSession !== null ? sessions.session(approval.askerSession) : undefined;
     const chief = approval.chiefSession;
@@ -492,6 +505,7 @@ export class ApprovalService {
     const sends: { to: string; about: string | null; text: string }[] = [];
     const waiter = this.waiters.get(approval.id);
     if (waiter) {
+      // The asker hears it from the command it's waiting on.
       waiter(approval);
     } else if (asker && asker.state !== 'ended') {
       sends.push({ to: asker.id, about: null, text: outcomeText(approval) });
@@ -520,6 +534,9 @@ export class ApprovalService {
         text: `${outcomeText(approval, 'its')} That was session ${approval.askerSession ?? ''}'s request.${told}`,
       });
     }
+    // Marked delivered once each message is kept, which delivers it again after a restart if
+    // need be. One not kept because the service is stopping is tried again when it next starts.
+    let again = false;
     for (const send of sends) {
       try {
         const kept = await this.options.sessions.notify(
@@ -528,13 +545,17 @@ export class ApprovalService {
           send.about,
           send.text,
         );
-        if (!kept) this.log(`Approval ${approval.id}'s outcome couldn't reach session ${send.to}`);
+        if (!kept && this.stopped) again = true;
+        else if (!kept)
+          this.log(`Approval ${approval.id}'s outcome couldn't reach session ${send.to}`);
       } catch (error) {
+        again = true;
         this.log(
           `Couldn't deliver approval ${approval.id}'s outcome to ${send.to}: ${describe(error)}`,
         );
       }
     }
+    if (!again) sessions.markApprovalDelivered(approval.id, this.now().toISOString());
   }
 
   /** Posts an approval for the person, with buttons, mentioning them. */
@@ -583,11 +604,7 @@ export class ApprovalService {
   }
 
   /** The message that brings a team request to the chief. */
-  private forChief(
-    workspace: LoadedWorkspace,
-    approval: ApprovalRecord,
-    asker: SessionRecord,
-  ): string {
+  private forChief(approval: ApprovalRecord, asker: SessionRecord): string {
     const details = approval.details !== null ? `\n\n${quote(approval.details)}` : '';
     return `Wheems: approval ${approval.id} from session ${asker.id} ("${asker.title ?? ''}", ${agentName(asker.agent)}) is waiting on you:
 
@@ -595,7 +612,7 @@ ${quote(approval.question)}${details}
 
 Choices: ${approval.choices.join(', ')}. Open until ${when(approval.expiresAt)}.
 
-Decide it with the wheems-approvals skill. If it's yours to decide, answer it: wheems approval answer ${approval.id} "<choice>". If it's the person's (${workspace.config?.name ?? workspace.id}'s rules say which), bring it to them: wheems approval escalate ${approval.id} --note "…".`;
+Decide it with the wheems-approvals skill. If it's yours to decide (Decisions, in your instructions, says what's the person's), answer it: wheems approval answer ${approval.id} "<choice>". If it's the person's, bring it to them: wheems approval escalate ${approval.id} --note "…".`;
   }
 
   private waitFor(id: string, seconds?: number): Promise<ApprovalRecord | null> {
