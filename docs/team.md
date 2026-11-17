@@ -1,6 +1,7 @@
 # The chief of staff and its team
 
-**Status: proposal, not built.** This is how a workspace's chief of staff works with a team of
+**Status: step 1 built** (the chief's role and its team in its instructions, in Unreleased);
+**the rest is a proposal.** This is how a workspace's chief of staff works with a team of
 agents. The person talks only to the chief, and the chief delegates and manages the work rather
 than doing it. Decided by the owner on 17 November 2026 ([ideas/decisions.md](ideas/decisions.md)).
 
@@ -182,8 +183,8 @@ stays as an emergency stop. To change what a sub-agent is doing, the person tell
 ## In order
 
 1. **The chief's role and its team in its instructions.** Rewrite the template, add **Your role**
-   and **Your team**, and remove "answer simple things yourself". This is a small change, and it
-   changes behaviour at once.
+   and **Your team**, and remove "answer simple things yourself". Built: `CHIEF_ROLE`,
+   `teamInstructions` and `workerInstructions` in `src/agents/builtin.ts`, and `src/agents/team.ts`.
 2. **Approvals** ([approvals.md](approvals.md)), built for the chief only.
 3. **Narrowing the chief's tools,** engine by engine, starting with Claude Code, with doctor's
    view of it.

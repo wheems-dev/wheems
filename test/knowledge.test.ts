@@ -97,4 +97,24 @@ describe('notes', () => {
     expect(known).toContain('### About the person\n\nPrefers short answers.');
     expect(known).not.toContain("This workspace's brief");
   });
+
+  it('gives only a chief its role and team, with an empty team handed to ad-hoc sessions', () => {
+    expect(withBuiltins('# Agent')).not.toContain('Your role');
+    const alone = withBuiltins('# Chief', undefined, {
+      chief: { team: [] },
+      sessions: { maxOpen: 3, open: [] },
+    });
+    expect(alone).toContain('## Your role (built into Wheems)');
+    expect(alone).toContain('No agents yet: hand work to ad-hoc sessions for now.');
+    expect(alone).toContain('Start one for any work that no agent on your team fits.');
+    expect(alone).not.toContain('answer simple things yourself');
+    // The role comes before the sessions it relies on.
+    expect(alone.indexOf('Your role')).toBeLessThan(alone.indexOf('## Sessions'));
+    const team = withBuiltins('# Chief', undefined, {
+      chief: {
+        team: [{ name: 'writer', description: null, engine: 'codex', model: 'gpt-6.1-sol' }],
+      },
+    });
+    expect(team).toContain('- **writer** (codex, gpt-6.1-sol): no description yet');
+  });
 });

@@ -1,7 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { END_NOTE_REQUEST, withBuiltins, type OpenSession } from '../agents/builtin.js';
+import {
+  END_NOTE_REQUEST,
+  withBuiltins,
+  workerInstructions,
+  type OpenSession,
+} from '../agents/builtin.js';
+import { isChief } from '../agents/team.js';
 import type { LoadedAgent, LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import { isDriverError } from '../contracts/driver.js';
@@ -1183,7 +1189,12 @@ export class SessionService {
       config !== null && depth < config.sessions.max_depth
         ? { maxOpen: config.sessions.max_open_per_owner, open: [] }
         : undefined;
-    const instructions = withBuiltins(agent.definition.instructions, knowledge, {
+    // The chief's own file is written for managing: a session started without naming an agent
+    // runs on the chief's engine and account, as a member of the team who does the job itself.
+    const own = isChief(workspace, agent.definition.name)
+      ? workerInstructions(config?.name ?? workspace.id)
+      : agent.definition.instructions;
+    const instructions = withBuiltins(own, knowledge, {
       adhoc: {
         title: session.title ?? '',
         purpose: session.purpose ?? '',

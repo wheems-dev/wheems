@@ -5,6 +5,23 @@ change anything, including commands and config formats, without a migration path
 
 ## Unreleased
 
+The chief of staff now manages and delegates instead of doing the work itself, and knows its team.
+
+**Changed**
+
+- Every chief gets a built-in **Your role** section: you only talk to the chief, which reads and
+  answers, and hands anything that makes or changes something (code of any size, files, research
+  beyond a quick lookup, sending or publishing) to its team. It comes before anything in the
+  chief's own agent file that says otherwise. See `docs/team.md`.
+- Every chief gets a generated **Your team** section listing the workspace's other agents, with
+  each one's engine, model and description, so it hands work to the right one with
+  `wheems session create <name>`.
+- An ad-hoc session started without naming an agent runs as a general member of the team on the
+  chief's engine, model and account, not as the chief, whose file is now written for managing.
+- A new workspace's chief file describes a chief that runs a team, with a **What we're working
+  towards** section for its goal. Existing chief files aren't changed; the built-in role
+  overrides "Do what you're asked, end to end", but it's worth editing them.
+
 **Fixed**
 
 - The service refuses to carry a chat thread on when the chief's agent file names a different

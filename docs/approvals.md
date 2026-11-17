@@ -53,7 +53,7 @@ A sub-agent asks with `wheems approval request`. It never chooses who decides:
 
 ## What the chief may decide
 
-**Recommended, and not yet agreed.** It follows the same line as the chief's work
+**Agreed on 17 November.** It follows the same line as the chief's work
 ([team.md](team.md#what-counts-as-work)): the chief decides what can be undone and stays inside
 what the person asked for. The person decides five things:
 
@@ -249,13 +249,10 @@ person's phone, one tap answers it, and the work carries on.
 
 ## Open questions
 
-1. **What the chief may decide.** See the recommendation [above](#what-the-chief-may-decide):
-   five categories for the person, everything else the chief's, and a daily list of the chief's
-   decisions.
-2. **Engine prompts from the phone.** Answering an engine's own permission prompt remotely would
+1. **Engine prompts from the phone.** Answering an engine's own permission prompt remotely would
    let agents run on `ask`, but it means typing into each engine's screen through Herdr, which is
    easy to get wrong. The suggestion is to leave it until after the broker, through which most
    risky actions will go.
-3. **The broker in milestone 3.** The roadmap lists "the first version of the broker" here. This
+2. **The broker in milestone 3.** The roadmap lists "the first version of the broker" here. This
    design builds the approvals it will use, but no actions. The suggestion is to design the broker
    on its own before milestone 9, and count milestone 3 done without it.

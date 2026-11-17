@@ -169,3 +169,6 @@ Answered the same day:
   at an email is the chief's; replying to it, development of any size and long research are the
   team's. Its tools are narrowed to match where the engine allows.
 - **Gemini isn't needed now.**
+- **What the chief may decide:** anything that can be undone and stays inside the ask. The person
+  decides money, speaking for them, what can't be undone, access, and anything outside the ask;
+  a workspace can hand a category to the chief, and the chief posts a daily list of its decisions.

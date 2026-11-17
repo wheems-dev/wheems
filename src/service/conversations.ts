@@ -8,6 +8,7 @@ import {
   withBuiltins,
   type SessionBuiltins,
 } from '../agents/builtin.js';
+import { teamOf } from '../agents/team.js';
 import type { LoadedWorkspace } from '../config/load.js';
 import type { InstallConfig } from '../config/schemas.js';
 import {
@@ -1070,6 +1071,7 @@ export class ConversationManager {
         ...agent.definition,
         instructions: withBuiltins(agent.definition.instructions, knowledge, {
           ...(sessions && { sessions }),
+          chief: { team: teamOf(workspace) },
         }),
       },
       workspace: { id: workspace.id, dir: workspace.dir },

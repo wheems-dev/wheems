@@ -275,7 +275,8 @@ When Wheems starts an agent, it writes the engine's instructions file in the wor
 (`CLAUDE.md` for Claude Code, `AGENTS.md` for Codex and opencode). The file holds the agent's
 instructions, then Wheems's built-in instructions, then what the agent should know at launch:
 `about-you.md` and the workspace's brief. The built-in instructions cover talking to the person,
-writing notes, searching the knowledge base and proposing skills. Don't edit the instructions
+writing notes, searching the knowledge base, proposing skills and, for a chief, its role, its team
+and starting sessions. Don't edit the instructions
 file: it's rewritten at every launch and ignored by git.
 
 `permissions` says how much an agent may do without asking:
@@ -289,8 +290,41 @@ file: it's rewritten at every launch and ignored by git.
 A prompt means someone has to answer it at the Mac, so a chief of staff you talk to from your
 phone usually runs on `auto`.
 
-Today the service talks to each workspace's chief of staff. Other agent files are validated and
-can be given skills, but nothing starts them yet: teams of agents come in later milestones.
+### The chief of staff and its team
+
+You only ever talk to the chief of staff. **The chief manages and delegates, and never does the
+work itself**: it reads and answers, and its team makes and changes things. "Look at this email
+and tell me what you think" is the chief's; replying to it, a fix of any size, or research beyond
+a quick lookup goes to the team. Every chief gets this as a built-in **Your role** section,
+which comes before anything in its own agent file that says otherwise.
+
+**The team** is the workspace's other agent files. Each is an agent in the same format as the
+chief, on any engine and model, and its `description` says when to use it:
+
+```markdown
+---
+description: Builds and fixes the website. Use for any code.
+engine: codex
+model: gpt-6.1-sol
+account: chatgpt-subscription
+permissions: auto
+---
+
+# Developer
+
+You build and fix the website, in small, tested steps.
+```
+
+The chief is told its team in a generated **Your team** section, with each agent's name, engine,
+model and description, as the service last loaded them (restart the service after adding one). It
+hands work to an agent with `wheems session create <name> …`, and to a general member of the team,
+on the chief's own engine, for work no agent fits. When the same kind of work keeps coming up, it
+suggests an agent for it. The chief creating agents itself, and a Team page in the web app, are
+planned; see [docs/team.md](docs/team.md).
+
+A chief made before 0.1.9 has an agent file that says "Do what you're asked, end to end". The
+built-in role overrides it, but it's worth editing the file to describe the chief's goal instead,
+as a new one does under **What we're working towards**.
 
 ## Talking to agents
 
@@ -331,8 +365,9 @@ wheems session create --title "Packaging suppliers" --purpose "Find five UK pack
 ```
 
 - The session starts working on its purpose at once, in Herdr, and stays open until it's ended.
-  It runs the chief's own agent file, or another of the workspace's agents
-  (`wheems session create researcher …`).
+  It runs another of the workspace's agents when one is named
+  (`wheems session create researcher …`). Without one, it runs a general member of the team on the
+  chief's engine, model and account, since the chief's own file is written for managing.
 - A session the chief starts is owned by the chief, whichever thread started it, so it's the
   chief's from any of its threads. Each new thread's session is told the chief's open sessions
   when it starts.
