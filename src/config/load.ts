@@ -1,6 +1,6 @@
 import { listLibrary } from '../skills/library.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { basename, extname, join, relative } from 'node:path';
+import { basename, dirname, extname, join, relative } from 'node:path';
 import { isMap, isNode, isScalar, isSeq, LineCounter, parseDocument, type Document } from 'yaml';
 import type { z } from 'zod';
 import type { AgentDefinition } from '../contracts/engine.js';
@@ -283,9 +283,21 @@ export async function validateFile(
     case 'skills':
       parseYaml(path, text, skillsSchema, problems);
       break;
-    case 'agent':
-      parseAgent(path, text, problems);
+    case 'agent': {
+      if (basename(path) !== CHIEF_FILE) {
+        parseAgent(path, text, problems);
+        break;
+      }
+      // WHEEMS.md is named by the workspace.yaml beside it, or the default when that won't read.
+      let name = DEFAULT_CHIEF;
+      const config = join(dirname(path), 'workspace.yaml');
+      if (await exists(config)) {
+        const parsed = parseYaml(config, await readFile(config, 'utf8'), workspaceSchema, []);
+        if (parsed) name = parsed.chief_of_staff;
+      }
+      parseAgent(path, text, problems, { name });
       break;
+    }
     case 'workflow':
       parseWorkflow(path, text, problems);
       break;
@@ -294,7 +306,7 @@ export async function validateFile(
         level: 'error',
         file: path,
         message:
-          'Not a config file Wheems knows: expected install.yaml, workspace.yaml, skills.yaml, agents/*.md or workflows/*.yaml',
+          'Not a config file Wheems knows: expected install.yaml, workspace.yaml, skills.yaml, WHEEMS.md, agents/*.md or workflows/*.yaml',
       });
   }
   return { kind, problems };
@@ -306,6 +318,7 @@ export function kindOf(path: string): ConfigKind | null {
   if (name === 'install.yaml') return 'install';
   if (name === 'workspace.yaml') return 'workspace';
   if (name === 'skills.yaml') return 'skills';
+  if (name === CHIEF_FILE) return 'agent';
   if (folder === 'agents' && extname(name) === '.md') return 'agent';
   if (folder === 'workflows' && (extname(name) === '.yaml' || extname(name) === '.yml'))
     return 'workflow';

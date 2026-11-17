@@ -33,7 +33,9 @@ the team" role.
 
 When the service starts, each workspace that still has `agents/<chief>.md` and no `WHEEMS.md`
 is moved over: the file becomes `WHEEMS.md`, and a "What we're working towards" section in it, if
-there is one, moves to `GOAL.md`. A workspace without `GOAL.md` gets an empty one to fill in.
+there is one, moves to `GOAL.md`. If the workspace already has a `GOAL.md`, the section stays in
+`WHEEMS.md` for you to move. The goal is saved before the old file is removed, so nothing is lost
+if a step fails. A workspace without `GOAL.md` gets an empty one to fill in.
 The install's `.gitignore` gets the generated files. Until the service has started, the CLI reads
 `agents/<chief>.md` where `WHEEMS.md` is missing, and doctor says so.
 

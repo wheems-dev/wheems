@@ -23,25 +23,30 @@ export async function moveToWheemsFiles(home: string): Promise<string[]> {
     const wheems = join(dir, CHIEF_FILE);
     const goal = join(dir, GOAL_FILE);
     const old = join(dir, 'agents', `${config.chief}.md`);
-    let goalText: string | null = null;
     if (!(await exists(wheems)) && (await exists(old))) {
-      const split = splitGoal(await readFile(old, 'utf8'));
-      goalText = split.goal;
-      // Written only if it isn't there, before the old file goes, so nothing is ever lost.
-      await writeFile(wheems, split.chief, { flag: 'wx' });
+      const text = await readFile(old, 'utf8');
+      const split = splitGoal(text);
+      // Nothing is deleted until everything in it is saved elsewhere.
+      let chief = split.chief;
+      if (split.goal !== null) {
+        if (await exists(goal)) {
+          // GOAL.md already says something: the section stays in WHEEMS.md for the person.
+          chief = text;
+          done.push(
+            `Kept ${id}'s "What we're working towards" in ${CHIEF_FILE}, since it already has a ${GOAL_FILE}: move what you need`,
+          );
+        } else {
+          await writeFile(goal, `${goalMd(config.name ?? id)}\n${split.goal}\n`, { flag: 'wx' });
+          done.push(`Moved ${id}'s goal to ${GOAL_FILE}`);
+        }
+      }
+      await writeFile(wheems, chief, { flag: 'wx' });
       await unlink(old);
       done.push(`Moved ${id}'s chief of staff from agents/${config.chief}.md to ${CHIEF_FILE}`);
     }
     if (!(await exists(goal))) {
-      const template = goalMd(config.name ?? id);
-      await writeFile(goal, goalText !== null ? `${template}\n${goalText}\n` : template, {
-        flag: 'wx',
-      });
-      done.push(
-        goalText !== null
-          ? `Moved ${id}'s goal to ${GOAL_FILE}`
-          : `Added ${GOAL_FILE} to ${id}, for its goal`,
-      );
+      await writeFile(goal, goalMd(config.name ?? id), { flag: 'wx' });
+      done.push(`Added ${GOAL_FILE} to ${id}, for its goal`);
     }
   }
   const ignore = join(home, '.gitignore');

@@ -14,7 +14,7 @@ import { withBuiltins } from '../src/agents/builtin.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { INSTALL_GITIGNORE, installYaml } from '../src/cli/templates.js';
 import { crossCheck } from '../src/config/check.js';
-import { loadInstall } from '../src/config/load.js';
+import { loadInstall, validateFile } from '../src/config/load.js';
 import { moveToWheemsFiles, splitGoal } from '../src/config/migrate.js';
 import { instructionsFiles } from '../src/drivers/engine/instructions.js';
 import { writeSkills } from '../src/service/launch.js';
@@ -92,8 +92,8 @@ describe("a workspace's files", () => {
     writeFileSync(join(home, '.gitignore'), '.wheems/\nworkspaces/*/CLAUDE.md\n');
 
     expect(await moveToWheemsFiles(home)).toEqual([
-      "Moved personal's chief of staff from agents/chief-of-staff.md to WHEEMS.md",
       "Moved personal's goal to GOAL.md",
+      "Moved personal's chief of staff from agents/chief-of-staff.md to WHEEMS.md",
       'Added workspaces/*/AGENTS.md, workspaces/*/.claude/, workspaces/*/.agents/ to .gitignore',
     ]);
     expect(existsSync(chief)).toBe(false);
@@ -105,6 +105,33 @@ describe("a workspace's files", () => {
     expect(await problems()).toEqual([]);
 
     expect(await moveToWheemsFiles(home)).toEqual([]);
+  });
+
+  it('keeps the goal in WHEEMS.md when the workspace already has a GOAL.md', async () => {
+    const chief = join(ws, 'agents', 'chief-of-staff.md');
+    renameSync(join(ws, 'WHEEMS.md'), chief);
+    writeFileSync(
+      chief,
+      `${readFileSync(chief, 'utf8')}\n## What we're working towards\n\nBoxes.\n`,
+    );
+    writeFileSync(join(ws, 'GOAL.md'), 'Ours.\n');
+    expect(await moveToWheemsFiles(home)).toEqual([
+      'Kept personal\'s "What we\'re working towards" in WHEEMS.md, since it already has a GOAL.md: move what you need',
+      "Moved personal's chief of staff from agents/chief-of-staff.md to WHEEMS.md",
+    ]);
+    expect(readFileSync(join(ws, 'WHEEMS.md'), 'utf8')).toContain('Boxes.');
+    expect(readFileSync(join(ws, 'GOAL.md'), 'utf8')).toBe('Ours.\n');
+  });
+
+  it('validates WHEEMS.md on its own, named by the workspace.yaml beside it', async () => {
+    expect(await validateFile(join(ws, 'WHEEMS.md'))).toEqual({ kind: 'agent', problems: [] });
+    writeFileSync(
+      join(ws, 'WHEEMS.md'),
+      readFileSync(join(ws, 'WHEEMS.md'), 'utf8').replace('---\n', '---\nname: boss\n'),
+    );
+    expect((await validateFile(join(ws, 'WHEEMS.md'))).problems.map((p) => p.message)).toEqual([
+      'The chief of staff\'s name comes from chief_of_staff in workspace.yaml ("chief-of-staff"): leave name out of WHEEMS.md',
+    ]);
   });
 
   it('gives a workspace without a goal an empty GOAL.md, and never replaces one', async () => {
