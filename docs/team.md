@@ -194,8 +194,9 @@ stays as an emergency stop. To change what a sub-agent is doing, the person tell
    `teamInstructions` and `workerInstructions` in `src/agents/builtin.ts`, and `src/agents/team.ts`.
    1a. **Finish lines and evidence,** so delegated work can be checked. A session has a
    `--done-when` line, which a chief must give. Workers hand back evidence, not "should work".
-   Hand-backs show the finish line and a count, and the chief sends a job back at most twice
-   before bringing it to the person. Built: the `done_when` column (schema 6), `answerText` in
+   Answers, handed back or waited for, show the finish line and a count, and the chief sends a
+   job back at most twice before bringing it to the person. Built: the `done_when` column
+   (schema 6), and `finishLine` in
    `src/service/sessions.ts`. The limit is an instruction, not a block, because a chief may also
    send a session follow-up work. If chiefs ignore it, Wheems could count send-backs per job.
 2. **Approvals** ([approvals.md](approvals.md)), built for the chief only.

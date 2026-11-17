@@ -371,8 +371,9 @@ wheems session create --title "Packaging suppliers" \
   that exists. A chief must give one; anyone else may. The session sees it in its instructions,
   and is told to hand back evidence (what it ran and what that showed, links, files, commits),
   not "should work".
-- **Each answer comes back with the finish line,** to check it against, and a count: `(answer 2)`.
-  The chief sends a job back at most twice. From the third answer, Wheems's hand-back tells it to
+- **Each answer comes with the finish line,** to check it against, and a count ("Answer 2 from
+  this session"), whether it's handed back or waited for with `--wait`. The chief sends a job back
+  at most twice. From the third answer, Wheems tells it to
   stop and bring the job to you, with what was tried and what's missing. That's an instruction
   for now, not a block, since a chief may also send a session follow-up work.
 

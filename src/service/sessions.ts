@@ -478,7 +478,12 @@ export class SessionService {
       if (result.answer === null) {
         throw new Error(`No answer from session ${target.id}: ${result.problem}`);
       }
-      return { message: sessions.message(message.id) ?? message, answer: result.answer, next: '' };
+      // A session waiting on the answer checks it against the finish line, as a hand-back would.
+      const answer =
+        from !== null
+          ? `${result.answer}${finishLine(target.doneWhen, sessions.answerCount(from.id, target.id))}`
+          : result.answer;
+      return { message: sessions.message(message.id) ?? message, answer, next: '' };
     } finally {
       timer.cancel();
       if (waiter !== null) this.removeWait(waiter.id, target.id);
@@ -1045,12 +1050,10 @@ export class SessionService {
     }
     const text =
       outcome.answer !== null
-        ? answerText(
-            who,
-            outcome.answer,
+        ? `Wheems: answer from ${who}:\n\n${outcome.answer}${finishLine(
             target?.doneWhen ?? null,
-            sessions.handbackCount(targetId, fromId) + 1,
-          )
+            sessions.answerCount(fromId, targetId),
+          )}`
         : `Wheems: no answer from ${who}, because ${outcome.problem}. See it with wheems session show ${targetId}.`;
     await this.passBack(workspace, from, targetId, text);
   }
@@ -1532,21 +1535,18 @@ function timeout(ms: number): { done: Promise<null>; cancel: () => void } {
 }
 
 /**
- * An answer handed back to its sender. With a finish line, it's shown again to check the answer
- * against, and from the third answer on, the sender is told to stop sending the job back.
+ * What follows a session's answer to the session that sent the message, when it has a finish
+ * line: the line again, to check the answer against, and how many of that sender's messages it
+ * has answered, waited for or handed back. From the third, the sender is told to stop sending
+ * the job back.
  */
-export function answerText(
-  who: string,
-  answer: string,
-  doneWhen: string | null,
-  count: number,
-): string {
-  if (doneWhen === null) return `Wheems: answer from ${who}:\n\n${answer}`;
+export function finishLine(doneWhen: string | null, count: number): string {
+  if (doneWhen === null) return '';
   const stop =
     count >= SEND_BACK_ANSWERS
-      ? `\n\nThis is its answer ${String(count)}. If the job still isn't done, don't send it back again: bring it to the person, saying what was tried and what's missing.`
+      ? `\n\nIf the job still isn't done, don't send it back again: bring it to the person, saying what was tried and what's missing.`
       : '';
-  return `Wheems: answer from ${who} (answer ${String(count)}):\n\n${answer}\n\n---\n\nIt's done when: ${doneWhen}\n\nCheck its evidence against that before you report.${stop}`;
+  return `\n\n---\n\nAnswer ${String(count)} from this session. It's done when: ${doneWhen}\n\nCheck its evidence against that before you report.${stop}`;
 }
 
 function describe(error: unknown): string {

@@ -10,7 +10,7 @@ change anything, including commands and config formats, without a migration path
 - **Finish lines for delegated work.** `wheems session create --done-when "…"` gives a session what
   must be true when its job is finished, in things that can be checked. A chief's session must
   have one. The session sees it in its instructions, `session show` prints it, and each answer
-  handed back shows it again, with a count, so the chief checks the answer against it.
+  handed back or waited for shows it again, with a count, so the chief checks the answer against it.
 - Ad-hoc sessions are told to hand back evidence (what they ran and what it showed, links,
   files, commits) rather than "should work", and to say so rather than retry when they get the
   same result twice.

@@ -942,14 +942,17 @@ export class WorkspaceSessions {
     }));
   }
 
-  /** How many hand-backs one session has had from another: its answers, and notices about it. */
-  handbackCount(from: string, to: string): number {
+  /**
+   * How many of one session's messages to another (its purpose among them) have been answered,
+   * whether the answer was waited for or handed back.
+   */
+  answerCount(sender: string, receiver: string): number {
     const row = this.db
       .prepare(
-        `SELECT count(*) AS n FROM messages
-         WHERE workspace = ? AND kind = 'handback' AND sender = ? AND receiver = ?`,
+        `SELECT count(*) AS n FROM messages WHERE workspace = ? AND kind = 'message'
+         AND sender = ? AND receiver = ? AND state = 'answered'`,
       )
-      .get(this.workspace, from, to) as { n: number } | undefined;
+      .get(this.workspace, sender, receiver) as { n: number } | undefined;
     return row?.n ?? 0;
   }
 

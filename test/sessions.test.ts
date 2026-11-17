@@ -631,22 +631,30 @@ describe('wheems session', () => {
       const told = `Wheems: answer from session ${created.id} ("packaging")`;
       const heard = () => [...received.values()].flat().filter((l) => l.startsWith(told));
       await waitFor(() => heard().length === 1);
-      expect(heard()[0]).toContain('(answer 1)');
-      expect(heard()[0]).toContain("It's done when: packaging researched");
+      expect(heard()[0]).toContain(
+        "Answer 1 from this session. It's done when: packaging researched",
+      );
       await waitFor(() => channel.sent.length > before);
 
       const sent = await wheems(['session', 'send', created.id, 'And prices.'], chief);
       expect(sent.out).toContain('Its answer will come to you in this conversation');
       await waitFor(() => heard().length === 2);
       expect(heard()[1]).toContain('Wheems: message from chief-of-staff:');
-      expect(heard()[1]).toContain('(answer 2)');
+      expect(heard()[1]).toContain('Answer 2 from this session.');
       expect(heard()[1]).not.toContain("don't send it back again");
 
-      await wheems(['session', 'send', created.id, 'And minimum orders.'], chief);
-      await waitFor(() => heard().length === 3);
-      expect(heard()[2]).toContain(
-        "This is its answer 3. If the job still isn't done, don't send it back again",
+      // An answer waited for counts too, and carries the finish line the same way.
+      const waited = await wheems(
+        ['session', 'send', created.id, 'And minimum orders.', '--wait'],
+        chief,
       );
+      expect(waited.out).toContain('Answer 3 from this session.');
+      expect(waited.out).toContain("If the job still isn't done, don't send it back again");
+
+      await wheems(['session', 'send', created.id, 'And delivery times.'], chief);
+      await waitFor(() => heard().length === 3);
+      expect(heard()[2]).toContain('Answer 4 from this session.');
+      expect(heard()[2]).toContain("don't send it back again");
     });
 
     it("refuses a chief's session without a finish line, and shows one in the session", async () => {

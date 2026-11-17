@@ -167,7 +167,7 @@ describe('session store', () => {
       state = await StateStore.open(join(dir, 'other.sqlite'));
     });
 
-    it("keeps a session's finish line, and counts the hand-backs from one session to another", () => {
+    it("keeps a session's finish line, and counts one session's answered messages to another", () => {
       const ws = state.workspace('personal');
       const made = (id: string, doneWhen?: string) =>
         ws.create({
@@ -188,12 +188,15 @@ describe('session store', () => {
       expect(made('b').doneWhen).toBeNull();
       const add = (id: string, kind: 'message' | 'handback', sender: string, receiver: string) =>
         ws.addMessage({ id, kind, sender, receiver, messageFile: `/${id}.md`, sentAt: id });
-      add('1', 'handback', 'a', 'b');
-      add('2', 'handback', 'a', 'b');
-      add('3', 'message', 'a', 'b');
+      // Answered messages count, however the answer came; unanswered ones and hand-backs don't.
+      for (const id of ['1', '2', '3']) add(id, 'message', 'a', 'b');
+      ws.finishMessage('1', 'answered', '/1-answer.md', 't');
+      ws.finishMessage('2', 'answered', '/2-answer.md', 't');
+      ws.finishMessage('3', 'failed', null, 't');
       add('4', 'handback', 'b', 'a');
-      expect(ws.handbackCount('a', 'b')).toBe(2);
-      expect(ws.handbackCount('b', 'a')).toBe(1);
+      add('5', 'message', 'b', 'a');
+      expect(ws.answerCount('a', 'b')).toBe(2);
+      expect(ws.answerCount('b', 'a')).toBe(0);
     });
 
     it('refuses a store from a newer Wheems, and doctor refuses one at another version', async () => {

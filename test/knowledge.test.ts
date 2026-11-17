@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withBuiltins } from '../src/agents/builtin.js';
-import { answerText } from '../src/service/sessions.js';
+import { finishLine } from '../src/service/sessions.js';
 import { BRIEF_MD } from '../src/cli/templates.js';
 import { knowledgePaths, noteTitle, readCapped, writeNote } from '../src/knowledge/notes.js';
 
@@ -127,16 +127,13 @@ describe('notes', () => {
 
 describe('answers handed back', () => {
   it('shows a finish line to check against, and says to stop sending back from the third', () => {
-    expect(answerText('session s ("t")', 'Found three.', null, 5)).toBe(
-      'Wheems: answer from session s ("t"):\n\nFound three.',
-    );
-    const first = answerText('session s ("t")', 'Done: tests pass.', 'npm test passes', 1);
-    expect(first).toContain('Wheems: answer from session s ("t") (answer 1):');
-    expect(first).toContain("It's done when: npm test passes");
+    expect(finishLine(null, 5)).toBe('');
+    const first = finishLine('npm test passes', 1);
+    expect(first).toContain("Answer 1 from this session. It's done when: npm test passes");
     expect(first).toContain('Check its evidence against that before you report.');
     expect(first).not.toContain("don't send it back again");
-    expect(answerText('session s ("t")', 'Still red.', 'npm test passes', 3)).toContain(
-      "This is its answer 3. If the job still isn't done, don't send it back again: bring it to the person",
+    expect(finishLine('npm test passes', 3)).toContain(
+      "Answer 3 from this session. It's done when: npm test passes\n\nCheck its evidence against that before you report.\n\nIf the job still isn't done, don't send it back again: bring it to the person",
     );
   });
 });
