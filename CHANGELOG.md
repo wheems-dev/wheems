@@ -3,7 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.10
+
+Released 17 November 2026. Work a chief hands on now has a finish line it can check, answers
+come with evidence, and a job goes back to a worker at most twice before the person hears of it.
+The session store moves to schema version 6. Still an early preview.
 
 **Added**
 

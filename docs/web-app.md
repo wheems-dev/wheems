@@ -164,7 +164,7 @@ then remembers it.
 
 ## What can be built when
 
-| Page             | Can show now (0.1.9)                                                            | Waits for                                                       |
+| Page             | Can show now (0.1.10)                                                           | Waits for                                                       |
 | ---------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                              |
 | Sessions         | The session store: tree, detail, messages, send and end                         | Sub-agents read-only, with End as a stop ([team.md](team.md))   |

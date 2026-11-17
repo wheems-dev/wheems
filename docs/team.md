@@ -1,7 +1,7 @@
 # The chief of staff and its team
 
 **Status: steps 1 and 1a built** (the chief's role and its team in its instructions, in 0.1.9;
-finish lines, evidence and the send-back limit, in Unreleased);
+finish lines, evidence and the send-back limit, in 0.1.10);
 **the rest is a proposal.** This is how a workspace's chief of staff works with a team of
 agents. The person talks only to the chief, and the chief delegates and manages the work rather
 than doing it. Decided by the owner on 17 November 2026 ([ideas/decisions.md](ideas/decisions.md)).
