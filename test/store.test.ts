@@ -139,11 +139,64 @@ describe('session store', () => {
       expect(reader.conversation('k')?.generation).toBeUndefined();
       expect(reader.conversation('k')?.handover).toBeUndefined();
       expect(reader.workspace('personal').handovers('s')).toEqual([]);
+      // Nor had any session a finish line.
+      expect(reader.workspace('personal').session('s')?.doneWhen).toBeNull();
       reader.close();
       state = await StateStore.open(old);
       // Opened to write, it's brought up to date.
       expect(state.restartThread('k', null)).toBeNull();
       expect(state.conversation('k')).toMatchObject({ generation: 1, handover: 'fresh' });
+    });
+
+    it('reads sessions from a store at schema 2 without asks or finish lines', async () => {
+      state.close();
+      const old = join(dir, 'v2.sqlite');
+      const db = new DatabaseSync(old);
+      for (const migration of MIGRATIONS.slice(0, 2)) db.exec(migration);
+      db.exec('PRAGMA user_version = 2');
+      db.exec(
+        "INSERT INTO sessions (id, workspace, kind, state, created_at, last_active_at) VALUES ('s', 'personal', 'adhoc', 'idle', 't', 't')",
+      );
+      db.close();
+      const reader = await StateStore.open(old, { readOnly: true, olderSchema: true });
+      expect(reader.workspace('personal').session('s')).toMatchObject({
+        ask: null,
+        doneWhen: null,
+      });
+      reader.close();
+      state = await StateStore.open(join(dir, 'other.sqlite'));
+    });
+
+    it("keeps a session's finish line, and counts one session's answered messages to another", () => {
+      const ws = state.workspace('personal');
+      const made = (id: string, doneWhen?: string) =>
+        ws.create({
+          id,
+          project: null,
+          agent: 'personal/chief-of-staff',
+          owner: null,
+          parent: null,
+          title: id,
+          purpose: `do ${id}`,
+          ask: null,
+          ...(doneWhen !== undefined && { doneWhen }),
+          herdrName: id,
+          folder: join(dir, id),
+          createdAt: new Date().toISOString(),
+        });
+      expect(made('a', 'tests pass').doneWhen).toBe('tests pass');
+      expect(made('b').doneWhen).toBeNull();
+      const add = (id: string, kind: 'message' | 'handback', sender: string, receiver: string) =>
+        ws.addMessage({ id, kind, sender, receiver, messageFile: `/${id}.md`, sentAt: id });
+      // Answered messages count, however the answer came; unanswered ones and hand-backs don't.
+      for (const id of ['1', '2', '3']) add(id, 'message', 'a', 'b');
+      ws.finishMessage('1', 'answered', '/1-answer.md', 't');
+      ws.finishMessage('2', 'answered', '/2-answer.md', 't');
+      ws.finishMessage('3', 'failed', null, 't');
+      add('4', 'handback', 'b', 'a');
+      add('5', 'message', 'b', 'a');
+      expect(ws.answerCount('a', 'b')).toBe(2);
+      expect(ws.answerCount('b', 'a')).toBe(0);
     });
 
     it('refuses a store from a newer Wheems, and doctor refuses one at another version', async () => {

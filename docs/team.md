@@ -1,6 +1,7 @@
 # The chief of staff and its team
 
-**Status: step 1 built** (the chief's role and its team in its instructions, in Unreleased);
+**Status: steps 1 and 1a built** (the chief's role and its team in its instructions, in 0.1.9;
+finish lines, evidence and the send-back limit, in Unreleased);
 **the rest is a proposal.** This is how a workspace's chief of staff works with a team of
 agents. The person talks only to the chief, and the chief delegates and manages the work rather
 than doing it. Decided by the owner on 17 November 2026 ([ideas/decisions.md](ideas/decisions.md)).
@@ -61,8 +62,14 @@ section says:
 - **Choose who does it:**
   - a defined agent on your team, when the work matches its role;
   - otherwise an ad-hoc session, with a clear purpose and what to hand back.
-- **Brief well.** Say what's wanted, what done looks like, what to hand back and what not to touch.
-- **Check before reporting.** Read the result, and send it back if it isn't right.
+- **Brief with a finish line.** The purpose says what's wanted, what to hand back and what not to
+  touch. `--done-when` says what must be true when it's finished, in things that can be checked.
+  Wheems refuses a chief's session without one.
+- **Check the evidence, not the claim.** Workers hand back what they ran and what it showed,
+  links, files and commits. Each answer comes back with the finish line and a count.
+- **Send back at most twice.** Say what was expected, what came instead and what's been tried. If
+  it still isn't done, or comes back the same, bring it to the person. From the third answer,
+  Wheems's hand-back says so too.
 - **Decisions.** Answer your team's approval requests within your authority, and bring the person
   only what's theirs to decide ([approvals.md](approvals.md)).
 - **Notice what repeats.** When you've started ad-hoc sessions for the same kind of work several
@@ -185,6 +192,13 @@ stays as an emergency stop. To change what a sub-agent is doing, the person tell
 1. **The chief's role and its team in its instructions.** Rewrite the template, add **Your role**
    and **Your team**, and remove "answer simple things yourself". Built: `CHIEF_ROLE`,
    `teamInstructions` and `workerInstructions` in `src/agents/builtin.ts`, and `src/agents/team.ts`.
+   1a. **Finish lines and evidence,** so delegated work can be checked. A session has a
+   `--done-when` line, which a chief must give. Workers hand back evidence, not "should work".
+   Answers, handed back or waited for, show the finish line and a count, and the chief sends a
+   job back at most twice before bringing it to the person. Built: the `done_when` column
+   (schema 6), and `finishLine` in
+   `src/service/sessions.ts`. The limit is an instruction, not a block, because a chief may also
+   send a session follow-up work. If chiefs ignore it, Wheems could count send-backs per job.
 2. **Approvals** ([approvals.md](approvals.md)), built for the chief only.
 3. **Narrowing the chief's tools,** engine by engine, starting with Claude Code, with doctor's
    view of it.

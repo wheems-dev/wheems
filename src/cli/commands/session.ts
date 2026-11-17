@@ -46,6 +46,10 @@ export function registerSession(program: Command, io: Io): void {
       .argument('[agent]', "the agent in the workspace's agents/ (default: your own)")
       .requiredOption('--title <title>', 'a short title, one line')
       .requiredOption('--purpose <text>', 'what it is for: what to do and what to hand back')
+      .option(
+        '--done-when <text>',
+        'what must be true when the job is finished, in things that can be checked (a chief must give it)',
+      )
       .option('--project <name>', 'the project it works on (milestone 4)')
       .option('--workspace <id>', workspaceHelp)
       .option('--json', 'print the session as JSON')
@@ -56,6 +60,7 @@ export function registerSession(program: Command, io: Io): void {
           options: {
             title: string;
             purpose: string;
+            doneWhen?: string;
             project?: string;
             workspace?: string;
             json?: boolean;
@@ -70,6 +75,7 @@ export function registerSession(program: Command, io: Io): void {
               caller: caller(options),
               title: options.title,
               purpose: options.purpose,
+              ...(options.doneWhen !== undefined && { doneWhen: options.doneWhen }),
               ...(agent !== undefined && { agent }),
               ...(options.project !== undefined && { project: options.project }),
             },
@@ -366,6 +372,7 @@ export function formatDetails(details: SessionDetails, now: number): string {
   ];
   if (s.ask !== null && s.ask !== s.purpose) lines.push('', 'Asked:', s.ask);
   if (s.purpose !== null) lines.push('', 'Purpose:', s.purpose);
+  if (s.doneWhen !== null) lines.push('', 'Done when:', s.doneWhen);
   if (s.summary !== null && s.summary !== s.purpose) lines.push('', `Summary: ${s.summary}`);
   if (details.latestAnswer !== null) lines.push('', 'Latest answer:', details.latestAnswer.trim());
   if (details.messages.length > 0) {

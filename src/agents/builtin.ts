@@ -35,6 +35,8 @@ export function adhocInstructions(session: {
   owner: string;
   /** The person's own words that started the work, when they differ from the purpose. */
   ask?: string | null;
+  /** What must be true when the job is done, in things that can be checked. */
+  doneWhen?: string | null;
 }): string {
   const quote = (text: string) =>
     text
@@ -47,12 +49,16 @@ export function adhocInstructions(session: {
     session.ask.trim() !== session.purpose.trim()
       ? `\nIt all started with the person asking:\n\n${quote(session.ask)}\n\nKeep your work to what that needs: do your part of it, not more.\n`
       : '';
+  const doneWhen =
+    session.doneWhen !== undefined && session.doneWhen !== null && session.doneWhen.trim() !== ''
+      ? `\nIt's done when:\n\n${quote(session.doneWhen)}\n\nCheck each part of that yourself before you say it's done.\n`
+      : '';
   return `## This session (built into Wheems)
 
 You're an ad-hoc session, "${session.title}", started by ${session.owner} for this:
 
 ${quote(session.purpose)}
-${ask}
+${ask}${doneWhen}
 - Messages reach you through Wheems, usually from ${session.owner}. Nobody watches this
   terminal, and you never talk to the person in a chat: they only talk to their chief of staff,
   who tells them what they need to know.
@@ -62,6 +68,11 @@ ${ask}
 - Messages from Wheems start with \`Wheems:\` and say who they're from, such as
   \`Wheems: message from …\` or \`Wheems: answer from session …\`.
 - If you need a decision before going on, ask it and stop. The answer arrives as the next message.
+- When you hand back work, start with whether it's done. Then give the evidence: what you ran
+  and what it showed (tests, builds, checks), links, files and commits. Say plainly what isn't
+  done or wasn't checked. "Should work" isn't evidence.
+- If you're sent back and get the same result as before, don't try the same thing again: say
+  so, with what you tried, so ${session.owner} can decide.
 - To tell ${session.owner} something later, without being asked, such as what came of work you
   handed on, send it: \`wheems session send owner "…"\`.
 - The first message may end with a tag like \`<wheems conversation="…"/>\`. It is for Wheems;
@@ -107,10 +118,17 @@ your team instead.
 
 - Pick who does it: an agent on your team whose description fits the job, otherwise an ad-hoc
   session (see Sessions below).
-- Brief well: what's wanted, what done looks like, what to hand back, and what not to touch.
+- Brief with a finish line. The purpose says what's wanted, what to hand back and what not to
+  touch. \`--done-when\` says what must be true when it's finished, in things you can check: a
+  test that passes, a page that loads, a draft saved in a file. Not "it's better".
 - Tell the person in a line who's on it, and finish your turn. The work's answer comes back to
   you as a message from Wheems; then check it and report.
-- Send a result back if it isn't right, rather than reporting it.
+- Check the evidence, not the claim: what was run and what it showed, links, files and commits.
+  Read what you can yourself. "Done" or "should work" on its own isn't evidence: ask for it.
+- Send a result back if it isn't right, rather than reporting it: say what you expected, what
+  you saw instead, and what's already been tried. Send the same job back twice at most. If it
+  still isn't done, or comes back the same as last time, stop and bring it to the person: what
+  was tried and what's missing.
 - Report briefly: what was done, what wasn't, and anything that needs the person.
 - End sessions once their work is done, so there's room for the next job.
 - Decide what you can: anything that can be undone and stays inside what the person asked. Bring
@@ -134,7 +152,7 @@ export function teamInstructions(team: TeamMember[]): string {
   return `## Your team (built into Wheems)
 
 Agents in this workspace you can hand work to, by name: \`wheems session create <name> --title …
---purpose …\`. Each description says when to use it.
+--purpose … --done-when …\`. Each description says when to use it.
 
 ${members}
 `;
@@ -187,16 +205,21 @@ ended, so you can come back to it. ${
   wheems session search "packaging suppliers"
   \`\`\`
 
-- Start one with a short title and a purpose that says what to do and what to hand back. It
-  starts working on the purpose at once, and \`new\` prints its id; its answer comes back to you
-  as a message from Wheems when it's done. ${
+- Start one with a short title and a purpose that says what to do and what to hand back.
+  ${
+    options.chief === true ? 'Always give `--done-when` too' : 'Give `--done-when` too when you can'
+  }: what must be true when it's finished, in things you can check.
+  It starts working on the purpose at once, and \`create\` prints its id; its answer comes back to
+  you as a message from Wheems when it's done. ${
     options.chief === true
       ? 'Name an agent on your team first to give it the job, as in `wheems session create researcher --title …`; without one, it runs a general member of the team on your engine.'
       : "It runs your own agent, or another of this workspace's agents when you name it first: `wheems session create researcher --title …`."
   }
 
   \`\`\`sh
-  wheems session create --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
+  wheems session create --title "Packaging suppliers" \\
+    --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date." \\
+    --done-when "suppliers.md lists five UK suppliers, each with a price, a minimum order and a link."
   \`\`\`
 
 - Talk to a session with \`wheems session send <id> "…"\`. It's resumed first if it has
@@ -310,7 +333,13 @@ export interface Knowledge {
 /** What the built-ins say about the session an agent runs in. */
 export interface SessionBuiltins {
   /** For an ad-hoc session, replacing the chat instructions. */
-  adhoc?: { title: string; purpose: string; owner: string; ask?: string | null };
+  adhoc?: {
+    title: string;
+    purpose: string;
+    owner: string;
+    ask?: string | null;
+    doneWhen?: string | null;
+  };
   /** For an agent that may start sessions. */
   sessions?: { maxOpen: number; open: OpenSession[] };
   /** For a workspace's chief: its role, and its team. */

@@ -361,8 +361,21 @@ work behind the chief, and it tells you what you need to know.
 Ask your chief "open a session to research packaging suppliers and keep it going", and it runs:
 
 ```bash
-wheems session create --title "Packaging suppliers" --purpose "Find five UK packaging suppliers, with prices and minimum orders."
+wheems session create --title "Packaging suppliers" \
+  --purpose "Find five UK packaging suppliers, with prices and minimum orders." \
+  --done-when "suppliers.md lists five UK suppliers, each with a price, a minimum order and a link."
 ```
+
+- **Every job a chief hands on has a finish line.** `--done-when` says what must be true when
+  it's finished, in things that can be checked: a test that passes, a page that loads, a file
+  that exists. A chief must give one; anyone else may. The session sees it in its instructions,
+  and is told to hand back evidence (what it ran and what that showed, links, files, commits),
+  not "should work".
+- **Each answer comes with the finish line,** to check it against, and a count ("Answer 2 from
+  this session"), whether it's handed back or waited for with `--wait`. The chief sends a job back
+  at most twice. From the third answer, Wheems tells it to
+  stop and bring the job to you, with what was tried and what's missing. That's an instruction
+  for now, not a block, since a chief may also send a session follow-up work.
 
 - The session starts working on its purpose at once, in Herdr, and stays open until it's ended.
   It runs another of the workspace's agents when one is named
@@ -828,7 +841,7 @@ Commands are grouped by area, like Laravel's `php artisan`: `wheems <area> <acti
 
 | Command                                                             | What it does                                                                                         |
 | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `wheems session create [agent] --title --purpose [--workspace]`     | Starts an ad-hoc session, owned by you, and prints its id                                            |
+| `wheems session create [agent] --title --purpose [--done-when]`     | Starts an ad-hoc session, owned by you, and prints its id. A chief must give `--done-when`           |
 | `wheems session list [--mine] [--agent] [--state] [--kind] [--all]` | Sessions in a workspace, most recently active first; open ones unless `--all`                        |
 | `wheems session send <id> "…" [--wait] [--timeout <s>]`             | Sends a message into a session, resuming it if stopped; prints its answer with `--wait`              |
 | `wheems session search "…"`, `show <id>`, `end <id>`                | Finds sessions, shows one with its latest answer and messages, or ends one after asking for its note |
