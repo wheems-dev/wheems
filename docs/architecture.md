@@ -31,7 +31,7 @@ TypeScript first.
   small SQLite store of every session it runs (built) and what's waiting (planned), see
   [Sessions](#sessions).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems chat post updates "…"`,
-  `wheems chat ask approvals "Deploy?"` and `wheems knowledgebase note`. Commands are grouped by
+  `wheems approval request "Deploy?"` and `wheems knowledgebase note`. Commands are grouped by
   area, like `php artisan` ([cli.md](cli.md)), and named in full words (`knowledgebase`, not `kb`);
   short forms are only aliases. It replaces hand-written scripts and hard-coded channel IDs.
 - **The web app** (stage 1 built): a local page the service serves, for setting up, watching sessions,
@@ -354,12 +354,12 @@ Planned, milestone 4. A **project** is any body of work inside a workspace: "Cus
 "Reviews", "Sales leads", "Bookkeeping", or a website with its code. Each has, all optional apart
 from its knowledge base:
 
-- a **lead** (a chief officer for the project), reachable in the project's own Slack channel as
-  well as through the workspace chief;
+- a **lead**: an agent on the chief's team that runs the project's work, which the chief hands
+  jobs to. It has no channel: the person only talks to the chief ([team.md](team.md));
 - its own **knowledge base**, with the same loop as the workspace's: notes, filing, pages, a
   brief, reports and a search index;
 - a **team list**: the workspace agents it may use, plus agents of its own;
-- a **channel**, and session folders of its own.
+- session folders of its own.
 
 A project shares its workspace's accounts, secrets, integrations, rules and skills, and may
 narrow them. **Only workspaces are confidentiality walls.** Projects keep context clean, not
@@ -373,8 +373,7 @@ overseer (later).
 # workspaces/acme/projects/reviews/project.yaml (proposed format)
 name: Reviews
 description: Replies to reviews from the reviews service, and what customers tell us in them.
-lead: lead # agents/lead.md in this project; leave out and the workspace chief covers it
-channel: { connection: slack, channel: acme-reviews }
+lead: lead # agents/lead.md in this project; leave out and the chief hands work to the team itself
 team: [writer] # workspace agents this project may use, besides its own agents/
 skills: [review-replies] # narrows the workspace's skills.yaml
 integrations: [reviews] # narrows the workspace's integrations
@@ -392,18 +391,18 @@ project's card and into the workspace's `knowledge/activity.md`, so the workspac
 happened without anything being posted.
 
 **Cards are generated, never written by an agent.** `knowledge/cards/<project>.md` holds the
-project's name, description, lead, channel, status, a "can answer about" list taken from its brief's
+project's name, description, lead, team, status, a "can answer about" list taken from its brief's
 headings, and the latest lines of activity. Code writes it at `project new`, after each project note
 is filed, and at the nightly tidy, so it can't drift; `wheems configuration validate` reports a card
 without a project or a project without a card. The chief's built-in instructions get a generated
 Projects section at each launch, from the `project.yaml` files.
 
-| Command (planned)                                                                     | What it does                                                                                                                                        |
-| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `wheems project create <name> [--workspace] [--lead template] [--channel] [--folder]` | Creates the folder, `project.yaml`, a lead from a template, an empty knowledge base and the card; creates or checks the channel; validates; commits |
-| `wheems project list`                                                                 | Projects, leads, channels, routing and note counts                                                                                                  |
-| `wheems project rename <old> <new>`                                                   | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                                                  |
-| `wheems project archive <name>`                                                       | Moves it to `projects/_archive/`, marks the card archived and stops its channel. Knowledge is never deleted                                         |
+| Command (planned)                                                         | What it does                                                                                                         |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `wheems project create <name> [--workspace] [--lead template] [--folder]` | Creates the folder, `project.yaml`, a lead from a template, an empty knowledge base and the card; validates; commits |
+| `wheems project list`                                                     | Projects, leads, teams, routing and note counts                                                                      |
+| `wheems project rename <old> <new>`                                       | Moves the folder and rewrites the card, rules and bindings; old sources stay valid                                   |
+| `wheems project archive <name>`                                           | Moves it to `projects/_archive/` and marks the card archived. Knowledge is never deleted                             |
 
 **Routing: search first, ask for jobs.** The workspace chief's `wheems knowledgebase search` covers
 its own pages, the cards, and every project with `routing: search` (the default), with each result
@@ -457,10 +456,9 @@ still no prompt.
 `.wheems/tasks/<id>/work/`), which the install's trust covers. The project's folder is still
 given as an extra folder, since the worktree's git data lives in the project's `.git`.
 
-**Slack.** One app, as now. Each project with a lead gets a channel, `<workspace>-<project>` by
-default, where its lead posts under its own name and icon. `approvals` and `updates` stay one per
-workspace, each post tagged with its project. `wheems project create` creates the channel when the
-app may, and otherwise tells you to create it and invite the app; doctor checks it.
+**Slack.** One app, as now, and no channel per project: the person talks to the chief about any
+project in the chief's own channel. `approvals` and `updates` stay one per workspace, each post
+from the chief and tagged with its project.
 
 ## Sessions
 
@@ -472,8 +470,9 @@ session to talk to. Two kinds of thing are recorded:
 
 - **Standing agents**: each workspace's chief and, from milestone 4, each project's lead. One row
   per agent, written by code from `workspace.yaml` and `project.yaml` at every service start,
-  never by an agent. They're always there, whether a session of theirs is running or not. Their
-  sessions are thread sessions: one per chat thread, as now.
+  never by an agent. They're always there, whether a session of theirs is running or not. A
+  chief's sessions are thread sessions: one per chat thread, as now. A lead works on tasks the
+  chief sends it.
 - **Ad-hoc sessions**: started on the fly for one piece of work, by a chief or by you. "Open a
   session to research packaging suppliers and keep it going" starts one. Each has an owner, a
   title, a purpose and a one-line summary, and stays open until it's ended, so its owner can come
@@ -481,8 +480,9 @@ session to talk to. Two kinds of thing are recorded:
 
 From milestone 5, [tasks](#tasks) are recorded the same way, as sessions of kind `task`.
 
-**Chiefs are the only agents people talk to.** Only a chief (and, from milestone 4, a project's
-lead) has a channel. An ad-hoc session has no channel and no thread of its own, and never posts
+**Chiefs are the only agents people talk to.** Only a chief has a channel, and a chief manages
+and delegates rather than doing the work itself ([team.md](team.md)). Leads, defined agents and
+ad-hoc sessions are its team. An ad-hoc session has no channel and no thread of its own, and never posts
 anywhere: it works behind its owner, and the chief tells you what you need to know from its
 answers, in its own conversation with you. You can still watch any session in Herdr
 (`hc attach`) or with `wheems session show`.
@@ -718,18 +718,18 @@ every judge are all tasks. It's built on the task runner that the filer already 
 
 ### Lifetimes and session folders
 
-| Who                                                     | Lifetime                                                 | Why                                 |
-| ------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------- |
-| Workspace chief                                         | One session per Slack thread, resumable (built)          | You talk to it                      |
-| Project lead                                            | Per thread in its channel; fresh per task when sent work | Tasks don't clutter your threads    |
-| Workers, pair members, judges, routines, workflow steps | Fresh per task                                           | Clean context; runs can be repeated |
-| Ad-hoc sessions                                         | Until ended; stopped when idle, resumed when sent work   | Work you come back to               |
-| Filer                                                   | Fresh per note (built)                                   |                                     |
+| Who                                                     | Lifetime                                               | Why                                 |
+| ------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------- |
+| Workspace chief                                         | One session per Slack thread, resumable (built)        | You talk to it                      |
+| Project lead                                            | Fresh per task, sent by the chief                      | Works behind the chief              |
+| Workers, pair members, judges, routines, workflow steps | Fresh per task                                         | Clean context; runs can be repeated |
+| Ad-hoc sessions                                         | Until ended; stopped when idle, resumed when sent work | Work you come back to               |
+| Filer                                                   | Fresh per note (built)                                 |                                     |
 
 A task goes to a fresh session by default, or to an existing [ad-hoc session](#sessions) when
 `task.md` names one with `session: <id>`.
 
-Agent front matter gains `lifetime: thread | task`: `thread` by default for chiefs and leads,
+Agent front matter gains `lifetime: thread | task`: `thread` by default for chiefs,
 `task` for everyone else. Each agent session gets **its own folder**
 (`.wheems/sessions/<workspace>/<agent>/` for thread agents, `.wheems/tasks/<id>/work/` for
 tasks), so the engine driver writes that agent's instructions file and only its pinned skills
@@ -775,7 +775,7 @@ CRM row, a draft). The result is filed as the session's note, so a task needs no
 2. The runner prepares the agent in the task's own folder and starts it through the runtime
    driver, on the agent's machine, labelled with the task's id.
 3. It follows the session as conversations are followed today: by status, or by answers for
-   engines without status. A permission prompt is posted to `approvals` with the `hc attach` line.
+   engines without status. A permission prompt is told to the chief that sent the task, with the `hc attach` line.
 4. The result is evaluated ([below](#evaluating-tasks)). A result that fails its checks goes back
    to the agent with the reasons, up to the task's retries (two by default); then the task fails.
 5. A session that goes quiet without a result gets one reminder, then fails with `no_result`.

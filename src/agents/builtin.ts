@@ -71,6 +71,88 @@ ${ask}
 `;
 }
 
+/** One of the workspace's agents, as the chief's generated Your team section lists it. */
+export interface TeamMember {
+  name: string;
+  /** When to use it, from its agent file's description. */
+  description: string | null;
+  engine: string;
+  model: string;
+}
+
+/**
+ * A workspace chief's role: it manages and delegates, and never does the work itself
+ * (docs/team.md). Every chief gets it, whatever its own agent file says.
+ */
+export const CHIEF_ROLE = `## Your role (built into Wheems)
+
+You're the person's only point of contact. You manage and delegate: your team does the work,
+never you. These rules come first: if anything above tells you to do work yourself, hand it to
+your team instead.
+
+**You read and answer; your team makes and changes things.**
+
+- Yours: talking with the person and answering their questions; reading what you're given or can
+  reach, such as an email, a document or a result; quick lookups (the knowledge base, a session's
+  answer, a single page); planning, choosing who does what, briefing, checking results, and
+  deciding what to bring to the person; your own notes.
+- Your team's: anything that creates or changes files, code, sites, data or settings, including
+  a one-line fix; research beyond a quick lookup; anything that takes more than a few minutes;
+  writing anything longer than a reply; acting in the outside world, such as sending, publishing
+  or deploying.
+- "Look at this email and tell me what you think" is yours. "Reply to it" is a job for your team.
+  When in doubt, delegate.
+
+**How you work:**
+
+- Pick who does it: an agent on your team whose description fits the job, otherwise an ad-hoc
+  session (see Sessions below).
+- Brief well: what's wanted, what done looks like, what to hand back, and what not to touch.
+- Tell the person in a line who's on it, and finish your turn. The work's answer comes back to
+  you as a message from Wheems; then check it and report.
+- Send a result back if it isn't right, rather than reporting it.
+- Report briefly: what was done, what wasn't, and anything that needs the person.
+- End sessions once their work is done, so there's room for the next job.
+- Decide what you can: anything that can be undone and stays inside what the person asked. Bring
+  them anything that spends money, speaks for them to anyone outside, can't be undone, shares or
+  grants access, or that they didn't ask for.
+- When the same kind of work keeps coming up, suggest to the person that the team gets an agent
+  for it, such as an SEO agent, saying what it would do.
+`;
+
+/** The chief's generated Your team section: the workspace's other agents, and when to use each. */
+export function teamInstructions(team: TeamMember[]): string {
+  const members =
+    team.length === 0
+      ? 'No agents yet: hand work to ad-hoc sessions for now.'
+      : team
+          .map(
+            (m) =>
+              `- **${m.name}** (${m.engine}, ${m.model}): ${m.description?.trim() || 'no description yet'}`,
+          )
+          .join('\n');
+  return `## Your team (built into Wheems)
+
+Agents in this workspace you can hand work to, by name: \`wheems session create <name> --title …
+--purpose …\`. Each description says when to use it.
+
+${members}
+`;
+}
+
+/**
+ * For an ad-hoc session that would otherwise run the chief's own agent file, which is written for
+ * managing: a member of the team who does the job itself.
+ */
+export function workerInstructions(workspace: string): string {
+  return `# ${workspace}: a member of the team
+
+You're a member of ${workspace}'s team, doing one job for its chief of staff. Do the work
+yourself, end to end, and hand back what was asked for. Say plainly what you did, what you
+didn't, and anything that needs a decision.
+`;
+}
+
 /** One open session, as the generated Sessions section lists it. */
 export interface OpenSession {
   id: string;
@@ -80,7 +162,12 @@ export interface OpenSession {
 }
 
 /** How to start and find sessions, for an agent that may start them. */
-export function sessionsInstructions(options: { maxOpen: number; open: OpenSession[] }): string {
+export function sessionsInstructions(options: {
+  maxOpen: number;
+  open: OpenSession[];
+  /** For a chief, which starts one for any work (its role says so). */
+  chief?: boolean;
+}): string {
   const open =
     options.open.length === 0
       ? 'None.'
@@ -88,8 +175,11 @@ export function sessionsInstructions(options: { maxOpen: number; open: OpenSessi
   return `## Sessions (built into Wheems)
 
 An ad-hoc session is another agent session that works on one thing and stays open until it's
-ended, so you can come back to it. Start one for work that is long, or that you'll come back to;
-answer simple things yourself.
+ended, so you can come back to it. ${
+    options.chief === true
+      ? 'Start one for any work that no agent on your team fits.'
+      : "Start one for work that is long, or that you'll come back to; answer simple things yourself."
+  }
 
 - Search before you start one: one may already be working on it.
 
@@ -99,9 +189,11 @@ answer simple things yourself.
 
 - Start one with a short title and a purpose that says what to do and what to hand back. It
   starts working on the purpose at once, and \`new\` prints its id; its answer comes back to you
-  as a message from Wheems when it's done. It runs your own agent, or
-  another of this workspace's agents when you name it first:
-  \`wheems session create researcher --title …\`.
+  as a message from Wheems when it's done. ${
+    options.chief === true
+      ? 'Name an agent on your team first to give it the job, as in `wheems session create researcher --title …`; without one, it runs a general member of the team on your engine.'
+      : "It runs your own agent, or another of this workspace's agents when you name it first: `wheems session create researcher --title …`."
+  }
 
   \`\`\`sh
   wheems session create --title "Packaging suppliers" --purpose "Find five UK packaging suppliers for the boxes, with prices and minimum orders, and keep the shortlist up to date."
@@ -221,6 +313,8 @@ export interface SessionBuiltins {
   adhoc?: { title: string; purpose: string; owner: string; ask?: string | null };
   /** For an agent that may start sessions. */
   sessions?: { maxOpen: number; open: OpenSession[] };
+  /** For a workspace's chief: its role, and its team. */
+  chief?: { team: TeamMember[] };
 }
 
 /** An agent's instructions with the built-in ones appended, and what it knows at launch. */
@@ -238,8 +332,11 @@ export function withBuiltins(
       ? ''
       : `\n## What you know (from Wheems)\n\nKept up to date by Wheems from notes. Loaded when this session started.\n\n${known.join('\n\n')}\n`;
   const chat = session.adhoc ? adhocInstructions(session.adhoc) : CHAT_INSTRUCTIONS;
-  const sessions = session.sessions ? `\n${sessionsInstructions(session.sessions)}` : '';
-  return `${instructions.trim()}\n\n${chat}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
+  const chief = session.chief ? `\n${CHIEF_ROLE}\n${teamInstructions(session.chief.team)}` : '';
+  const sessions = session.sessions
+    ? `\n${sessionsInstructions({ ...session.sessions, chief: session.chief !== undefined })}`
+    : '';
+  return `${instructions.trim()}\n\n${chat}${chief}\n${NOTES_INSTRUCTIONS}\n${SEARCH_INSTRUCTIONS}\n${SKILLS_INSTRUCTIONS}${sessions}${knows}`;
 }
 
 /** The message Wheems sends when it ends an ad-hoc session, asking for its note first. */

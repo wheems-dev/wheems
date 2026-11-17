@@ -204,6 +204,11 @@ describe('wheems session', () => {
     expect(instructions).toContain('You\'re an ad-hoc session, "Packaging suppliers"');
     expect(instructions).toContain('> Find five packaging suppliers.');
     expect(instructions).not.toContain('Talking to the person');
+    // Without a named agent it runs on the chief's engine as a member of the team, not as the
+    // chief, whose file is written for managing.
+    expect(instructions).toContain("You're a member of Personal's team");
+    expect(instructions).not.toContain('chief of staff for Personal');
+    expect(instructions).not.toContain('Your role (built into Wheems)');
     // Started by the person, one level deep: it may start one more level.
     expect(instructions).toContain('## Sessions (built into Wheems)');
     expect(existsSync(join(home, 'workspaces', 'personal', 'AGENTS.md'))).toBe(false);
@@ -212,6 +217,36 @@ describe('wheems session', () => {
     const show = await wheems(['session', 'show', id!]);
     expect(show.out).toContain('Latest answer:\nanswer: Find five packaging suppliers.');
     expect(show.out).toContain(`Watch it: hc attach ${live!.id}`);
+  });
+
+  it('tells the chief its role and its team, and a team agent keeps its own role', async () => {
+    await service?.stop();
+    const agents = join(home, 'workspaces', 'personal', 'agents');
+    const chiefFile = readFileSync(join(agents, 'chief-of-staff.md'), 'utf8');
+    const front = chiefFile.slice(0, chiefFile.indexOf('\n---\n', 4) + 5);
+    writeFileSync(
+      join(agents, 'developer.md'),
+      front.replace(
+        /^description: .*$/m,
+        'description: Builds and fixes the website. Use for any code.',
+      ) + '\n# Developer\n\nYou build and fix the website.\n',
+    );
+    await start();
+    await chiefThread();
+    const chief = readFileSync(join(home, 'workspaces', 'personal', 'AGENTS.md'), 'utf8');
+    expect(chief).toContain('## Your role (built into Wheems)');
+    expect(chief).toContain('**You read and answer; your team makes and changes things.**');
+    expect(chief).toMatch(
+      /## Your team \(built into Wheems\)[\s\S]*- \*\*developer\*\* \(claude-code, [^)]+\): Builds and fixes the website\. Use for any code\./,
+    );
+    expect(chief).not.toContain('answer simple things yourself');
+    expect(chief).toContain('without one, it runs a general member of the team');
+
+    const job = await newSession('checkout fix', {}, ['developer']);
+    const own = readFileSync(join(job.folder!, 'AGENTS.md'), 'utf8');
+    expect(own).toContain('You build and fix the website.');
+    expect(own).not.toContain('Your role (built into Wheems)');
+    expect(own).not.toContain('Your team (built into Wheems)');
   });
 
   it('lists and searches sessions in the workspace', async () => {
