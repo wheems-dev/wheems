@@ -1,5 +1,13 @@
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { AgentDefinition, EngineContext } from '../src/contracts/engine.js';
@@ -65,8 +73,35 @@ describe('claude-code engine', () => {
       'personal-chief-of-staff',
       '--permission-mode',
       'auto',
+      '--settings',
+      expect.any(String) as string,
       '--',
       '-v hello',
+    ]);
+    // None of the person's own CLAUDE.md files: their own, and any in a folder above.
+    const settings = JSON.parse(plan.command.at(-3) ?? '') as { claudeMdExcludes: string[] };
+    expect(settings.claudeMdExcludes).toContain(
+      join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude'), 'CLAUDE.md'),
+    );
+    expect(settings.claudeMdExcludes).toEqual(
+      expect.arrayContaining([
+        '/home/me/wheems/workspaces/CLAUDE.md',
+        '/home/me/wheems/CLAUDE.local.md',
+        '/home/me/.claude/CLAUDE.md',
+        '/CLAUDE.md',
+      ]),
+    );
+    // Never the one Wheems writes in the session's folder.
+    expect(settings.claudeMdExcludes).not.toContain(
+      '/home/me/wheems/workspaces/personal/CLAUDE.md',
+    );
+    expect(
+      await new ClaudeCodeEngine({ configDir: '/elsewhere/.claude' }).othersInstructions('/a'),
+    ).toEqual([
+      '/elsewhere/.claude/CLAUDE.md',
+      '/CLAUDE.md',
+      '/CLAUDE.local.md',
+      '/.claude/CLAUDE.md',
     ]);
     expect(plan.cwd).toBe(context.sessionDir);
     expect(plan.env).toEqual({ CLAUDE_CODE_FORCE_SESSION_PERSISTENCE: '1' });
@@ -74,6 +109,64 @@ describe('claude-code engine', () => {
       { path: 'AGENTS.md', content: expect.stringContaining('# Chief of staff') as string },
       { path: 'CLAUDE.md', content: expect.stringMatching(/^@AGENTS\.md$/m) as string },
     ]);
+  });
+
+  it('excludes the files above a session reached through a symlink, by their real paths too', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'wheems-link-')));
+    try {
+      mkdirSync(join(root, 'real', 'wheems'), { recursive: true });
+      symlinkSync(join(root, 'real'), join(root, 'link'));
+      // The session's folder needn't exist yet.
+      const excluded = await new ClaudeCodeEngine({
+        configDir: join(root, 'link', 'conf'),
+      }).othersInstructions(join(root, 'link', 'wheems', 'sessions', 'new'));
+      expect(excluded).toEqual(
+        expect.arrayContaining([
+          join(root, 'link', 'conf', 'CLAUDE.md'),
+          join(root, 'real', 'conf', 'CLAUDE.md'),
+          join(root, 'link', 'wheems', 'CLAUDE.md'),
+          join(root, 'real', 'wheems', 'CLAUDE.md'),
+          join(root, 'real', 'CLAUDE.md'),
+        ]),
+      );
+      expect(excluded).not.toContain(join(root, 'real', 'wheems', 'sessions', 'new', 'CLAUDE.md'));
+      expect(new Set(excluded).size).toBe(excluded.length);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("hides the person's own skills, but never Wheems's", async () => {
+    const config = mkdtempSync(join(tmpdir(), 'wheems-claude-config-'));
+    try {
+      const skill = (folder: string, text: string) => {
+        mkdirSync(join(config, 'skills', folder), { recursive: true });
+        writeFileSync(join(config, 'skills', folder, 'SKILL.md'), text);
+      };
+      skill('wrap-up', '---\nname: wrap-up\ndescription: Notes.\n---\n');
+      skill('odd-folder', '---\nname: "other-name"\ndescription: x\n---\n');
+      skill('wheems-notes', '---\nname: wheems-notes\n---\n');
+      mkdirSync(join(config, 'skills', 'synced', 'nested'), { recursive: true });
+      const engine = new ClaudeCodeEngine({ configDir: config });
+      expect(await engine.ownSkills()).toEqual(['odd-folder', 'other-name', 'wrap-up']);
+      const plan = await engine.prepare(agent, context);
+      const settings = JSON.parse(plan.command.at(-3) ?? '') as {
+        skillOverrides: Record<string, string>;
+        claudeMdExcludes: string[];
+      };
+      expect(settings.skillOverrides).toEqual({
+        'odd-folder': 'off',
+        'other-name': 'off',
+        'wrap-up': 'off',
+      });
+      expect(settings.claudeMdExcludes[0]).toBe(join(config, 'CLAUDE.md'));
+      // Without a skills folder, nothing is hidden.
+      expect(await new ClaudeCodeEngine({ configDir: join(config, 'none') }).ownSkills()).toEqual(
+        [],
+      );
+    } finally {
+      rmSync(config, { recursive: true, force: true });
+    }
   });
 
   it('resumes by session id', async () => {
@@ -88,7 +181,7 @@ describe('claude-code engine', () => {
   it('maps permission levels to Claude Code flags', async () => {
     const engine = new ClaudeCodeEngine();
     const flags = async (permissions: AgentDefinition['permissions']) =>
-      (await engine.prepare({ ...agent, permissions }, context)).command.slice(7, -2);
+      (await engine.prepare({ ...agent, permissions }, context)).command.slice(7, -4);
     expect(await flags('ask')).toEqual([]);
     expect(await flags('auto')).toEqual(['--permission-mode', 'auto']);
     expect(await flags('skip')).toEqual(['--dangerously-skip-permissions']);
