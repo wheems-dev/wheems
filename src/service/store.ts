@@ -10,7 +10,7 @@ import type {
 export type { Conversation } from '../state/store.js';
 
 /**
- * Remembers each conversation (one per chat thread) in the session store. Node's SQLite is
+ * Remembers each conversation (one per chat thread) in the session store. SQLite is
  * synchronous and only the service writes to the store, so every read sees every earlier
  * write, and each change is one transaction.
  */

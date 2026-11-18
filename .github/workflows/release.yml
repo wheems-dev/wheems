@@ -93,12 +93,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run check
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run check
 
   publish:
     name: Publish v${{ needs.version.outputs.version }}
@@ -121,10 +120,13 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      # Only for npm itself, which publishes through npm's trusted publishing.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          cache: npm
 
       - name: Publish to npm
         if: needs.version.outputs.publish == 'true'
@@ -136,8 +138,9 @@ jobs:
           fi
           # Trusted publishing needs npm 11.5.1 or later; Node 22 comes with npm 10.
           npm install -g npm@^11.5.1
-          npm ci
-          # prepublishOnly runs clean and the full check again before anything is uploaded.
+          bun install --frozen-lockfile
+          # prepublishOnly runs clean and the full check again, with Bun, before anything is
+          # uploaded.
           npm publish
 
       - name: Tag

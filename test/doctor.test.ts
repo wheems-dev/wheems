@@ -74,12 +74,12 @@ describe('doctor', () => {
       ...probes,
       home,
       registry: registryWith().registry,
-      nodeVersion: '22.16.0',
+      bunVersion: '1.4.4',
       platform: 'darwin',
     });
     expect(report.ok).toBe(true);
     expect(statuses(report)).toEqual({
-      System: ['pass Node.js', 'pass SQLite search', 'pass platform'],
+      System: ['pass Bun', 'pass SQLite search', 'pass platform'],
       'Herdr core': ['pass hc installed', 'pass hc version', 'pass Herdr core', 'pass round trip'],
       Config: ['skip install'],
     });
@@ -96,7 +96,7 @@ describe('doctor', () => {
       home,
       registry: registryWith().registry,
       quick: true,
-      nodeVersion: '22.16.0',
+      bunVersion: '1.4.4',
       platform: 'linux',
     });
     const platform = report.sections[0]?.checks.find((c) => c.name === 'platform');
@@ -105,7 +105,7 @@ describe('doctor', () => {
     expect(report.ok).toBe(true);
   });
 
-  it('fails on Node 23, and on a Node whose SQLite has no full-text search', async () => {
+  it('fails on Node.js, and on a SQLite with no full-text search', async () => {
     const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
@@ -121,17 +121,17 @@ describe('doctor', () => {
       });
       return report.sections.find((s) => s.title === 'System')?.checks ?? [];
     };
-    const node23 = await system({ nodeVersion: '23.11.0' });
-    expect(node23[0]).toMatchObject({ name: 'Node.js', status: 'fail' });
-    expect(node23[0]?.message).toMatch(/no Node 23 release has SQLite full-text search/);
-    expect(node23[0]?.hint).toMatch(/22\.16 or later in the 22 line, or 24 or later/);
+    const node = await system({ bunVersion: null });
+    expect(node[0]).toMatchObject({ name: 'Bun', status: 'fail' });
+    expect(node[0]?.message).toMatch(/Wheems runs on Bun, not Node\.js/);
+    expect(node[0]?.hint).toMatch(/Bun 1\.4\.4 or later: curl -fsSL https:\/\/bun\.sh\/install/);
 
     const noFts = await system({
-      nodeVersion: '24.1.0',
-      fullTextSearch: () => Promise.resolve('This Node.js has SQLite without full-text search'),
+      bunVersion: '1.4.4',
+      fullTextSearch: () => Promise.resolve('This runtime has SQLite without full-text search'),
     });
     expect(noFts.map((c) => `${c.status} ${c.name}`)).toEqual([
-      'pass Node.js',
+      'pass Bun',
       'fail SQLite search',
       'pass platform',
     ]);
@@ -157,7 +157,7 @@ describe('doctor', () => {
     expect(statuses(report)['Herdr core']).not.toContain('pass round trip');
   });
 
-  it('fails on an old Node.js, an old hc and config errors', async () => {
+  it('fails on an old Bun, an old hc and config errors', async () => {
     const home = mkdtempSync(join(tmpdir(), 'wheems-home-'));
     cleanups.push(() => {
       rmSync(home, { recursive: true, force: true });
@@ -167,12 +167,12 @@ describe('doctor', () => {
       ...probes,
       home,
       registry: registryWith().registry,
-      nodeVersion: '20.19.0',
+      bunVersion: '1.3.0',
       platform: 'win32',
     });
     expect(report.ok).toBe(false);
     expect(statuses(report)).toEqual({
-      System: ['fail Node.js', 'pass SQLite search', 'warn platform'],
+      System: ['fail Bun', 'pass SQLite search', 'warn platform'],
       // install.yaml failed to parse, so the pin in it does not apply.
       'Herdr core': ['pass hc installed', 'pass hc version', 'pass Herdr core', 'pass round trip'],
       Config: ['fail install', 'fail install.yaml:2'],

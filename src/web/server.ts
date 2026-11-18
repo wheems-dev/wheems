@@ -117,7 +117,8 @@ export async function startWeb(options: WebOptions): Promise<RunningWeb> {
     log: options.log ?? (() => undefined),
     outcomes: new Map<string, Flash>(),
     sendWaitMs: options.sendWaitMs,
-    appDir: options.appDir ?? fileURLToPath(new URL('./app/', import.meta.url)),
+    // Built by `bun run build`, beside the source: dist/web/app in the package.
+    appDir: options.appDir ?? fileURLToPath(new URL('../../dist/web/app/', import.meta.url)),
   };
   const server = createServer((req, res) => {
     handle(req, res, web).catch((error: unknown) => {

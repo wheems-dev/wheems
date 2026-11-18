@@ -1,39 +1,14 @@
 import { existsSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
-import { NODE_SUPPORTED } from './node-support.js';
+import { BUN_SUPPORTED } from './bun-support.js';
 
 type Sqlite = typeof import('node:sqlite');
 
 let loaded: Promise<Sqlite> | undefined;
 
-/**
- * Node's built-in SQLite, loaded without its "experimental" warning, which would otherwise
- * be printed by every `wheems` command that touches the search index. Only that one warning
- * is hidden.
- */
+/** SQLite, through Bun's `node:sqlite`, loaded once, when first needed. */
 export function sqlite(): Promise<Sqlite> {
-  loaded ??= (async () => {
-    const emit = process.emitWarning.bind(process);
-    process.emitWarning = (warning: string | Error, ...rest: unknown[]) => {
-      const text = typeof warning === 'string' ? warning : warning.message;
-      const first = rest[0];
-      const type =
-        typeof first === 'string'
-          ? first
-          : typeof first === 'object' && first !== null && 'type' in first
-            ? String(first.type)
-            : typeof warning === 'string'
-              ? undefined
-              : warning.name;
-      if (type === 'ExperimentalWarning' && /SQLite/i.test(text)) return;
-      (emit as (...args: unknown[]) => void)(warning, ...rest);
-    };
-    try {
-      return await import('node:sqlite');
-    } finally {
-      process.emitWarning = emit;
-    }
-  })();
+  loaded ??= import('node:sqlite');
   return loaded;
 }
 
@@ -87,13 +62,13 @@ export async function fullTextSearchProblem(
   try {
     db = open ? await open() : new (await sqlite()).DatabaseSync(':memory:');
   } catch (error) {
-    return `Node's SQLite isn't available: ${describe(error)}. Use ${NODE_SUPPORTED}.`;
+    return `SQLite isn't available: ${describe(error)}. Use ${BUN_SUPPORTED}.`;
   }
   try {
     db.exec('CREATE VIRTUAL TABLE probe USING fts5(text)');
     return null;
   } catch (error) {
-    return `This Node.js (${process.versions.node}, ${process.execPath}) has SQLite without full-text search (FTS5), which Wheems's search needs (${describe(error)}). Use ${NODE_SUPPORTED}, from nodejs.org or a package that bundles Node's own SQLite.`;
+    return `This runtime (${process.execPath}) has SQLite without full-text search (FTS5), which Wheems's search needs (${describe(error)}). Use ${BUN_SUPPORTED}.`;
   } finally {
     db.close();
   }
@@ -101,7 +76,7 @@ export async function fullTextSearchProblem(
 
 let checked: Promise<string | null> | undefined;
 
-/** Throws a plain explanation when this Node's SQLite has no full-text search. Checks once. */
+/** Throws a plain explanation when this SQLite has no full-text search. Checks once. */
 export async function requireFullTextSearch(): Promise<void> {
   checked ??= fullTextSearchProblem();
   const problem = await checked;

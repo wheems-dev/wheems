@@ -10,7 +10,7 @@ import { runCommand, startDetached, type RunResult } from '../util/process.js';
 export const LABEL = 'dev.wheems.service';
 
 export interface ServiceSpec {
-  node: string;
+  bun: string;
   cli: string;
   home: string;
   logFile: string;
@@ -20,10 +20,10 @@ export function plistPath(): string {
   return join(homedir(), 'Library', 'LaunchAgents', `${LABEL}.plist`);
 }
 
-/** The PATH the service runs with: this Node.js first, then where hc and claude usually live. */
-export function servicePath(node: string): string {
+/** The PATH the service runs with: this Bun first, then where hc and claude usually live. */
+export function servicePath(bun: string): string {
   return [
-    dirname(node),
+    dirname(bun),
     join(homedir(), '.local', 'bin'),
     '/opt/homebrew/bin',
     '/usr/local/bin',
@@ -39,7 +39,7 @@ export function servicePath(node: string): string {
  * and disk, which made the service take ten seconds to start rather than one.
  */
 export function renderPlist(spec: ServiceSpec): string {
-  const args = [spec.node, spec.cli, 'service', 'run', '--home', spec.home];
+  const args = [spec.bun, spec.cli, 'service', 'run', '--home', spec.home];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -53,7 +53,7 @@ ${args.map((a) => `    <string>${xml(a)}</string>`).join('\n')}
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>${xml(servicePath(spec.node))}</string>
+    <string>${xml(servicePath(spec.bun))}</string>
     <key>WHEEMS_HOME</key>
     <string>${xml(spec.home)}</string>
   </dict>
