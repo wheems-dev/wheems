@@ -22,7 +22,7 @@ const CIRCLES: Partial<Record<keyof typeof PATHS, [number, number, number]>> = {
   person: [12, 8, 4],
 };
 
-export function Icon({ name, size = 18 }: { name: keyof typeof PATHS; size?: number }) {
+export function Icon({ name, size = 16 }: { name: keyof typeof PATHS; size?: number }) {
   const circle = CIRCLES[name];
   return (
     <svg
@@ -46,7 +46,7 @@ export function Icon({ name, size = 18 }: { name: keyof typeof PATHS; size?: num
 
 export function Logo() {
   return (
-    <svg width="30" height="25" viewBox="78 94 372 306" aria-hidden="true">
+    <svg width="25" height="21" viewBox="78 94 372 306" aria-hidden="true">
       <path
         className="cloud"
         d="M170 400C116 400 78 364 78 315C78 278 100 248 132 234C124 195 148 158 183 158C195 158 208 162 220 170C230 123 267 94 311 94C370 94 414 138 414 200C414 222 408 243 396 259C430 271 450 296 450 326C450 369 415 400 372 400Z"

@@ -152,7 +152,7 @@ function Detail({ workspace, session }: { workspace: string; session: string }) 
       <FlashBanner flash={flash} />
       <div className="stack">
         <SessionBadge session={s} />
-        <h2 style={{ fontSize: 22, fontWeight: 800 }}>{item.label}</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 800 }}>{item.label}</h2>
         <span className="mono muted small">
           {s.id}
           {s.herdrName !== null && ` · ${s.herdrName} in Herdr`}

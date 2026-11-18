@@ -135,7 +135,8 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  line-height: 1.45;
+  line-height: 1.5;
+  font-size: 14px;
 }
 a {
   color: var(--link);
@@ -149,18 +150,18 @@ a:hover {
   min-height: 100vh;
 }
 .side {
-  flex: 1 1 240px;
+  flex: 1 1 220px;
   max-width: 100%;
-  padding: 20px 16px;
+  padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   border-right: 1px solid var(--line);
 }
 .mainp {
   flex: 999 1 560px;
   min-width: 0;
-  padding: 32px clamp(16px, 4vw, 48px) 48px;
+  padding: 24px clamp(16px, 3vw, 36px) 40px;
   background: var(--main);
 }
 /* Side by side, only the content scrolls: the sidebar stays in view, scrolling on its own when
@@ -170,7 +171,7 @@ a:hover {
     flex-wrap: nowrap;
   }
   .side {
-    flex: 0 0 240px;
+    flex: 0 0 216px;
     position: sticky;
     top: 0;
     align-self: flex-start;
@@ -180,19 +181,19 @@ a:hover {
   }
 }
 .wrap {
-  max-width: 1080px;
+  max-width: 1240px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px;
+  gap: 8px;
+  padding: 2px 6px;
   font-weight: 800;
-  font-size: 17px;
+  font-size: 15px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -212,11 +213,11 @@ a:hover {
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 8px 10px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   cursor: pointer;
 }
@@ -228,15 +229,15 @@ a:hover {
 }
 .switcher .menu {
   position: absolute;
-  top: 62px;
+  top: 50px;
   left: 0;
   right: 0;
   z-index: 5;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 12px 32px var(--shadow);
-  padding: 6px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -244,9 +245,9 @@ a:hover {
 .mi {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 10px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
   border-radius: 8px;
   color: var(--ink);
   text-decoration: none;
@@ -257,14 +258,14 @@ a:hover {
 }
 .av {
   flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
   background: var(--ws-bg);
   color: var(--ws-ink);
 }
@@ -273,10 +274,10 @@ a:hover {
   color: var(--inv-ink);
 }
 .av.big {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  font-size: 22px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 17px;
 }
 .nav {
   display: flex;
@@ -286,14 +287,14 @@ a:hover {
 .nav a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
   color: var(--ink);
   text-decoration: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 .nav a:hover {
   background: var(--navhover);
@@ -304,35 +305,36 @@ a:hover {
   color: var(--inv-ink);
 }
 .navlabel {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 14px 12px 4px;
+  padding: 12px 10px 2px;
 }
 .foot {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
   background: var(--chip);
+  font-size: 12.5px;
 }
 .theme {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
   font-family: inherit;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12.5px;
   cursor: pointer;
 }
 .theme:hover {
@@ -341,10 +343,10 @@ a:hover {
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
 }
 .pad {
-  padding: 20px;
+  padding: 16px;
 }
 .notice {
   background: var(--notice);
@@ -360,22 +362,22 @@ a:hover {
   color: var(--soft);
 }
 .small {
-  font-size: 13px;
+  font-size: 12.5px;
 }
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 700;
 }
 h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 p {
@@ -385,7 +387,7 @@ p {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .between {
   justify-content: space-between;
@@ -397,19 +399,23 @@ p {
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
 }
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+/* A badge keeps its own width, even as the only thing in a column. */
+.stack > .badge {
+  align-self: flex-start;
 }
 .ok {
   background: var(--ok-bg);
@@ -434,13 +440,13 @@ p {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 12px;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
   text-decoration: none;
@@ -462,34 +468,34 @@ p {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--sunk);
 }
 .stat b {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
 }
 .stat span {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--soft);
 }
 .stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .tag {
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border-radius: 7px;
   background: var(--sunk);
 }
 .tree {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 9px 16px;
   text-decoration: none;
   color: var(--ink);
   border-top: 1px solid var(--hair);
@@ -523,18 +529,18 @@ p {
 .group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 12px 16px;
   font-weight: 800;
 }
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  padding: 14px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
   background: var(--sunk);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 .facts span:first-child {
   color: var(--soft);
@@ -545,51 +551,51 @@ p {
 }
 .msg {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 .msg .av {
-  font-size: 12px;
+  font-size: 11px;
 }
 .msg pre {
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 .split {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
   align-items: flex-start;
 }
 .split > .list {
-  flex: 1 1 320px;
+  flex: 1 1 300px;
   min-width: 0;
   overflow: hidden;
 }
 .split > .detail {
   flex: 2 1 420px;
   min-width: 0;
-  padding: 24px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 .check {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 10px 16px;
   border-top: 1px solid var(--hair);
-  font-size: 14px;
+  font-size: 13px;
 }
 .check .grow {
   flex: 1 1 300px;
 }
 .empty {
-  padding: 20px;
+  padding: 16px;
   color: var(--muted);
 }
 .code {
@@ -602,9 +608,9 @@ p {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--hair);
-  font-size: 14px;
+  font-size: 13px;
 }
 .kv span:first-child {
   color: var(--muted);
@@ -616,12 +622,12 @@ p {
 }
 .preview {
   margin: 0;
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
   background: #202735;
   color: #e7e9ef;
   font:
-    400 13px/1.6 'IBM Plex Mono',
+    400 12.5px/1.6 'IBM Plex Mono',
     ui-monospace,
     monospace;
   white-space: pre-wrap;
@@ -636,13 +642,13 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
   font-family: inherit;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   border: 1px solid var(--field-line);
   background: var(--surface);
@@ -670,13 +676,13 @@ p {
 }
 .field {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
   border: 1px solid var(--field-line);
   background: var(--main);
   color: var(--ink);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 textarea.field {
   resize: vertical;
@@ -697,7 +703,7 @@ textarea.field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 28px;
 }
 .flash.ok {
   border-color: var(--ok);
@@ -715,14 +721,14 @@ textarea.field {
   z-index: 4;
 }
 .loading {
-  padding: 20px;
+  padding: 16px;
   color: var(--muted);
 }
 .live {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 .live::before {
@@ -744,17 +750,17 @@ button.tree {
 .msg-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .switcher-button {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 56px;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
