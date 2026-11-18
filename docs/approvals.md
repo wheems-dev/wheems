@@ -1,9 +1,9 @@
 # Approvals and updates
 
-**Status: proposal, not built.** This is the design for the second half of milestone 3: work that
-waits for a decision before going on, and updates that need no answer. The first half is built:
-the session store, `wheems session` and handovers, and onboarding by inviting the app to a
-channel.
+**Status: built** (unreleased), apart from what [What was built](#what-was-built) says. This is
+the design for the second half of milestone 3: work that waits for a decision before going on,
+and updates that need no answer. The first half was built before it: the session store,
+`wheems session` and handovers, and onboarding by inviting the app to a channel.
 
 The one rule it follows: **the person only ever deals with the chief of staff.** Sub-agents
 (defined agents, project leads and ad-hoc sessions) never post to, ask or chat with the person.
@@ -85,9 +85,9 @@ How the line is drawn and kept:
   person trusts it: `approvals: { chief_decides: [speaking] }` in `workspace.yaml`. It can also
   name single actions with rules. Only the person changes this. The chief can't widen its own
   authority.
-- **The person sees every decision the chief made.** A short daily list ("Decisions I made today:
-  merged the checkout fix to staging for the developer, …") goes to `updates`, or to the chat
-  channel without one. That way a bad call is noticed, and the person learns where to widen or
+- **The person sees every decision the chief made.** A short daily list ("Decisions I made since
+  my last list: Approve on "Merge the checkout fix to staging?", for developer, …") goes to
+  `updates`, or to the chat channel without one, each evening after six, local time. That way a bad call is noticed, and the person learns where to widen or
   narrow the chief's authority. It's also the record a later "shadow mode" for decisions can
   learn from.
 
@@ -194,6 +194,8 @@ it to schema version 7. Each one keeps:
   - who answered (the chief or the person) and how (Slack, the web app or a terminal);
   - when it was asked, escalated, answered and delivered, and when it expires.
 
+**Ids** are six hex digits, such as `a1b2c3`, short enough to type in a reply.
+
 **After a restart** nothing is lost. The buttons carry only the approval's id and the choice, and
 everything else is read from the store. Requests still waiting can still be answered. Any that
 expired while the service was down are expired when it starts. Answers that hadn't reached their
@@ -218,34 +220,35 @@ The design keeps the record ready for real enforcement:
 The docs and the built-in instructions say this plainly
 ([architecture.md](architecture.md#guardrails-that-work-with-any-engine)).
 
-## What it needs
+## What was built
 
-1. **The store and the service.** The `approvals` table and its migration, asking, answering,
-   escalating and withdrawing, expiry checked each minute and at start, and delivery through the
-   hand-back.
-2. **The CLI.** The `approval` area, `chat post`, the built-in instructions for chiefs and for
-   sub-agents, and the README.
-3. **The Slack driver's buttons.** Posts get an `actions` block, the Socket Mode transport passes
-   `interactive` envelopes on, and a `block_actions` press becomes a `button` event. The app
-   manifest already turns interactivity on. Apps made from an older manifest need it switched on,
-   which doctor can't check, so the first approval tests it.
-4. **Changing a post.** The channel contract gets an optional `update(message, change)`, which
-   Slack does with `chat.update`. Drivers without it reply under the post instead.
-5. **The web app, stage 2.** What's waiting and the history, on Review.
-6. **Sub-agents stuck at a prompt.** When Herdr says a sub-agent's session is `blocked`, its
-   chief is told, with the `hc attach` line, and decides whether the person needs to know. A
-   chief stuck at a prompt already says so in its thread.
+1. **The store and the service.** The `approvals` table (schema 7), and `src/service/approvals.ts`:
+   asking, answering, escalating and withdrawing, expiry checked each minute and at start, and
+   delivery as a hand-back (`notify` in `src/service/sessions.ts`), so a restart delivers again
+   what hadn't arrived. Posts for the person go through `src/service/poster.ts`, which also
+   serves `chat post`.
+2. **The CLI.** The `approval` area, `chat post`, the chief's **Decisions** section and the
+   worker's rule, always loaded, and the `wheems-approvals` skill, worded for each
+   ([instructions.md](instructions.md)).
+3. **The Slack driver's buttons.** An `actions` block under the post, a mention of the person,
+   presses from `interactive` envelopes, and `chat.update` to change the post
+   ([drivers.md](drivers.md)). Wheems's manifest has always turned Interactivity on; an app set
+   up by hand needs it switched on, which the first approval tests.
+4. **Changing a post.** The channel contract's optional `update(message, change)`; drivers
+   without it get a reply under the post.
+5. **The web app, stage 2.** Review shows what's waiting, answered with a button, and the
+   history ([web-app.md](web-app.md)).
+6. **Sub-agents stuck at a prompt.** Not as designed. A sub-agent's session that Herdr says is
+   `blocked` was already stopped by Wheems, to keep its answers in order, and its owner told; the
+   hand-back now says it was a question from its engine, such as a permission, and that what only
+   the person can allow is theirs to decide. Keeping it blocked with an `hc attach` line for the
+   person would hold the session's messages for as long as nobody answers.
 
-### In pull requests
+Answering in words (`approve a1b2c3`) works on every channel, not only those without buttons:
+a reply from the person in that form is taken as the answer, and not passed to the chief.
 
-1. The store and the CLI: request, answer, escalate, withdraw and expiry, tested with the memory
-   channel, which already has buttons.
-2. Slack buttons and changing a post, then a live test on wheems-live.
-3. `chat post`, the `approvals` and chat fallbacks, and notices for stuck sub-agents.
-4. Web app stage 2.
-
-Milestone 3's test then becomes: a developer agent asks before merging, the chief brings it to the
-person's phone, one tap answers it, and the work carries on.
+Milestone 3's test is still to come: a developer agent asks before merging, the chief brings it
+to the person's phone, one tap answers it, and the work carries on.
 
 ## Open questions
 

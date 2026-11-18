@@ -15,6 +15,19 @@
  */
 import { z } from 'zod';
 
+/**
+ * The five kinds of decision that are the person's (docs/approvals.md). A workspace can leave
+ * some of them to its chief with `approvals.chief_decides`.
+ */
+export const APPROVAL_CATEGORIES = [
+  'money',
+  'speaking',
+  'irreversible',
+  'access',
+  'outside',
+] as const;
+export type ApprovalCategory = (typeof APPROVAL_CATEGORIES)[number];
+
 export const nameSchema = z
   .string()
   .regex(
@@ -260,6 +273,17 @@ export const workspaceSchema = z.strictObject({
     .describe(
       "The name and icon the workspace's posts appear under, where the channel supports it.",
     ),
+  approvals: z
+    .strictObject({
+      chief_decides: z
+        .array(z.enum(APPROVAL_CATEGORIES))
+        .default([])
+        .describe(
+          "Kinds of decision that are usually the person's, left to the chief in this workspace: `money`, `speaking` (for the person, to anyone outside), `irreversible`, `access` and `outside` (the ask). Only the person changes this.",
+        ),
+    })
+    .default({ chief_decides: [] })
+    .describe('Which decisions the chief of staff makes, and which it brings to the person.'),
   rules: z
     .array(ruleSchema)
     .default([])

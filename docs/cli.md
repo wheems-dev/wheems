@@ -68,8 +68,8 @@ appears without being added there on purpose. Everything else goes under an area
 | `workspace` (`ws` for short) | ✓ `list [--archived]`, `show`, `create`, `rename`, `archive`, `restore`, `remove` |
 | `session`                    | ✓ `list`, `search`, `show`, `create`, `send`, `end`                               |
 | `knowledgebase`              | ✓ `search`, `note`, `reindex`                                                     |
-| `chat`                       | ✓ `reply`; ○ `post <channel>` (M3, chiefs only)                                   |
-| `approval`                   | ○ `list`, `show`, `request`, `answer`, `escalate`, `withdraw` (M3)                |
+| `chat`                       | ✓ `reply`, `post <channel>` (chiefs and you)                                      |
+| `approval`                   | ✓ `list`, `show`, `request`, `answer`, `escalate`, `withdraw`                     |
 | `skill`                      | ✓ `list`, `show`, `propose`; ○ `add`, `remove`                                    |
 | `channel`                    | ✓ `list`, `connect <driver>`, `manifest <driver>`                                 |
 | `engine`                     | ✓ `list`, `install`, `login`, `trust`                                             |

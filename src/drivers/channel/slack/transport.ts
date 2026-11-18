@@ -12,7 +12,10 @@ export type SlackResult = Record<string, unknown> & { ok: boolean; error?: strin
  * calls out. The real one wraps Slack's own clients; tests use a fake.
  */
 export interface SlackTransport {
-  /** Connects and delivers each event. Events are acknowledged before delivery. */
+  /**
+   * Connects and delivers each event, and each button press as a `block_actions` event. Both
+   * are acknowledged before delivery.
+   */
   start(onEvent: (event: SlackEvent) => Promise<void>): Promise<void>;
   stop(): Promise<void>;
   /**
@@ -92,7 +95,7 @@ export interface SlackTokens {
 interface Envelope {
   ack: () => Promise<void>;
   type: string;
-  body?: { event?: SlackEvent };
+  body?: { event?: SlackEvent; type?: unknown };
 }
 
 /** The real transport: Socket Mode (no public URL needed) and the Web API. */
@@ -122,8 +125,12 @@ export class SocketModeTransport implements SlackTransport {
     try {
       // Acknowledge first: Slack resends events that are not acknowledged within 3 seconds.
       await envelope.ack();
-      if (envelope.type === 'events_api' && envelope.body?.event)
+      if (envelope.type === 'events_api' && envelope.body?.event) {
         await onEvent(envelope.body.event);
+      } else if (envelope.type === 'interactive' && envelope.body?.type === 'block_actions') {
+        // A press of a button on one of the app's posts: its payload, as an event.
+        await onEvent({ ...envelope.body, type: 'block_actions' });
+      }
     } catch {
       // The driver handles its own errors; a failed acknowledgement means Slack resends.
     }

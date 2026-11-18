@@ -63,6 +63,8 @@ export class FakeSlack implements SlackTransport {
         return Promise.resolve({ ok: true, user: 'wheems', user_id: 'UBOT', team: 'Test team' });
       case 'chat.postMessage':
         return Promise.resolve({ ok: true, channel: args.channel, ts: this.nextTs() });
+      case 'chat.update':
+        return Promise.resolve({ ok: true, channel: args.channel, ts: args.ts });
       case 'reactions.add': {
         const key = `${String(args.channel)}/${String(args.timestamp)}/${String(args.name)}`;
         if (this.reactions.has(key)) return this.fail('already_reacted');
@@ -108,6 +110,27 @@ export class FakeSlack implements SlackTransport {
   /** Delivers a Slack event as Socket Mode would. */
   async emit(event: Record<string, unknown>): Promise<void> {
     await this.onEvent?.({ type: 'message', ...event });
+  }
+
+  /** Delivers a press of a button on a post, as an interactive envelope's payload. */
+  async press(options: {
+    channel: string;
+    ts: string;
+    actionId: string;
+    user?: string;
+    threadTs?: string;
+  }): Promise<void> {
+    await this.onEvent?.({
+      type: 'block_actions',
+      user: { id: options.user ?? 'UPERSON' },
+      channel: { id: options.channel },
+      container: { type: 'message', channel_id: options.channel, message_ts: options.ts },
+      message: {
+        ts: options.ts,
+        ...(options.threadTs !== undefined && { thread_ts: options.threadTs }),
+      },
+      actions: [{ action_id: options.actionId, value: options.actionId, type: 'button' }],
+    });
   }
 
   /** Delivers a plain message from a person. Returns its ts. */

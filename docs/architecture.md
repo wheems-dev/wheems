@@ -27,9 +27,9 @@ TypeScript first.
 
 - **The service**: always running, under launchd on a Mac and systemd on Linux. It holds the
   channel connections and routes messages, files notes, keeps search indexes and runs the
-  nightly tidy (built). It will also run tasks, approvals, routines and workflows, and keep a
-  small SQLite store of every session it runs (built) and what's waiting (planned), see
-  [Sessions](#sessions).
+  nightly tidy, and keeps approvals (built). It will also run tasks, routines and workflows. It
+  keeps a small SQLite store of every session it runs and every approval asked (built), see
+  [Sessions](#sessions) and [approvals.md](approvals.md).
 - **The CLI**, `wheems`: what users and agents run, for example `wheems chat post updates "…"`,
   `wheems approval request "Deploy?"` and `wheems knowledgebase note`. Commands are grouped by
   area, like `php artisan` ([cli.md](cli.md)), and named in full words (`knowledgebase`, not `kb`);
@@ -1066,6 +1066,11 @@ itself: hooks written for Claude Code are ignored by Codex and opencode.
 | 4. Machine level     | Git hooks installed outside the agent's reach, file permissions, a sandbox or separate user per workspace                                 | Yes                                    |
 | 5. Engine hooks      | Each driver writes the same rules into its engine's own hooks and permission settings, where it has them                                  | Best effort                            |
 | 6. Instructions      | The agent is told the rule                                                                                                                | Guidance only                          |
+
+**Approvals today rest on layer 6.** Agents are told to ask with `wheems approval request`
+before anything that's the person's to decide ([approvals.md](approvals.md)), and the record is
+kept, but nothing stops an agent that acts without asking: it's a promise the agents keep. The
+broker makes it a gate, using the same approvals.
 
 **The broker is the key piece.** Agents never get deploy keys, mail access or channel tokens.
 They ask Wheems, for example `wheems action run deploy storefront --to staging`. The broker looks up the

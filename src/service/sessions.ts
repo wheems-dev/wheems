@@ -145,6 +145,8 @@ export interface SessionServiceOptions {
    * reaches the person on whatever channel that is. The sessions code never posts anything.
    */
   tell?: (threadSessionId: string, text: string) => Promise<void>;
+  /** Called once an ad-hoc session has ended, such as to withdraw the approvals it asked. */
+  onEnded?: (session: SessionRecord) => void;
   log?: (message: string) => void;
 }
 
@@ -162,9 +164,12 @@ const LONGEST_WAIT_SECONDS = 3600;
  * only, and goes through the store's workspace filter.
  */
 export class SessionService {
-  private readonly options: Required<Omit<SessionServiceOptions, 'aboutYouFile' | 'tell'>> & {
+  private readonly options: Required<
+    Omit<SessionServiceOptions, 'aboutYouFile' | 'tell' | 'onEnded'>
+  > & {
     aboutYouFile: string | undefined;
     tell: SessionServiceOptions['tell'];
+    onEnded: SessionServiceOptions['onEnded'];
   };
   private readonly ending = new Set<string>();
   /** Starting and resuming sessions, one at a time, so none slips past a limit. */
@@ -198,6 +203,7 @@ export class SessionService {
       trustProblem: () => Promise.resolve(null),
       aboutYouFile: undefined,
       tell: undefined,
+      onEnded: undefined,
       ...options,
     };
   }
@@ -575,10 +581,63 @@ export class SessionService {
       this.options.log(
         `Ended session ${id} in ${caller.workspace.id}${noted ? ', with its note' : ''}`,
       );
-      return { session: sessions.session(id) ?? session, noted };
+      const ended = sessions.session(id) ?? session;
+      try {
+        this.options.onEnded?.(ended);
+      } catch (error) {
+        this.options.log(`After ending session ${id}: ${describe(error)}`);
+      }
+      return { session: ended, noted };
     } finally {
       this.ending.delete(id);
     }
+  }
+
+  /**
+   * Delivers a message from Wheems to a session, such as an approval's answer: typed into an
+   * ad-hoc session, or told to a chief's conversation. It's kept as a hand-back first, so a
+   * restart doesn't lose it, and resolves once it's kept; delivery carries on after. False when
+   * there's no such session, or it has ended.
+   */
+  async notify(
+    workspaceId: string,
+    toId: string,
+    /** The session it's about, or null for none, such as when the person answered. */
+    aboutId: string | null,
+    text: string,
+  ): Promise<boolean> {
+    const workspace = this.workspace(workspaceId);
+    const to = this.options.state.workspace(workspaceId).session(toId);
+    if (!to || to.state === 'ended' || this.stopped) return false;
+    const kept = await this.record(workspace, aboutId, to.id, text, 'handback');
+    void this.passBack(workspace, to, aboutId ?? 'wheems', text, kept);
+    return true;
+  }
+
+  /**
+   * The chief's chat thread a session's work came from: the session itself for a thread, or the
+   * thread above an ad-hoc session's starters. Null when none, as for one the person started.
+   */
+  chiefThreadOf(session: SessionRecord): SessionRecord | null {
+    const sessions = this.options.state.workspace(session.workspace);
+    let current: SessionRecord | undefined = session;
+    for (let depth = 0; current && depth < 100; depth++) {
+      if (current.kind === 'thread') return current;
+      current = current.parent === null ? undefined : sessions.session(current.parent);
+    }
+    return null;
+  }
+
+  /**
+   * Who hears about an ad-hoc session's work when it can't: its owner's session, or the session
+   * that started it. Null when the person started it, or neither is open.
+   */
+  ownerOf(session: SessionRecord): SessionRecord | null {
+    const sessions = this.options.state.workspace(session.workspace);
+    const owner =
+      (session.owner !== null ? sessions.session(session.owner) : undefined) ??
+      (session.parent !== null ? sessions.session(session.parent) : undefined);
+    return owner && owner.state !== 'ended' ? owner : null;
   }
 
   /** A note from an ad-hoc session: its title becomes the session's summary. */
@@ -917,12 +976,16 @@ export class SessionService {
     const minutes = Math.round(this.options.answerWaitSeconds / 60);
     const why =
       live?.status === 'blocked'
-        ? 'it was waiting for an answer at the Mac'
+        ? 'it was waiting for an answer at the Mac, such as a permission its engine asked for'
         : `it gave no answer within ${String(minutes)} minutes`;
     if (await this.stopRuntimeSession(name)) {
       sessions.update(targetId, { state: 'stopped' }, 'working');
       this.options.log(`Stopped session ${targetId} mid-turn: ${why}`);
-      return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it`;
+      return `${why}, so Wheems stopped it to keep its answers in order. Send again to resume it${
+        live?.status === 'blocked'
+          ? ", perhaps another way; if it needs something only the person can allow, that's theirs to decide"
+          : ''
+      }`;
     }
     this.options.log(`Session ${targetId} didn't finish its turn, and couldn't be stopped`);
     // Held until that turn is over, or it can be stopped: see untilFree.
@@ -1126,7 +1189,7 @@ export class SessionService {
         if (message.kind === 'handback') {
           const to = sessions.session(message.receiver);
           const text = (await readFile(message.messageFile, 'utf8').catch(() => '')).trim();
-          if (!to || to.state === 'ended' || message.sender === null || text === '') {
+          if (!to || to.state === 'ended' || text === '') {
             sessions.finishMessage(message.id, 'failed', null, now);
             continue;
           }
@@ -1155,7 +1218,7 @@ export class SessionService {
     }
     await Promise.allSettled(
       deliveries.map((d) =>
-        this.passBack(d.workspace, d.to, d.notice.sender ?? '', d.text, d.notice),
+        this.passBack(d.workspace, d.to, d.notice.sender ?? 'wheems', d.text, d.notice),
       ),
     );
   }

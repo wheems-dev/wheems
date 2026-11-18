@@ -42,7 +42,7 @@ has three parts:
 3. **What it knows**: `about-you.md` and the workspace's brief.
 
 Everything around the chief is code in the service, and deterministic: routing messages,
-following sessions, the session store, hand-backs and, soon, approvals. What the chief decides to
+following sessions, the session store, hand-backs and approvals. What the chief decides to
 do comes from that text.
 
 **Today's text says the opposite of the idea.** The template tells the chief to "do what you're
@@ -69,7 +69,8 @@ section says:
   it still isn't done, or comes back the same, bring it to the person. From the third answer,
   Wheems's hand-back says so too.
 - **Decisions.** Answer your team's approval requests within your authority, and bring the person
-  only what's theirs to decide ([approvals.md](approvals.md)).
+  only what's theirs to decide ([approvals.md](approvals.md)). A section of its own, **Decisions**,
+  lists the five kinds that are the person's, less any `approvals.chief_decides` leaves to it.
 - **Notice what repeats.** When you've started ad-hoc sessions for the same kind of work several
   times, create an agent for it.
 
@@ -197,7 +198,9 @@ stays as an emergency stop. To change what a sub-agent is doing, the person tell
    (schema 6), and `finishLine` in
    `src/service/sessions.ts`. The limit is an instruction, not a block, because a chief may also
    send a session follow-up work. If chiefs ignore it, Wheems could count send-backs per job.
-2. **Approvals** ([approvals.md](approvals.md)), built for the chief only.
+2. **Approvals** ([approvals.md](approvals.md)), built for the chief only. Built:
+   `src/service/approvals.ts`, the `approvals` table (schema 7), the `approval` commands, Slack's
+   buttons, the chief's **Decisions** section and the `wheems-approvals` skill.
 3. **Narrowing the chief's tools,** engine by engine, starting with Claude Code, with doctor's
    view of it.
 4. **Team, read-only, in the web app,** and sub-agents made read-only on Sessions.

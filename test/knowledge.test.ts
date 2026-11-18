@@ -133,11 +133,56 @@ describe('notes', () => {
     expect(sessions?.content).not.toContain('answer simple things yourself');
     // Without sessions, there's no sessions skill, and no mention of it.
     expect(builtinSkills().map((s) => s.name)).toEqual([
+      'wheems-approvals',
       'wheems-knowledge',
       'wheems-notes',
       'wheems-skill-proposals',
     ]);
     expect(withBuiltins('# Agent')).not.toContain('wheems-sessions');
+  });
+
+  it("gives a chief the person's decisions as a rule, and the how-to as a skill", () => {
+    const chief = withBuiltins('# Chief', undefined, { chief: { team: [] } });
+    // The five kinds of decision that are the person's: always loaded, after the role.
+    expect(chief).toContain('## Decisions (built into Wheems)');
+    expect(chief.indexOf('## Your role')).toBeLessThan(chief.indexOf('## Decisions'));
+    for (const kind of [
+      '**Money:**',
+      '**Speaking for them:**',
+      "**What can't be undone:**",
+      '**Access:**',
+      '**Outside the ask:**',
+    ]) {
+      expect(chief).toContain(kind);
+    }
+    expect(chief).toContain('never in words in a reply');
+    expect(chief).toContain(
+      "- `wheems-approvals`: before anything that's the person's to decide, when Wheems says an",
+    );
+    // A workspace can leave a kind to its chief: it's no longer listed as the person's.
+    const trusted = withBuiltins('# Chief', undefined, {
+      chief: { team: [], chiefDecides: ['speaking'] },
+    });
+    expect(trusted).not.toContain('**Speaking for them:**');
+    expect(trusted).toContain('the person has also left these to you: speaking for them.');
+    const skill = builtinSkills({ chief: { team: [] } }).find((s) => s.name === 'wheems-approvals');
+    expect(skill?.content).toContain('wheems approval escalate <id> --note');
+    expect(skill?.content).toContain('wheems chat post updates');
+
+    // A team member asks before anything that's not its to do, and stops for the answer.
+    const worker = withBuiltins('# Worker', undefined, {
+      adhoc: { title: 'Fix', purpose: 'Fix it.', owner: 'the chief of staff' },
+    });
+    expect(worker).not.toContain('## Decisions');
+    expect(worker).toContain(
+      'ask with `wheems approval request` (the `wheems-approvals` skill) and\n  stop.',
+    );
+    expect(worker).toContain('Only a yes lets you go ahead');
+    const own = builtinSkills({
+      adhoc: { title: 'Fix', purpose: 'Fix it.', owner: 'the chief of staff' },
+    }).find((s) => s.name === 'wheems-approvals');
+    expect(own?.content).toContain('You never ask the person yourself.');
+    expect(own?.content).not.toContain('wheems approval escalate');
     // The runtime's skill, when it has one, with its rule always loaded.
     const runtime = {
       name: 'wheems-herdr',

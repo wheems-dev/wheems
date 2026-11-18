@@ -3,6 +3,41 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## Unreleased
+
+Approvals and updates, the second half of milestone 3. The session store moves to schema 7, with
+an `approvals` table; the service updates it when it starts. Still an early preview.
+
+**Added**
+
+- **Approvals.** An agent asks before anything that isn't its to decide, with
+  `wheems approval request "…"`: a team member asks its chief, which answers it or brings it to
+  you with `wheems approval escalate`; the chief asks you. You see a post in the conversation the
+  work came from, in the chief's name, mentioning you, with a button for each choice. One tap
+  answers it, the post changes to show your answer, and the answer goes back to whoever asked,
+  as a message from Wheems. Approvals expire after 24 hours by default, and silence is never a
+  yes. `wheems approval list`, `show`, `answer` and `withdraw` do the rest. See
+  [docs/approvals.md](docs/approvals.md).
+- **The chief knows what's yours to decide.** A built-in **Decisions** section lists the five
+  kinds that are yours (money, speaking for you, what can't be undone, access, and what you
+  didn't ask for); `approvals.chief_decides` in `workspace.yaml` leaves some to the chief. Team
+  members ask before any of them. The how-to is a new `wheems-approvals` skill.
+- **A daily list of the chief's decisions,** each evening after six, to the workspace's
+  `updates` channel, or its chat channel without one.
+- **`wheems chat post <channel> "…"`** posts one-way updates from a chief, such as a routine's
+  results, to the workspace's `updates` channel, or its chat channel without one.
+- **Slack buttons.** Posts can carry buttons and mention you, and a post can be changed in
+  place. Wheems's Slack manifest has always turned Interactivity on; an app set up by hand needs
+  it switched on, or presses never arrive.
+- **Approvals on the web app's Review page:** what's waiting, answered with a button, and the
+  history.
+
+**Changed**
+
+- A team member stopped at a question from its engine, such as a permission, is still stopped
+  by Wheems; its chief is now told it was the engine asking, and that what only you can allow is
+  yours to decide.
+
 ## 0.1.13
 
 Released 17 November 2026. Nothing a chief reads names a chat channel, so it reads the same

@@ -24,6 +24,13 @@ channelContract('slack (fake Slack)', {
       ...(message.threadId !== undefined && { thread_ts: message.threadId }),
     });
   },
+  simulateButton: async (driver, press) => {
+    await fakes.get(driver as SlackChannel)!.press({
+      channel: press.channel,
+      ts: press.messageId,
+      actionId: press.buttonId,
+    });
+  },
 });
 
 function setup() {
@@ -153,6 +160,84 @@ describe('slack channel', () => {
     });
     expect(posts[1]).toMatchObject({ username: 'Work', icon_url: 'https://example.com/i.png' });
     expect(posts[1]).not.toHaveProperty('thread_ts');
+  });
+
+  it('posts buttons and mentions under the text, and reports presses', async () => {
+    const { fake, driver, events, start } = setup();
+    await start();
+    const sent = await driver.send({
+      channel: 'C1',
+      threadId: '9.9',
+      text: '**Approval needed**\n\nDeploy?',
+      mentions: ['UME'],
+      buttons: [
+        { id: 'approval:a1b2c3:0', label: 'Approve', style: 'primary' },
+        { id: 'approval:a1b2c3:1', label: 'Decline', style: 'danger' },
+      ],
+    });
+    const post = fake.calls.find((c) => c.method === 'chat.postMessage')!;
+    expect(post.args.text).toBe('<@UME> **Approval needed**\n\nDeploy?');
+    expect(post.args.blocks).toEqual([
+      { type: 'markdown', text: '**Approval needed**\n\nDeploy?' },
+      { type: 'section', text: { type: 'mrkdwn', text: '<@UME>' } },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            action_id: 'approval:a1b2c3:0',
+            value: 'approval:a1b2c3:0',
+            text: { type: 'plain_text', text: 'Approve' },
+            style: 'primary',
+          },
+          {
+            type: 'button',
+            action_id: 'approval:a1b2c3:1',
+            value: 'approval:a1b2c3:1',
+            text: { type: 'plain_text', text: 'Decline' },
+            style: 'danger',
+          },
+        ],
+      },
+    ]);
+    await fake.press({
+      channel: 'C1',
+      ts: sent.messageId,
+      threadTs: '9.9',
+      actionId: 'approval:a1b2c3:1',
+      user: 'UME',
+    });
+    expect(events).toEqual([
+      {
+        type: 'button',
+        channel: 'C1',
+        messageId: sent.messageId,
+        threadId: '9.9',
+        userId: 'UME',
+        buttonId: 'approval:a1b2c3:1',
+        receivedAt: expect.any(Date) as Date,
+      },
+    ]);
+    // A payload it can't read is dropped.
+    await fake.emit({ type: 'block_actions', actions: [] });
+    expect(events).toHaveLength(1);
+
+    // Changing the post replaces its blocks: without buttons, they're gone.
+    await driver.update({ channel: 'C1', messageId: sent.messageId }, { text: 'Approved' });
+    expect(fake.calls.at(-1)).toEqual({
+      method: 'chat.update',
+      args: {
+        channel: 'C1',
+        ts: sent.messageId,
+        text: 'Approved',
+        blocks: [{ type: 'markdown', text: 'Approved' }],
+      },
+    });
+    fake.failures.set('chat.update', 'message_not_found');
+    await expectDriverError(
+      driver.update({ channel: 'C1', messageId: '1.1' }, { text: 'x' }),
+      'not_found',
+    );
   });
 
   it('splits long replies, preferring paragraph breaks', async () => {

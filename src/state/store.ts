@@ -199,6 +199,87 @@ export interface MessageRecord {
   answeredAt: string | null;
 }
 
+/** What an approval is for: a request from an agent now; the broker's actions and others later. */
+export type ApprovalKind = 'request' | 'action' | 'purchase' | 'folder' | 'workflow';
+/** Who decides an approval: the chief (for a request from its team) or the person. */
+export type Decider = 'chief' | 'person';
+export type ApprovalState = 'waiting' | 'escalated' | 'answered' | 'expired' | 'withdrawn';
+/** How an approval was answered: by the chief's session, or by the person in chat, the web app or a terminal. */
+export type AnsweredVia = 'session' | 'chat' | 'web' | 'terminal';
+
+/** Where an approval was posted for the person. */
+export interface ApprovalPost {
+  connection: string;
+  channel: string;
+  /** The thread it was posted in, or null for a post that started none. */
+  thread: string | null;
+  message: string;
+}
+
+/** A question waiting for a decision, and what became of it (docs/approvals.md). */
+export interface ApprovalRecord {
+  id: string;
+  workspace: string;
+  kind: ApprovalKind;
+  /** The session that asked, and its agent; null when a rule asked. */
+  askerSession: string | null;
+  askerAgent: string | null;
+  decider: Decider;
+  /** Only the person may answer it: the chief carries it but can't. */
+  personOnly: boolean;
+  /** The chief's chat thread the work came from, or null when it came from none. */
+  chiefSession: string | null;
+  question: string;
+  details: string | null;
+  choices: string[];
+  fingerprint: string;
+  state: ApprovalState;
+  answer: string | null;
+  reason: string | null;
+  answeredBy: Decider | null;
+  answeredVia: AnsweredVia | null;
+  /** The chief's note when it brought the request to the person. */
+  note: string | null;
+  post: ApprovalPost | null;
+  askedAt: string;
+  escalatedAt: string | null;
+  /** When it was answered, expired or withdrawn. */
+  answeredAt: string | null;
+  /** When its outcome was kept for everyone who must hear it, to be delivered (again after a restart). */
+  deliveredAt: string | null;
+  /** The sessions its outcome has been kept for so far, so a retry skips them. */
+  deliveredTo: string[];
+  expiresAt: string;
+  /** When a chief's decision went in its daily list to the person. */
+  reportedAt: string | null;
+}
+
+/** A new approval's row. */
+export interface NewApproval {
+  id: string;
+  kind: ApprovalKind;
+  askerSession: string | null;
+  askerAgent: string | null;
+  decider: Decider;
+  personOnly: boolean;
+  chiefSession: string | null;
+  question: string;
+  details: string | null;
+  choices: string[];
+  fingerprint: string;
+  askedAt: string;
+  expiresAt: string;
+}
+
+/** An answer to an approval, recorded once. */
+export interface ApprovalAnswer {
+  answer: string;
+  reason: string | null;
+  by: Decider;
+  via: AnsweredVia;
+  at: string;
+}
+
 export interface SessionFilter {
   kind?: SessionKind;
   state?: SessionState;
@@ -294,6 +375,12 @@ export class StateStore {
               'CREATE TEMP VIEW handovers AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS text, NULL AS author, NULL AS from_engine, NULL AS from_model, NULL AS written_at, NULL AS to_engine, NULL AS to_model, NULL AS used_at WHERE 0',
             );
           }
+          if (version < 7) {
+            // No approval was asked before version 7.
+            db.exec(
+              `CREATE TEMP VIEW approvals AS SELECT ${APPROVAL_COLUMNS.map((c) => `NULL AS ${c}`).join(', ')} WHERE 0`,
+            );
+          }
         } else if (version !== SCHEMA_VERSION) {
           throw new Error(
             `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
@@ -377,13 +464,62 @@ export class StateStore {
       .map(toMessage);
   }
 
+  // Approvals, install-wide: for button presses, which name only the approval, and the
+  // service's own expiry and delivery after a restart.
+
+  /** An approval by id, in whichever workspace it belongs to. */
+  approvalAnywhere(id: string): ApprovalRecord | undefined {
+    const row = this.db.prepare(`${APPROVAL_SELECT} WHERE id = ?`).get(id);
+    return row === undefined ? undefined : toApproval(row);
+  }
+
+  /**
+   * Expires every approval still open whose time has run out, in one write, and returns them.
+   * Their outcome still has to be delivered: see `undeliveredApprovals`.
+   */
+  expireApprovals(now: Date): ApprovalRecord[] {
+    const at = now.toISOString();
+    let expired: ApprovalRecord[] = [];
+    this.transaction(() => {
+      expired = this.db
+        .prepare(
+          `${APPROVAL_SELECT} WHERE state IN ('waiting', 'escalated') AND expires_at <= ? ORDER BY asked_at, id`,
+        )
+        .all(at)
+        .map(toApproval);
+      const expire = this.db.prepare(
+        "UPDATE approvals SET state = 'expired', answered_at = ? WHERE id = ? AND state IN ('waiting', 'escalated')",
+      );
+      for (const approval of expired) expire.run(at, approval.id);
+    });
+    return expired.map((a) => ({ ...a, state: 'expired' as const, answeredAt: at }));
+  }
+
+  /** Approvals answered or expired whose outcome hasn't been kept for its asker yet, oldest first. */
+  undeliveredApprovals(): ApprovalRecord[] {
+    return this.db
+      .prepare(
+        `${APPROVAL_SELECT} WHERE state IN ('answered', 'expired') AND delivered_at IS NULL ORDER BY answered_at, id`,
+      )
+      .all()
+      .map(toApproval);
+  }
+
   /**
    * Forgets everything the store holds for a workspace: its standing agents, sessions, threads
    * and messages. For `wheems workspace remove`, which deletes the workspace itself.
    */
   forgetWorkspace(workspace: string): void {
     this.transaction(() => {
-      for (const table of ['chat', 'handovers', 'messages', 'threads', 'sessions', 'agents']) {
+      for (const table of [
+        'approvals',
+        'chat',
+        'handovers',
+        'messages',
+        'threads',
+        'sessions',
+        'agents',
+      ]) {
         this.db.prepare(`DELETE FROM ${table} WHERE workspace = ?`).run(workspace);
       }
     });
@@ -967,6 +1103,179 @@ export class WorkspaceSessions {
       .map(toMessage);
   }
 
+  // Approvals -----------------------------------------------------------------
+
+  /** Records a new approval, waiting for its decider. */
+  addApproval(approval: NewApproval): ApprovalRecord {
+    this.db
+      .prepare(
+        `INSERT INTO approvals (id, workspace, kind, asker_session, asker_agent, decider,
+           person_only, chief_session, question, details, choices, fingerprint, state, asked_at,
+           expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)`,
+      )
+      .run(
+        approval.id,
+        this.workspace,
+        approval.kind,
+        approval.askerSession,
+        approval.askerAgent,
+        approval.decider,
+        approval.personOnly ? 1 : 0,
+        approval.chiefSession,
+        approval.question,
+        approval.details,
+        JSON.stringify(approval.choices),
+        approval.fingerprint,
+        approval.askedAt,
+        approval.expiresAt,
+      );
+    const added = this.approval(approval.id);
+    if (!added) throw new Error(`Approval ${approval.id} wasn't recorded`);
+    return added;
+  }
+
+  approval(id: string): ApprovalRecord | undefined {
+    const row = this.db
+      .prepare(`${APPROVAL_SELECT} WHERE workspace = ? AND id = ?`)
+      .get(this.workspace, id);
+    return row === undefined ? undefined : toApproval(row);
+  }
+
+  /** The workspace's approvals, newest first, optionally only those in some states. */
+  approvals(
+    filter: { states?: readonly ApprovalState[]; askerSession?: string; limit?: number } = {},
+  ): ApprovalRecord[] {
+    const where = ['workspace = ?'];
+    const values: SQLInputValue[] = [this.workspace];
+    if (filter.states !== undefined && filter.states.length > 0) {
+      where.push(`state IN (${filter.states.map(() => '?').join(', ')})`);
+      values.push(...filter.states);
+    }
+    if (filter.askerSession !== undefined) {
+      where.push('asker_session = ?');
+      values.push(filter.askerSession);
+    }
+    return this.db
+      .prepare(
+        `${APPROVAL_SELECT} WHERE ${where.join(' AND ')} ORDER BY asked_at DESC, id DESC LIMIT ?`,
+      )
+      .all(...values, filter.limit ?? 50)
+      .map(toApproval);
+  }
+
+  /** How many approvals a session has open: waiting or escalated. */
+  openApprovals(askerSession: string): number {
+    const row = this.db
+      .prepare(
+        "SELECT count(*) AS n FROM approvals WHERE workspace = ? AND asker_session = ? AND state IN ('waiting', 'escalated')",
+      )
+      .get(this.workspace, askerSession) as { n: number } | undefined;
+    return row?.n ?? 0;
+  }
+
+  /**
+   * Records an answer, in one update from an open state and before its deadline, so two answers
+   * at once can't both count, and none counts once it has run out. True when this one counted.
+   */
+  answerApproval(id: string, answer: ApprovalAnswer, from: readonly ApprovalState[]): boolean {
+    const result = this.db
+      .prepare(
+        `UPDATE approvals SET state = 'answered', answer = ?, reason = ?, answered_by = ?,
+           answered_via = ?, answered_at = ?
+         WHERE workspace = ? AND id = ? AND expires_at > ?
+         AND state IN (${from.map(() => '?').join(', ')})`,
+      )
+      .run(
+        answer.answer,
+        answer.reason,
+        answer.by,
+        answer.via,
+        answer.at,
+        this.workspace,
+        id,
+        answer.at,
+        ...from,
+      );
+    return Number(result.changes) === 1;
+  }
+
+  /**
+   * Passes a request waiting on the chief to the person. True when it was still waiting, and
+   * hadn't run out.
+   */
+  escalateApproval(id: string, note: string | null, at: string): boolean {
+    const result = this.db
+      .prepare(
+        "UPDATE approvals SET state = 'escalated', note = ?, escalated_at = ? WHERE workspace = ? AND id = ? AND state = 'waiting' AND expires_at > ?",
+      )
+      .run(note, at, this.workspace, id, at);
+    return Number(result.changes) === 1;
+  }
+
+  /** Takes back an open approval. True when it was still open. */
+  withdrawApproval(id: string, at: string): boolean {
+    const result = this.db
+      .prepare(
+        "UPDATE approvals SET state = 'withdrawn', answered_at = ? WHERE workspace = ? AND id = ? AND state IN ('waiting', 'escalated')",
+      )
+      .run(at, this.workspace, id);
+    return Number(result.changes) === 1;
+  }
+
+  /** Records where an approval was posted for the person. */
+  setApprovalPost(id: string, post: ApprovalPost): void {
+    this.db
+      .prepare(
+        `UPDATE approvals SET post_connection = ?, post_channel = ?, post_thread = ?,
+           post_message = ? WHERE workspace = ? AND id = ?`,
+      )
+      .run(post.connection, post.channel, post.thread, post.message, this.workspace, id);
+  }
+
+  /** Records that an approval's outcome is kept for one session, so a retry skips it. */
+  markApprovalDeliveredTo(id: string, session: string): void {
+    this.db
+      .prepare(
+        `UPDATE approvals SET delivered_to = json_insert(delivered_to, '$[#]', ?)
+         WHERE workspace = ? AND id = ? AND NOT EXISTS (
+           SELECT 1 FROM json_each(approvals.delivered_to) WHERE value = ?
+         )`,
+      )
+      .run(session, this.workspace, id, session);
+  }
+
+  /** Marks an approval's outcome as kept for everyone. True the first time only. */
+  markApprovalDelivered(id: string, at: string): boolean {
+    const result = this.db
+      .prepare(
+        'UPDATE approvals SET delivered_at = ? WHERE workspace = ? AND id = ? AND delivered_at IS NULL',
+      )
+      .run(at, this.workspace, id);
+    return Number(result.changes) === 1;
+  }
+
+  /** The chief's decisions not yet in a daily list, oldest first. */
+  unreportedDecisions(): ApprovalRecord[] {
+    return this.db
+      .prepare(
+        `${APPROVAL_SELECT} WHERE workspace = ? AND state = 'answered' AND answered_by = 'chief'
+         AND reported_at IS NULL ORDER BY answered_at, id`,
+      )
+      .all(this.workspace)
+      .map(toApproval);
+  }
+
+  /** Marks the chief's decisions as reported in a daily list. */
+  markReported(ids: readonly string[], at: string): void {
+    inTransaction(this.db, () => {
+      const mark = this.db.prepare(
+        'UPDATE approvals SET reported_at = ? WHERE workspace = ? AND id = ?',
+      );
+      for (const id of ids) mark.run(at, this.workspace, id);
+    });
+  }
+
   /**
    * Sessions whose title, purpose, summary, agent or project has every one of the words,
    * most recently active first.
@@ -1070,6 +1379,94 @@ function toHandover(row: Row): Handover {
     toEngine: text(row.to_engine),
     toModel: text(row.to_model),
     usedAt: text(row.used_at),
+  };
+}
+
+const APPROVAL_COLUMNS = [
+  'id',
+  'workspace',
+  'kind',
+  'asker_session',
+  'asker_agent',
+  'decider',
+  'person_only',
+  'chief_session',
+  'question',
+  'details',
+  'choices',
+  'fingerprint',
+  'state',
+  'answer',
+  'reason',
+  'answered_by',
+  'answered_via',
+  'note',
+  'post_connection',
+  'post_channel',
+  'post_thread',
+  'post_message',
+  'asked_at',
+  'escalated_at',
+  'answered_at',
+  'delivered_at',
+  'delivered_to',
+  'expires_at',
+  'reported_at',
+] as const;
+
+const APPROVAL_SELECT = `SELECT ${APPROVAL_COLUMNS.join(', ')} FROM approvals`;
+
+/** A JSON array of strings from a column; an empty list for one that's empty or unreadable. */
+function jsonList(value: SQLOutputValue | undefined): string[] {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function toApproval(row: Row): ApprovalRecord {
+  const text = (value: SQLOutputValue | undefined) =>
+    value === null || value === undefined ? null : String(value);
+  const choices = jsonList(row.choices);
+  const message = text(row.post_message);
+  return {
+    id: String(row.id),
+    workspace: String(row.workspace),
+    kind: String(row.kind) as ApprovalKind,
+    askerSession: text(row.asker_session),
+    askerAgent: text(row.asker_agent),
+    decider: String(row.decider) as Decider,
+    personOnly: Number(row.person_only) === 1,
+    chiefSession: text(row.chief_session),
+    question: String(row.question),
+    details: text(row.details),
+    choices,
+    fingerprint: String(row.fingerprint),
+    state: String(row.state) as ApprovalState,
+    answer: text(row.answer),
+    reason: text(row.reason),
+    answeredBy: text(row.answered_by) as Decider | null,
+    answeredVia: text(row.answered_via) as AnsweredVia | null,
+    note: text(row.note),
+    post:
+      message === null
+        ? null
+        : {
+            connection: String(row.post_connection),
+            channel: String(row.post_channel),
+            thread: text(row.post_thread),
+            message,
+          },
+    askedAt: String(row.asked_at),
+    escalatedAt: text(row.escalated_at),
+    answeredAt: text(row.answered_at),
+    deliveredAt: text(row.delivered_at),
+    deliveredTo: jsonList(row.delivered_to),
+    expiresAt: String(row.expires_at),
+    reportedAt: text(row.reported_at),
   };
 }
 

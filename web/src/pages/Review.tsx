@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams } from 'react-router';
 import type { Flash } from '../../../src/web/actions.js';
-import type { ProposalView, ReviewView } from '../../../src/web/data.js';
+import type { ApprovalView, ProposalView, ReviewView } from '../../../src/web/data.js';
 import { useAction, useView } from '../api.js';
 import { Badge, FlashBanner, Loading, Problem, ago, ConfirmButton } from '../ui.js';
 
@@ -17,33 +17,135 @@ export function Review() {
       <header className="stack">
         <h1>Review in {w.name}</h1>
         <p className="muted">
-          Agents propose; you decide. Nothing here takes effect until you approve it.
+          Agents propose and ask; you decide. Nothing here takes effect until you approve it.
         </p>
       </header>
       <FlashBanner flash={flash} />
-      {view.data.proposals.length === 0 ? (
+      {view.data.storeProblem !== null && (
+        <section className="card pad">
+          <p className="muted">Approvals can't be read: {view.data.storeProblem}</p>
+        </section>
+      )}
+      {view.data.approvals.open.map((a) => (
+        <OpenApproval key={a.id} workspace={w.id} approval={a} done={setFlash} />
+      ))}
+      {view.data.proposals.map((p) => (
+        <Proposal
+          key={`${p.id}-${p.seen}`}
+          workspace={w.id}
+          workspaceName={w.name}
+          proposal={p}
+          done={setFlash}
+        />
+      ))}
+      {view.data.proposals.length === 0 && view.data.approvals.open.length === 0 && (
         <section className="card pad">
           <p className="muted">Nothing waits for review in this workspace.</p>
         </section>
-      ) : (
-        view.data.proposals.map((p) => (
-          <Proposal
-            key={`${p.id}-${p.seen}`}
-            workspace={w.id}
-            workspaceName={w.name}
-            proposal={p}
-            done={setFlash}
-          />
-        ))
       )}
-      <section className="card pad stack later">
+      <section className="card pad stack">
         <h2 style={{ fontSize: 16 }}>Approvals history</h2>
-        <p className="soft small">
-          When agents ask before acting (milestone 3), each request and your answer will be listed
-          here, with what the agent knew and your original ask.
-        </p>
+        {view.data.approvals.history.length === 0 ? (
+          <p className="soft small">
+            No approvals yet. When an agent asks before acting, its question and the answer are
+            listed here.
+          </p>
+        ) : (
+          <ul className="stack" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {view.data.approvals.history.map((a) => (
+              <li key={a.id} className="stack" style={{ gap: 4 }}>
+                <div className="row">
+                  <Badge kind={a.state === 'answered' ? 'ok' : 'idle'}>{outcome(a)}</Badge>
+                  <span>{a.question}</span>
+                </div>
+                <span className="muted small">
+                  Asked by {a.askedBy}
+                  {a.working !== null && <> for “{a.working}”</>} · {ago(a.askedAt)} ago
+                  {a.reason !== null && <> · Reason: {a.reason}</>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </>
+  );
+}
+
+/** How a closed approval ended, in a word or two. */
+function outcome(a: ApprovalView): string {
+  if (a.state === 'answered') {
+    return `${a.answer ?? ''} by ${a.answeredBy === 'person' ? 'you' : 'your chief'}`;
+  }
+  return a.state === 'expired' ? 'Expired' : 'Withdrawn';
+}
+
+function OpenApproval({
+  workspace,
+  approval: a,
+  done,
+}: {
+  workspace: string;
+  approval: ApprovalView;
+  done: (flash: Flash) => void;
+}) {
+  const act = useAction(
+    `/w/${encodeURIComponent(workspace)}/approvals/${encodeURIComponent(a.id)}`,
+    done,
+  );
+  const [reason, setReason] = useState('');
+  const last = a.choices.length - 1;
+  return (
+    <article className="card pad stack" style={{ gap: 14 }}>
+      <div className="row">
+        <Badge kind="warn">
+          {a.waitingOn === 'chief' ? 'Approval, with your chief' : 'Approval needed'}
+        </Badge>
+        <span className="muted small">
+          Asked by {a.askedBy}
+          {a.working !== null && <> for “{a.working}”</>} · {ago(a.askedAt)} ago · open until{' '}
+          {new Date(a.expiresAt).toLocaleString()}
+        </span>
+      </div>
+      <h2>{a.question}</h2>
+      {a.details !== null && <p style={{ whiteSpace: 'pre-wrap' }}>{a.details}</p>}
+      {a.note !== null && <p className="soft">Your chief's note: {a.note}</p>}
+      {a.ask !== null && (
+        <p className="soft small">
+          Your original ask: <q>{a.ask}</q>
+        </p>
+      )}
+      {a.waitingOn === 'chief' && (
+        <p className="soft small">
+          Your chief of staff is deciding this one. You can answer it yourself instead.
+        </p>
+      )}
+      <label className="stack small">
+        Reason (optional, passed on with your answer)
+        <input
+          className="field"
+          value={reason}
+          onChange={(event) => {
+            setReason(event.target.value);
+          }}
+        />
+      </label>
+      <div className="row">
+        {a.choices.map((choice, index) => (
+          <button
+            key={choice}
+            className={index === 0 ? 'btn primary' : index === last ? 'btn danger' : 'btn'}
+            type="button"
+            disabled={act.isPending}
+            onClick={() => {
+              act.mutate({ choice, reason });
+            }}
+          >
+            {choice}
+          </button>
+        ))}
+      </div>
+    </article>
   );
 }
 

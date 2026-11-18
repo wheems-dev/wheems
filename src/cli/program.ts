@@ -16,6 +16,7 @@ import { registerNote } from './commands/note.js';
 import { registerChat, registerReply } from './commands/reply.js';
 import { registerService } from './commands/service.js';
 import { registerSession } from './commands/session.js';
+import { registerApproval } from './commands/approval.js';
 import { setup } from './commands/setup.js';
 import { clackUi } from './clack-ui.js';
 import { setupActions } from './setup-actions.js';
@@ -204,6 +205,7 @@ export function createProgram(io: Io): Command {
   registerWorkspace(program, io);
   registerChat(program, io);
   registerSession(program, io);
+  registerApproval(program, io);
   registerKnowledgebase(program, io);
   registerSkill(program, io);
   registerChannel(program, io);
@@ -244,6 +246,7 @@ export const COMMAND_GROUPS: Record<string, string> = {
   workspace: 'Areas: wheems <area> <action>',
   chat: 'Areas: wheems <area> <action>',
   session: 'Areas: wheems <area> <action>',
+  approval: 'Areas: wheems <area> <action>',
   knowledgebase: 'Areas: wheems <area> <action>',
   skill: 'Areas: wheems <area> <action>',
   channel: 'Areas: wheems <area> <action>',

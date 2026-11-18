@@ -335,6 +335,8 @@ describe('the web app', () => {
     expect(detail.status).toBe(200);
     expect(detail.json().item.session).toMatchObject({ title: 'An old session', ask: null });
     expect(detail.json().messages).toEqual([]);
+    // No approvals were asked before version 7.
+    expect((await get('/w/default/review')).json().approvals).toEqual({ open: [], history: [] });
     const after = new DatabaseSync(store, { readOnly: true });
     expect(after.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 });
     after.close();
@@ -570,6 +572,97 @@ describe('the web app', () => {
       expect((await get('/w/default/sessions/child')).json().outcome).toBeNull();
     } finally {
       await new Promise((done) => slowService.close(done));
+    }
+  });
+
+  it('shows approvals waiting and answered, and answers one through the service as the person', async () => {
+    const state = await StateStore.open(paths(home, env).store);
+    const sessions = state.workspace('default');
+    const asked = new Date(Date.now() - 60_000).toISOString();
+    const expires = new Date(Date.now() + 3_600_000).toISOString();
+    const base = {
+      kind: 'request' as const,
+      askerSession: 'child',
+      askerAgent: 'default/chief-of-staff',
+      personOnly: false,
+      chiefSession: null,
+      details: 'Two quotes, both under £40.',
+      choices: ['Approve', 'Decline'],
+      fingerprint: 'f',
+      askedAt: asked,
+      expiresAt: expires,
+    };
+    sessions.addApproval({
+      ...base,
+      id: 'a1b2c3',
+      decider: 'person',
+      question: 'Book the cheaper one?',
+    });
+    sessions.addApproval({
+      ...base,
+      id: 'd4e5f6',
+      decider: 'chief',
+      question: 'Email the marina?',
+    });
+    sessions.answerApproval(
+      'd4e5f6',
+      { answer: 'Decline', reason: 'Not yet.', by: 'chief', via: 'session', at: asked },
+      ['waiting'],
+    );
+    state.close();
+    const review = (await get('/w/default/review')).json();
+    expect(review.approvals.open).toMatchObject([
+      {
+        id: 'a1b2c3',
+        question: 'Book the cheaper one?',
+        waitingOn: 'person',
+        askedBy: 'chief-of-staff',
+        working: 'Check prices',
+        ask: 'Shortlist marinas for the winter',
+      },
+    ]);
+    expect(review.approvals.history).toMatchObject([
+      {
+        id: 'd4e5f6',
+        state: 'answered',
+        answer: 'Decline',
+        answeredBy: 'chief',
+        reason: 'Not yet.',
+      },
+    ]);
+
+    // Answering goes to the service, as the person, from the web app.
+    const socket = paths(home, env).socket;
+    mkdirSync(dirname(socket), { recursive: true });
+    const seen: unknown[] = [];
+    const service = createServer((conn) => {
+      conn.on('data', (chunk: Buffer) => {
+        seen.push(JSON.parse(chunk.toString()));
+        conn.end('{"ok":true,"approval":{"answer":"Approve"}}\n');
+      });
+    });
+    await new Promise<void>((done) => service.listen(socket, done));
+    try {
+      expect((await post('/w/default/approvals/a1b2c3', {})).json()).toEqual({
+        ok: false,
+        text: 'Choose an answer.',
+      });
+      const answered = (
+        await post('/w/default/approvals/a1b2c3', { choice: 'Approve', reason: 'Cheaper.' })
+      ).json();
+      expect(answered).toEqual({ ok: true, text: 'Answered: Approve. Whoever asked is told.' });
+      expect(seen).toEqual([
+        {
+          op: 'approval-answer',
+          caller: { workspace: 'default' },
+          id: 'a1b2c3',
+          choice: 'Approve',
+          reason: 'Cheaper.',
+          via: 'web',
+        },
+      ]);
+    } finally {
+      await new Promise((done) => service.close(done));
     }
   });
 

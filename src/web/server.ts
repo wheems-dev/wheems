@@ -8,6 +8,7 @@ import { paths } from '../home.js';
 import {
   actOnSession,
   decideAboutYou,
+  answerApproval,
   decideProposal,
   openConversations,
   restartConversations,
@@ -229,6 +230,10 @@ async function api(
     }
     if (area === 'w' && id !== undefined && sub === 'review' && item !== undefined) {
       json(res, 200, await decideProposal(web.context, id, item, form));
+      return;
+    }
+    if (area === 'w' && id !== undefined && sub === 'approvals' && item !== undefined) {
+      json(res, 200, await answerApproval(web.context, id, item, form));
       return;
     }
     if (area === 'w' && id !== undefined && sub === 'sessions' && item !== undefined) {

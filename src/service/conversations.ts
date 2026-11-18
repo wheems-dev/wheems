@@ -1069,7 +1069,10 @@ export class ConversationManager {
     const runtimeSkill = (await this.options.runtime.agentSkill?.()) ?? null;
     const builtins = {
       ...(sessions && { sessions }),
-      chief: { team: teamOf(workspace) },
+      chief: {
+        team: teamOf(workspace),
+        chiefDecides: workspace.config?.approvals.chief_decides ?? [],
+      },
       ...(runtimeSkill !== null && { runtime: runtimeSkill }),
     };
     this.options.log(`Starting ${sessionName} for ${key}${resume ? ' (resuming)' : ''}`);
