@@ -31,8 +31,7 @@ describe('the service', () => {
     runService({
       home,
       registry,
-      bun: '/usr/local/bin/bun',
-      cli: '/opt/wheems/src/cli/main.ts',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log,
@@ -129,8 +128,7 @@ describe('the service', () => {
     service = await runService({
       home,
       registry,
-      bun: '/usr/local/bin/bun',
-      cli: '/opt/wheems/src/cli/main.ts',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -272,8 +270,7 @@ describe('the service', () => {
     const starting = runService({
       home,
       registry,
-      bun: '/usr/local/bin/bun',
-      cli: '/opt/wheems/src/cli/main.ts',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -453,8 +450,7 @@ describe('the service', () => {
     service = await runService({
       home,
       registry,
-      bun: '/usr/local/bin/bun',
-      cli: '/opt/wheems/src/cli/main.ts',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -702,8 +698,7 @@ describe('the service when a channel cannot connect', () => {
         runService({
           home,
           registry,
-          bun: 'bun',
-          cli: 'x.js',
+          command: ['bun', 'x.js'],
           version: '0',
           env,
           log: () => undefined,
@@ -727,8 +722,7 @@ describe('the service without a valid install', () => {
       runService({
         home,
         registry: new DriverRegistry(),
-        bun: 'bun',
-        cli: 'x.js',
+        command: ['bun', 'x.js'],
         version: '0',
         log: () => undefined,
       }),

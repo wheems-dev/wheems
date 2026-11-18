@@ -43,9 +43,11 @@ export interface ServiceOptions {
   /** Restarts the service once it has answered; returns why it can't, or null. Tests replace it. */
   restart?: () => Promise<string | null>;
   registry: DriverRegistry;
-  /** The Bun and script that run the `wheems` command, for the command agents run. */
-  bun: string;
-  cli: string;
+  /**
+   * What runs the `wheems` command, for the command agents run: Bun and its script, or the
+   * one-file executable alone.
+   */
+  command: string[];
   version: string;
   env?: NodeJS.ProcessEnv;
   log?: (message: string) => void;
@@ -99,13 +101,10 @@ export async function runService(options: ServiceOptions): Promise<RunningServic
   const config = install.config;
   const secrets = await readSecrets(where.secrets);
 
-  // The `wheems` command agents run, pinned to this Bun and this copy of Wheems.
+  // The `wheems` command agents run, pinned to this Bun and copy of Wheems, or this executable.
   await mkdir(where.bin, { recursive: true });
   const wrapper = join(where.bin, 'wheems');
-  await writeFile(
-    wrapper,
-    `#!/bin/sh\nexec ${shellQuote(options.bun)} ${shellQuote(options.cli)} "$@"\n`,
-  );
+  await writeFile(wrapper, `#!/bin/sh\nexec ${options.command.map(shellQuote).join(' ')} "$@"\n`);
   await chmod(wrapper, 0o755);
 
   const runtime = options.registry.create('runtime', 'herdr', {

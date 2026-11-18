@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
 import { bunVersionProblem } from '../../util/bun-support.js';
+import { isStandalone } from '../../util/standalone.js';
 import { runInteractive } from '../../util/process.js';
 import { defaultHome, paths, tilde, type Paths } from '../../home.js';
 import { request, type ServiceReport } from '../../service/control.js';
@@ -28,6 +29,11 @@ export function cliPath(): string {
   return realpathSync(process.argv[1] ?? '');
 }
 
+/** What runs this Wheems again: Bun and this script, or this one-file executable alone. */
+export function wheemsCommand(): string[] {
+  return isStandalone() ? [process.execPath] : [process.execPath, cliPath()];
+}
+
 /**
  * Runs the service under launchd with this Bun and copy of Wheems, replacing a copy already
  * running, and waits for it to answer.
@@ -36,8 +42,7 @@ export async function installAndWait(where: Paths): Promise<boolean> {
   const problem = bunVersionProblem(process.versions.bun);
   if (problem !== null) throw new Error(problem);
   await installService({
-    bun: process.execPath,
-    cli: cliPath(),
+    command: wheemsCommand(),
     home: where.home,
     logFile: logFile(where),
   });
@@ -213,7 +218,7 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
     );
   }
   io.out(
-    `${restart ? 'Restarting' : 'Starting'} with Bun ${process.versions.bun} and Wheems from ${tilde(cliPath(), io.env)}\n`,
+    `${restart ? 'Restarting' : 'Starting'} with ${isStandalone() ? `the Wheems executable at ${tilde(process.execPath, io.env)}` : `Bun ${process.versions.bun} and Wheems from ${tilde(cliPath(), io.env)}`}\n`,
   );
   if (await installAndWait(where)) {
     io.out(
@@ -343,8 +348,7 @@ export function registerService(program: Command, io: Io): void {
       const running = await runService({
         home: where(options).home,
         registry: io.registry(),
-        bun: process.execPath,
-        cli: cliPath(),
+        command: wheemsCommand(),
         version: packageVersion(),
         env: io.env,
       });

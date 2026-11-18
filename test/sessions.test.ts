@@ -77,8 +77,7 @@ describe('wheems session', () => {
     service = await runService({
       home,
       registry,
-      bun: '/usr/local/bin/bun',
-      cli: '/opt/wheems/src/cli/main.ts',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,

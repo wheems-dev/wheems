@@ -36,3 +36,8 @@ jobs:
         run: |
           ./src/cli/main.ts --version
           ./src/cli/main.ts validate examples/install
+      - name: One-file executable
+        run: |
+          bun run compile
+          dist/bin/wheems --version
+          dist/bin/wheems configuration validate examples/install

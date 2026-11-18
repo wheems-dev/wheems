@@ -700,10 +700,21 @@ describe('launchd', () => {
     expect(jobAbsent({ code: 5, stdout: '', stderr: 'Input/output error' })).toBe(false);
   });
 
+  it('runs a one-file executable as itself, with its own folder first on the PATH', () => {
+    const plist = renderPlist({
+      command: ['/Users/me/.local/bin/wheems'],
+      home: '/Users/me/wheems',
+      logFile: '/Users/me/wheems/.wheems/logs/service.log',
+    });
+    expect(plist).toContain(
+      '<string>/Users/me/.local/bin/wheems</string>\n    <string>service</string>\n    <string>run</string>',
+    );
+    expect(plist).toMatch(/<key>PATH<\/key>\s*<string>\/Users\/me\/\.local\/bin:/);
+  });
+
   it('reads back the install folder a plist was written for, so a restart keeps it', () => {
     const plist = renderPlist({
-      bun: '/Users/me/.bun/bin/bun',
-      cli: '/x/src/cli/main.ts',
+      command: ['/Users/me/.bun/bin/bun', '/x/src/cli/main.ts'],
       home: '/Users/me/Work & "Play"/wheems',
       logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });
@@ -713,8 +724,7 @@ describe('launchd', () => {
 
   it('writes a user agent that runs the service and restarts it', () => {
     const plist = renderPlist({
-      bun: '/Users/me/.bun/bin/bun',
-      cli: '/Users/me/Projects/wheems/src/cli/main.ts',
+      command: ['/Users/me/.bun/bin/bun', '/Users/me/Projects/wheems/src/cli/main.ts'],
       home: '/Users/me/wheems & co',
       logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });

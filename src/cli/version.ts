@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
+// Imported rather than read, so a one-file executable carries it inside.
+import pkg from '../../package.json' with { type: 'json' };
 
 export function packageVersion(): string {
-  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version: string;
-  };
   return pkg.version;
 }

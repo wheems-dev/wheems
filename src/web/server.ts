@@ -1,10 +1,11 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { extname, join, normalize, sep } from 'node:path';
+import { extname, join, normalize, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DriverRegistry } from '../contracts/registry.js';
 import { paths } from '../home.js';
+import { embeddedApp } from '../util/standalone.js';
 import {
   actOnSession,
   decideAboutYou,
@@ -362,14 +363,22 @@ async function serveApp(res: ServerResponse, pathname: string, appDir: string): 
   const wanted = normalize(join(root, decodeURIComponent(pathname)));
   const isFile = extname(pathname) !== '' && wanted.startsWith(root);
   const file = isFile ? wanted : join(root, 'index.html');
-  const body = await readFile(file).catch(() => null);
+  // The one-file executable carries the app inside it; otherwise it's in appDir.
+  const embedded = embeddedApp();
+  const inside = embedded?.get(relative(root, file).split(sep).join('/'));
+  const body =
+    embedded === undefined
+      ? await readFile(file).catch(() => null)
+      : inside === undefined
+        ? null
+        : await readFile(inside);
   if (body === null) {
     if (isFile) text(res, 404, 'Not found');
     else
       text(
         res,
         503,
-        "The web app isn't built. In the Wheems repository, run npm run build; an installed Wheems has it.",
+        "The web app isn't built. In the Wheems repository, run bun run build; an installed Wheems has it.",
       );
     return;
   }
