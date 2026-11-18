@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { DatabaseSync } from 'node:sqlite';
 import { NODE_SUPPORTED } from './node-support.js';
 
@@ -36,15 +37,36 @@ export function sqlite(): Promise<Sqlite> {
   return loaded;
 }
 
-/** Opens a SQLite file, in WAL mode when it may be written, so readers never wait on a writer. */
+/**
+ * Opens a SQLite file, in WAL mode when it may be written, so readers never wait on a writer.
+ *
+ * Read-only, it must exist already, and SQLite refuses every change to it (`query_only`).
+ * Bun's SQLite can't open a WAL database with the read-only flag, so it's opened as usual and
+ * made query-only instead. `beforeQueryOnly` runs first, for anything that only this connection
+ * sees, such as temporary views.
+ */
 export async function openDatabase(
   file: string,
-  options: { readOnly?: boolean } = {},
+  options: { readOnly?: boolean; beforeQueryOnly?: (db: DatabaseSync) => void } = {},
 ): Promise<DatabaseSync> {
   const { DatabaseSync } = await sqlite();
-  const db = new DatabaseSync(file, { readOnly: options.readOnly === true });
-  db.exec('PRAGMA busy_timeout = 5000');
-  if (options.readOnly !== true) db.exec('PRAGMA journal_mode = WAL');
+  const readOnly = options.readOnly === true;
+  if (readOnly && file !== ':memory:' && !existsSync(file)) {
+    throw new Error(`unable to open database file: ${file} doesn't exist`);
+  }
+  const db = new DatabaseSync(file);
+  try {
+    db.exec('PRAGMA busy_timeout = 5000');
+    if (readOnly) {
+      options.beforeQueryOnly?.(db);
+      db.exec('PRAGMA query_only = ON');
+    } else {
+      db.exec('PRAGMA journal_mode = WAL');
+    }
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   return db;
 }
 

@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import type { AgentDefinition, EngineContext } from '../src/contracts/engine.js';
 import { answersAfter } from '../src/contracts/engine.js';
 import { ClaudeCodeEngine, turnAnswers } from '../src/drivers/engine/claude-code.js';
@@ -18,7 +18,7 @@ import { realHcAvailable } from './helpers/hc.js';
 
 // The contract asks the real Claude Code whether it's signed in (claude auth status, which only
 // reads), so its config folder is the real one here; every other test points it into the
-// repository (test/setup/env.ts).
+// repository (test/setup/preload.ts).
 const testConfigDir = process.env.CLAUDE_CONFIG_DIR;
 beforeAll(() => {
   const real = process.env.WHEEMS_TEST_REAL_CLAUDE_CONFIG_DIR;
@@ -49,8 +49,8 @@ const agent: AgentDefinition = {
   instructions: '# Chief of staff',
 };
 const context: EngineContext = {
-  workspace: { id: 'personal', dir: '/home/me/wheems/workspaces/personal' },
-  sessionDir: '/home/me/wheems/workspaces/personal',
+  workspace: { id: 'personal', dir: '/srv/me/wheems/workspaces/personal' },
+  sessionDir: '/srv/me/wheems/workspaces/personal',
   account: { name: 'claude-subscription', driver: 'claude' },
   session: {
     id: '11111111-2222-5333-8444-555555555555',
@@ -85,16 +85,14 @@ describe('claude-code engine', () => {
     );
     expect(settings.claudeMdExcludes).toEqual(
       expect.arrayContaining([
-        '/home/me/wheems/workspaces/CLAUDE.md',
-        '/home/me/wheems/CLAUDE.local.md',
-        '/home/me/.claude/CLAUDE.md',
+        '/srv/me/wheems/workspaces/CLAUDE.md',
+        '/srv/me/wheems/CLAUDE.local.md',
+        '/srv/me/.claude/CLAUDE.md',
         '/CLAUDE.md',
       ]),
     );
     // Never the one Wheems writes in the session's folder.
-    expect(settings.claudeMdExcludes).not.toContain(
-      '/home/me/wheems/workspaces/personal/CLAUDE.md',
-    );
+    expect(settings.claudeMdExcludes).not.toContain('/srv/me/wheems/workspaces/personal/CLAUDE.md');
     expect(
       await new ClaudeCodeEngine({ configDir: '/elsewhere/.claude' }).othersInstructions('/a'),
     ).toEqual([

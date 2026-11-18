@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'bun:test';
 import type { EmbeddingsDriver } from '../contracts/embeddings.js';
 import { cosine } from '../contracts/vector-store.js';
 import { expectHealthCheck } from './runtime-contract.js';

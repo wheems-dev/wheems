@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { withBuiltins } from '../src/agents/builtin.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { INSTALL_GITIGNORE, installYaml } from '../src/cli/templates.js';

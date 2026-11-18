@@ -14,7 +14,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { loadInstall } from '../src/config/load.js';
 import { StubEngine } from '../src/testing/index.js';
 import { initWorkspace } from '../src/cli/commands/init.js';

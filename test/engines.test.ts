@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
   conversationTag,
   type AgentDefinition,
@@ -46,8 +46,8 @@ const agent: AgentDefinition = {
   instructions: '# Chief of staff',
 };
 const context: EngineContext = {
-  workspace: { id: 'work', dir: '/home/me/wheems/workspaces/work' },
-  sessionDir: '/home/me/wheems/workspaces/work',
+  workspace: { id: 'work', dir: '/srv/me/wheems/workspaces/work' },
+  sessionDir: '/srv/me/wheems/workspaces/work',
   account: { name: 'chatgpt-subscription', driver: 'chatgpt' },
   session: {
     id: '11111111-2222-5333-8444-555555555555',
@@ -491,7 +491,7 @@ describe('opencode engine', () => {
   });
 });
 
-describe.runIf(onThisMac)('engine CLIs on this Mac', () => {
+describe.if(onThisMac)('engine CLIs on this Mac', () => {
   it('finds Codex and opencode installed', async () => {
     for (const engine of [new CodexEngine(), new OpencodeEngine()]) {
       const checks = await engine.check();

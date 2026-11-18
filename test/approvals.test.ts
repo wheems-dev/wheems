@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -31,21 +31,15 @@ describe('approvals', () => {
   const wheems = async (args: string[], as: Record<string, string> = {}, stdin = '') => {
     let out = '';
     let err = '';
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run(args, {
-        ...defaultIo(),
-        out: (t) => (out += t),
-        err: (t) => (err += t),
-        env: { ...env, ...as },
-        color: false,
-        stdin: () => Promise.resolve(stdin),
-      });
-      return { code, out, err };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run(args, {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: (t) => (err += t),
+      env: { ...env, ...as },
+      color: false,
+      stdin: () => Promise.resolve(stdin),
+    });
+    return { code, out, err };
   };
 
   const start = async (extra: { approvalTickMs?: number } = {}) => {
@@ -328,7 +322,7 @@ describe('approvals', () => {
     const now = await approval(asked.id);
     expect(now.state).toBe('escalated');
     const post = postOf(now)!;
-    expect(post.threadId).toBe(now.post?.thread);
+    expect(post.threadId).toBe(now.post?.thread as string);
     expect(post.text).toContain('_Asked by chief-of-staff, working on "checkout fix"._');
     expect(post.text).toContain('_My note: Production, so it is yours._');
     expect(post.buttons?.map((b) => b.label)).toEqual(['Now', 'Tonight', 'Neither']);
@@ -523,7 +517,7 @@ describe('approvals', () => {
     expect(await approval(asked.id)).toMatchObject({ answer: 'Decline', answeredVia: 'chat' });
     // A channel that can't change a post gets a reply under it instead.
     const reply = channel.sent.slice(before).find((m) => m.text.includes('Decline, by you'));
-    expect(reply?.threadId).toBe(asked.post?.thread);
+    expect(reply?.threadId).toBe(asked.post?.thread as string);
   });
 
   it("won't take an answer once an approval has run out, even before it's marked expired", async () => {

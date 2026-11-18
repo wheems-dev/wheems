@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { DriverError, isDriverError } from '../src/contracts/driver.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
 import { replyThread } from '../src/contracts/channel.js';

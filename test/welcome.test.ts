@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, packageVersion, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -197,7 +197,7 @@ describe('the welcome screen', () => {
       color: false,
       columns: 80,
     });
-    expect(out).toContain(CLOUD[0]);
+    expect(out).toContain(CLOUD[0] ?? '');
     const shown = out.indexOf(SHOW_CURSOR);
     expect(out.indexOf(HIDE_CURSOR)).toBeGreaterThan(out.indexOf(CLOUD.at(-1) ?? ''));
     expect(shown).toBeLessThan(out.indexOf('No install at ~/none yet'));
@@ -213,7 +213,7 @@ describe('the welcome screen', () => {
       color: false,
       columns: 80,
     });
-    expect(out).toContain(CLOUD[0]);
+    expect(out).toContain(CLOUD[0] ?? '');
     expect(out).not.toContain('\x1b[');
   });
 

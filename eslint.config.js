@@ -39,6 +39,12 @@ export default tseslint.config(
     files: ['test/**/*.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
+      // bun:test's types say `expect(promise).rejects.toThrow()` returns nothing, though it
+      // returns a promise that must be awaited, and give `expect.any()` and the other
+      // asymmetric matchers the type `any`.
+      '@typescript-eslint/await-thenable': 'off',
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
     },
   },
   {

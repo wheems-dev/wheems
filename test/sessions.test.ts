@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { END_NOTE_REQUEST } from '../src/agents/builtin.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, run } from '../src/cli/program.js';
@@ -33,21 +33,15 @@ describe('wheems session', () => {
   const wheems = async (args: string[], as: Record<string, string> = {}, stdin = '') => {
     let out = '';
     let err = '';
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run(args, {
-        ...defaultIo(),
-        out: (t) => (out += t),
-        err: (t) => (err += t),
-        env: { ...env, ...as },
-        color: false,
-        stdin: () => Promise.resolve(stdin),
-      });
-      return { code, out, err };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run(args, {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: (t) => (err += t),
+      env: { ...env, ...as },
+      color: false,
+      stdin: () => Promise.resolve(stdin),
+    });
+    return { code, out, err };
   };
 
   const start = async (

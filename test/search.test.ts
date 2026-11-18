@@ -10,7 +10,7 @@ import {
 import { readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { formatAnswer } from '../src/cli/commands/knowledgebase.js';
 import { DriverError } from '../src/contracts/driver.js';
 import { OllamaEmbeddings, hasModel } from '../src/drivers/embeddings/ollama.js';
@@ -87,7 +87,7 @@ describe('the Ollama driver', () => {
   });
 
   it('says Ollama is unavailable when nothing answers, or when the model is missing', async () => {
-    const down = (() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch;
+    const down = (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
     const error = await new OllamaEmbeddings({ fetch: down })
       .embed(['x'], 'document')
       .catch((e: unknown) => e);
@@ -108,7 +108,7 @@ describe('the Ollama driver', () => {
     expect(has[0]?.status).toBe('pass');
     const lacks = await new OllamaEmbeddings({ model: 'nomic-embed-text', fetch: fake }).check();
     expect(lacks[0]).toMatchObject({ status: 'warn', hint: 'Run: ollama pull nomic-embed-text' });
-    const down = (() => Promise.reject(new TypeError('fetch failed'))) as typeof fetch;
+    const down = (() => Promise.reject(new TypeError('fetch failed'))) as unknown as typeof fetch;
     expect((await new OllamaEmbeddings({ fetch: down }).check())[0]?.status).toBe('warn');
   });
 

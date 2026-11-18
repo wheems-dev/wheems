@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { LoadedWorkspace } from '../src/config/load.js';
 import type { InstallConfig } from '../src/config/schemas.js';
 import { ApprovalService } from '../src/service/approvals.js';

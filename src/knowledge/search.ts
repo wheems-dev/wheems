@@ -640,16 +640,19 @@ export class SearchIndex {
     return { ok: true };
   }
 
-  /** Every file the index covers, by its path inside the knowledge folder. */
+  /**
+   * Every file the index covers, by its path inside the knowledge folder, in name order (folders
+   * list in whatever order the runtime and file system give).
+   */
   private async files(): Promise<Map<string, 'page' | 'note'>> {
     const files = new Map<string, 'page' | 'note'>();
     const paths = knowledgePaths(this.options.workspaceDir);
-    for (const name of await readdir(paths.pages).catch(() => [] as string[])) {
+    for (const name of (await readdir(paths.pages).catch(() => [] as string[])).sort()) {
       if (name.endsWith('.md')) files.set(`pages/${name}`, 'page');
     }
     for (const dir of [paths.inbox, paths.notes]) {
       const names = await readdir(dir, { recursive: true }).catch(() => [] as string[]);
-      for (const name of names) {
+      for (const name of names.sort()) {
         if (!name.endsWith('.md')) continue;
         files.set(relative(this.knowledge, join(dir, name)).split(sep).join('/'), 'note');
       }

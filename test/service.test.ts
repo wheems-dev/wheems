@@ -4,7 +4,7 @@ import { loadInstall } from '../src/config/load.js';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -49,21 +49,15 @@ describe('the service', () => {
   ) => {
     let out = '';
     let err = '';
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run([...command.split(' '), ...args], {
-        ...defaultIo(),
-        out: (t) => (out += t),
-        err: (t) => (err += t),
-        env: { ...env, WHEEMS_CONVERSATION: conversation },
-        color: false,
-        stdin: () => Promise.resolve(stdin),
-      });
-      return { code, out, err };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run([...command.split(' '), ...args], {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: (t) => (err += t),
+      env: { ...env, WHEEMS_CONVERSATION: conversation },
+      color: false,
+      stdin: () => Promise.resolve(stdin),
+    });
+    return { code, out, err };
   };
 
   beforeEach(async () => {
@@ -636,20 +630,14 @@ describe('the service', () => {
     const kb = async (args: string[]) => {
       let out = '';
       let err = '';
-      const previous = process.exitCode;
-      process.exitCode = undefined;
-      try {
-        const code = await run(['knowledgebase', ...args], {
-          ...defaultIo(),
-          out: (t) => (out += t),
-          err: (t) => (err += t),
-          env: { ...env, WHEEMS_WORKSPACE: 'personal' },
-          color: false,
-        });
-        return { code, out, err };
-      } finally {
-        process.exitCode = previous;
-      }
+      const code = await run(['knowledgebase', ...args], {
+        ...defaultIo(),
+        out: (t) => (out += t),
+        err: (t) => (err += t),
+        env: { ...env, WHEEMS_WORKSPACE: 'personal' },
+        color: false,
+      });
+      return { code, out, err };
     };
     const current = join(paths(home, env).index, 'personal', 'current.json');
     await waitFor(() => existsSync(current));

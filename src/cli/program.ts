@@ -330,6 +330,10 @@ export async function run(argv: string[], io: Io): Promise<number> {
     return 0;
   }
   const program = createProgram(io);
+  // Commands fail by setting process.exitCode; each run starts from 0 and puts back what was
+  // there, so one command's failure never shows in the next (Bun can't unset exitCode).
+  const previous = process.exitCode;
+  process.exitCode = 0;
   try {
     await program.parseAsync(argv, { from: 'user' });
     return typeof process.exitCode === 'number' ? process.exitCode : 0;
@@ -339,6 +343,8 @@ export async function run(argv: string[], io: Io): Promise<number> {
       `${paint('red', 'Error:', io.color)} ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return 1;
+  } finally {
+    process.exitCode = typeof previous === 'number' ? previous : 0;
   }
 }
 

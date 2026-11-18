@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { workspaceHere } from '../src/cli/caller.js';
 import { COMMAND_GROUPS, createProgram, defaultIo, run, type Io } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -54,14 +54,8 @@ describe('wheems areas', () => {
 
   const wheems = async (...args: string[]) => {
     const capture = { out: '', err: '' };
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run(args, io(capture));
-      return { code, ...capture };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run(args, io(capture));
+    return { code, ...capture };
   };
 
   let root: string;

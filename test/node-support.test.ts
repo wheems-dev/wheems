@@ -1,7 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { makeBinsExecutable } from '../scripts/executable.js';
 import { nodeVersionProblem } from '../src/util/node-support.js';
 import { fullTextSearchProblem, type SqlRunner } from '../src/util/sqlite.js';
