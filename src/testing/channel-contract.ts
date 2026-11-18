@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type {
   ButtonPress,
   ChannelDriver,
@@ -119,11 +119,9 @@ export function channelContract(label: string, options: ChannelContractOptions):
       expect(sent.threadId).toBeNull();
     });
 
-    it('replies in the thread of an inbound message, keeping the conversation together', async (ctx) => {
-      if (!driver.capabilities.threads) {
-        ctx.skip();
-        return;
-      }
+    it('replies in the thread of an inbound message, keeping the conversation together', async () => {
+      // A driver without threads has nothing to show here.
+      if (!driver.capabilities.threads) return;
       await driver.start(handler);
       const text = `thread ${Math.random().toString(36).slice(2)}`;
       await options.simulateMessage(driver, { channel: options.channel, text });

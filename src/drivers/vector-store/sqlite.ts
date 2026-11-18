@@ -9,7 +9,7 @@ import {
   type VectorMatch,
   type VectorStoreDriver,
 } from '../../contracts/vector-store.js';
-import { NODE_SUPPORTED } from '../../util/node-support.js';
+import { BUN_SUPPORTED } from '../../util/bun-support.js';
 import { openDatabase, sqlite } from '../../util/sqlite.js';
 
 export interface SqliteVectorStoreOptions {
@@ -54,8 +54,8 @@ export class SqliteVectorStore implements VectorStoreDriver {
         {
           name: 'vector store',
           status: 'fail',
-          message: `Node's SQLite isn't available: ${error instanceof Error ? error.message : String(error)}`,
-          hint: `Use ${NODE_SUPPORTED}.`,
+          message: `SQLite isn't available: ${error instanceof Error ? error.message : String(error)}`,
+          hint: `Use ${BUN_SUPPORTED}.`,
         },
       ];
     }
@@ -73,7 +73,7 @@ export class SqliteVectorStore implements VectorStoreDriver {
   }
 }
 
-/* eslint-disable @typescript-eslint/require-await -- Node's SQLite is synchronous; async methods
+/* eslint-disable @typescript-eslint/require-await -- SQLite is synchronous; async methods
    turn its errors into rejected promises, as the contract says. */
 class SqliteCollection implements VectorCollection {
   /** Every vector, read once and kept until the collection changes. */

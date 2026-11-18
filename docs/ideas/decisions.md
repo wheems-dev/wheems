@@ -230,3 +230,23 @@ The owner pointed out that `WHEEMS.md` said the person talks to the chief "from 
 is one of many channels to come. `WHEEMS.md` stays channel-agnostic: it says who the chief is. The
 built-in instructions don't name a channel either, not even a generated line saying which one,
 since the chief doesn't need to know: the channel's driver handles the differences.
+
+### Bun, not Node.js (18 November 2026)
+
+The owner asked to move from Node.js to Bun, and to use Bun for everything it covers, as a
+batteries-included base in the way Laravel is for PHP. Wheems now runs only on Bun:
+
+- **One tool.** Bun runs Wheems from its TypeScript source, installs packages, bundles the web app
+  (in place of Vite) and runs the tests (in place of Vitest). There's no `tsc` build or `tsx`.
+- **One file to install.** `bun build --compile` makes Wheems one executable with Bun and the web
+  app inside, so a person needs nothing else installed. Each release attaches one for each Mac and
+  for Linux; npm still has the package, for `bun install -g wheems`.
+- **Bun only, not both.** Supporting Node.js as well would keep the work of two runtimes, and a
+  test matrix for both, for little gain. Node.js is turned away with how to install Bun.
+- **Next, Bun's built-ins.** `Bun.secrets` keeps credentials in the macOS Keychain, the Linux
+  secret service or the Windows Credential Manager, which is most of milestone 9's vault. The
+  store still uses `node:sqlite`, which Bun provides; `bun:sqlite` is a later, mechanical change.
+
+Bun had a few differences to work round, each noted where the code handles it: its SQLite can't
+open a WAL database read-only (readers use `query_only`), it can't unset `process.exitCode`, its
+`readdir` gives no fixed order, and it takes the test timeout only on the command line.

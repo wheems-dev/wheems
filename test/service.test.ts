@@ -4,7 +4,7 @@ import { loadInstall } from '../src/config/load.js';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -31,8 +31,7 @@ describe('the service', () => {
     runService({
       home,
       registry,
-      node: '/usr/local/bin/node',
-      cli: '/opt/wheems/dist/cli/main.js',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log,
@@ -49,21 +48,15 @@ describe('the service', () => {
   ) => {
     let out = '';
     let err = '';
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run([...command.split(' '), ...args], {
-        ...defaultIo(),
-        out: (t) => (out += t),
-        err: (t) => (err += t),
-        env: { ...env, WHEEMS_CONVERSATION: conversation },
-        color: false,
-        stdin: () => Promise.resolve(stdin),
-      });
-      return { code, out, err };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run([...command.split(' '), ...args], {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: (t) => (err += t),
+      env: { ...env, WHEEMS_CONVERSATION: conversation },
+      color: false,
+      stdin: () => Promise.resolve(stdin),
+    });
+    return { code, out, err };
   };
 
   beforeEach(async () => {
@@ -135,8 +128,7 @@ describe('the service', () => {
     service = await runService({
       home,
       registry,
-      node: '/usr/local/bin/node',
-      cli: '/opt/wheems/dist/cli/main.js',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -278,8 +270,7 @@ describe('the service', () => {
     const starting = runService({
       home,
       registry,
-      node: '/usr/local/bin/node',
-      cli: '/opt/wheems/dist/cli/main.js',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -302,11 +293,11 @@ describe('the service', () => {
     expect(status.out).toMatch(/✓ Web app: http:\/\/127\.0\.0\.1:\d+\/#token=[\w-]+\n/);
   });
 
-  it('gives the channel driver its secrets, and agents an wheems command pinned to its Node.js', () => {
+  it('gives the channel driver its secrets, and agents a wheems command pinned to its Bun', () => {
     expect(channelOptions).toEqual({ bot_token: 'xoxb-test', app_token: 'xapp-test' });
     const wrapper = readFileSync(join(paths(home, env).bin, 'wheems'), 'utf8');
     expect(wrapper).toBe(
-      "#!/bin/sh\nexec '/usr/local/bin/node' '/opt/wheems/dist/cli/main.js' \"$@\"\n",
+      "#!/bin/sh\nexec '/usr/local/bin/bun' '/opt/wheems/src/cli/main.ts' \"$@\"\n",
     );
   });
 
@@ -459,8 +450,7 @@ describe('the service', () => {
     service = await runService({
       home,
       registry,
-      node: '/usr/local/bin/node',
-      cli: '/opt/wheems/dist/cli/main.js',
+      command: ['/usr/local/bin/bun', '/opt/wheems/src/cli/main.ts'],
       version: '9.9.9',
       env,
       log: () => undefined,
@@ -636,20 +626,14 @@ describe('the service', () => {
     const kb = async (args: string[]) => {
       let out = '';
       let err = '';
-      const previous = process.exitCode;
-      process.exitCode = undefined;
-      try {
-        const code = await run(['knowledgebase', ...args], {
-          ...defaultIo(),
-          out: (t) => (out += t),
-          err: (t) => (err += t),
-          env: { ...env, WHEEMS_WORKSPACE: 'personal' },
-          color: false,
-        });
-        return { code, out, err };
-      } finally {
-        process.exitCode = previous;
-      }
+      const code = await run(['knowledgebase', ...args], {
+        ...defaultIo(),
+        out: (t) => (out += t),
+        err: (t) => (err += t),
+        env: { ...env, WHEEMS_WORKSPACE: 'personal' },
+        color: false,
+      });
+      return { code, out, err };
     };
     const current = join(paths(home, env).index, 'personal', 'current.json');
     await waitFor(() => existsSync(current));
@@ -714,8 +698,7 @@ describe('the service when a channel cannot connect', () => {
         runService({
           home,
           registry,
-          node: 'node',
-          cli: 'x.js',
+          command: ['bun', 'x.js'],
           version: '0',
           env,
           log: () => undefined,
@@ -739,8 +722,7 @@ describe('the service without a valid install', () => {
       runService({
         home,
         registry: new DriverRegistry(),
-        node: 'node',
-        cli: 'x.js',
+        command: ['bun', 'x.js'],
         version: '0',
         log: () => undefined,
       }),

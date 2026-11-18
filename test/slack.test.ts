@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { SlackChannel } from '../src/drivers/channel/slack/slack-channel.js';
 import { slackManifest } from '../src/drivers/channel/slack/setup.js';
 import { noAnswer } from '../src/drivers/channel/slack/transport.js';

@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'bun:test';
 import { Hc, HcError } from '../src/drivers/runtime/herdr/hc.js';
 import { herdrSkill } from '../src/drivers/runtime/herdr/agent-skill.js';
 import { HERDR_MINIMUM_VERSION, HerdrRuntime } from '../src/drivers/runtime/herdr/herdr-runtime.js';
@@ -23,7 +23,7 @@ import { fakeHc, isolatedHcEnv, realHcAvailable, type FakeHc } from './helpers/h
 {
   const live = realHcAvailable();
   const isolated = live ? isolatedHcEnv() : undefined;
-  describe.runIf(live)('herdr (real hc)', () => {
+  describe.if(live)('herdr (real hc)', () => {
     runtimeContract('herdr (real hc)', {
       create: () => new HerdrRuntime({ env: isolated!.env }),
       teardown: async () => {

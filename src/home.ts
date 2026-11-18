@@ -20,7 +20,7 @@ export interface Paths {
   logs: string;
   /** The knowledge bases' search indexes, rebuildable from the files. */
   index: string;
-  /** Holds the `wheems` command that agents run, pinned to this Node.js. */
+  /** Holds the `wheems` command that agents run, pinned to this Bun. */
   bin: string;
   secrets: string;
   /** The page about the person, which every agent in every workspace reads. */

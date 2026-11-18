@@ -348,45 +348,47 @@ export class StateStore {
       await writeFile(file, '', { flag: 'a', mode: 0o600 });
       await ownerOnly(file);
     }
-    const db = await openDatabase(file, { readOnly });
-    try {
-      if (readOnly) {
-        const version = schemaVersion(db);
-        if (options.olderSchema === true && version >= 2 && version < SCHEMA_VERSION) {
-          // Temporary views take the tables' place for this connection only; nothing is written.
-          if (version < 6) {
-            // No session had an ask before version 3, nor a finish line before version 6.
-            db.exec(
-              `CREATE TEMP VIEW sessions AS SELECT *, ${version < 3 ? 'NULL AS ask, ' : ''}NULL AS done_when FROM main.sessions`,
-            );
-          }
-          if (version < 4) {
-            // No chat was recorded before version 4: an empty view stands in for the table.
-            db.exec(
-              'CREATE TEMP VIEW chat AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS author, NULL AS text, NULL AS at WHERE 0',
-            );
-          }
-          if (version < 5) {
-            // No thread was handed over before version 5.
-            db.exec(
-              'CREATE TEMP VIEW threads AS SELECT *, 0 AS generation, NULL AS handover FROM main.threads',
-            );
-            db.exec(
-              'CREATE TEMP VIEW handovers AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS text, NULL AS author, NULL AS from_engine, NULL AS from_model, NULL AS written_at, NULL AS to_engine, NULL AS to_model, NULL AS used_at WHERE 0',
-            );
-          }
-          if (version < 7) {
-            // No approval was asked before version 7.
-            db.exec(
-              `CREATE TEMP VIEW approvals AS SELECT ${APPROVAL_COLUMNS.map((c) => `NULL AS ${c}`).join(', ')} WHERE 0`,
-            );
-          }
-        } else if (version !== SCHEMA_VERSION) {
-          throw new Error(
-            `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
+    // Read-only, the version is checked, and older stores' views made, before it's query-only.
+    const check = (db: DatabaseSync): void => {
+      const version = schemaVersion(db);
+      if (options.olderSchema === true && version >= 2 && version < SCHEMA_VERSION) {
+        // Temporary views take the tables' place for this connection only; nothing is written.
+        if (version < 6) {
+          // No session had an ask before version 3, nor a finish line before version 6.
+          db.exec(
+            `CREATE TEMP VIEW sessions AS SELECT *, ${version < 3 ? 'NULL AS ask, ' : ''}NULL AS done_when FROM main.sessions`,
           );
         }
-      } else {
+        if (version < 4) {
+          // No chat was recorded before version 4: an empty view stands in for the table.
+          db.exec(
+            'CREATE TEMP VIEW chat AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS author, NULL AS text, NULL AS at WHERE 0',
+          );
+        }
+        if (version < 5) {
+          // No thread was handed over before version 5.
+          db.exec(
+            'CREATE TEMP VIEW threads AS SELECT *, 0 AS generation, NULL AS handover FROM main.threads',
+          );
+          db.exec(
+            'CREATE TEMP VIEW handovers AS SELECT NULL AS id, NULL AS workspace, NULL AS session, NULL AS text, NULL AS author, NULL AS from_engine, NULL AS from_model, NULL AS written_at, NULL AS to_engine, NULL AS to_model, NULL AS used_at WHERE 0',
+          );
+        }
+        if (version < 7) {
+          // No approval was asked before version 7.
+          db.exec(
+            `CREATE TEMP VIEW approvals AS SELECT ${APPROVAL_COLUMNS.map((c) => `NULL AS ${c}`).join(', ')} WHERE 0`,
+          );
+        }
+      } else if (version !== SCHEMA_VERSION) {
+        throw new Error(
+          `The session store is at schema version ${String(version)}; this Wheems uses ${String(SCHEMA_VERSION)}. The service updates it when it starts.`,
+        );
+      }
+    };
+    const db = await openDatabase(file, readOnly ? { readOnly, beforeQueryOnly: check } : {});
+    try {
+      if (!readOnly) {
         db.exec('PRAGMA foreign_keys = ON');
         migrate(db);
         // Stores from before this, and their -wal and -shm files, were readable by everyone.

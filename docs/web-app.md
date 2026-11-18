@@ -29,11 +29,11 @@ names.
   session and ending one go through the service's control socket, as `wheems session send` and
   `end` do, as you, in that session's workspace. Each action says how it went; a slow send's or
   end's result shows on the session when the service has it.
-- **Built with React and Vite** (`web/`), as a single-page app. `npm run build` builds it into
+- **Built with React and Bun** (`web/`), as a single-page app. `bun run build` bundles it into
   `dist/web/app`, so the npm package ships only the built files and installing Wheems builds
-  nothing. The service serves those files and a JSON API under `/api` that reads through
+  nothing; the one-file executable carries them inside it. The service serves those files and a JSON API under `/api` that reads through
   `data.ts` and acts through `actions.ts`. Pages that change while you watch (Overview,
-  Sessions) refresh every few seconds. `npm run dev:web` serves the app with live reload,
+  Sessions) refresh every few seconds. `bun run dev:web` serves the app with live reload,
   passing `/api` to a running Wheems.
 - **Only you can use it.** It's local only, and the API needs a token that Wheems keeps in
   `.wheems/web-token` (readable only by you). `wheems web open` gives it after the `#` in the

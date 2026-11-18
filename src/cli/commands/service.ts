@@ -3,7 +3,8 @@ import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { Command } from 'commander';
-import { nodeVersionProblem } from '../../util/node-support.js';
+import { bunVersionProblem } from '../../util/bun-support.js';
+import { isStandalone } from '../../util/standalone.js';
 import { runInteractive } from '../../util/process.js';
 import { defaultHome, paths, tilde, type Paths } from '../../home.js';
 import { request, type ServiceReport } from '../../service/control.js';
@@ -23,25 +24,25 @@ import { chatProblems } from '../../doctor/doctor.js';
 import type { Io } from '../program.js';
 import { packageVersion } from '../version.js';
 
-/** The script that is running this CLI, resolved through npm links. */
+/** The script that is running this CLI, resolved through package manager links. */
 export function cliPath(): string {
   return realpathSync(process.argv[1] ?? '');
 }
 
+/** What runs this Wheems again: Bun and this script, or this one-file executable alone. */
+export function wheemsCommand(): string[] {
+  return isStandalone() ? [process.execPath] : [process.execPath, cliPath()];
+}
+
 /**
- * Runs the service under launchd with this Node.js and build, replacing a copy already
+ * Runs the service under launchd with this Bun and copy of Wheems, replacing a copy already
  * running, and waits for it to answer.
  */
 export async function installAndWait(where: Paths): Promise<boolean> {
-  const problem = nodeVersionProblem(process.versions.node);
+  const problem = bunVersionProblem(process.versions.bun);
   if (problem !== null) throw new Error(problem);
-  const cli = cliPath();
-  if (!cli.endsWith('.js')) {
-    throw new Error('Run the service from a build of Wheems (npm run build), not from source.');
-  }
   await installService({
-    node: process.execPath,
-    cli,
+    command: wheemsCommand(),
     home: where.home,
     logFile: logFile(where),
   });
@@ -217,7 +218,7 @@ async function start(where: Paths, io: Io, restart: boolean): Promise<void> {
     );
   }
   io.out(
-    `${restart ? 'Restarting' : 'Starting'} with Node.js ${process.versions.node} and Wheems from ${tilde(cliPath(), io.env)}\n`,
+    `${restart ? 'Restarting' : 'Starting'} with ${isStandalone() ? `the Wheems executable at ${tilde(process.execPath, io.env)}` : `Bun ${process.versions.bun} and Wheems from ${tilde(cliPath(), io.env)}`}\n`,
   );
   if (await installAndWait(where)) {
     io.out(
@@ -347,8 +348,7 @@ export function registerService(program: Command, io: Io): void {
       const running = await runService({
         home: where(options).home,
         registry: io.registry(),
-        node: process.execPath,
-        cli: cliPath(),
+        command: wheemsCommand(),
         version: packageVersion(),
         env: io.env,
       });

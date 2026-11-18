@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { defaultIo, packageVersion, run } from '../src/cli/program.js';
 import { installYaml } from '../src/cli/templates.js';
@@ -11,20 +11,14 @@ const EXAMPLE = new URL('../examples/install/', import.meta.url).pathname;
 async function cli(...args: string[]): Promise<{ code: number; out: string; err: string }> {
   let out = '';
   let err = '';
-  const previous = process.exitCode;
-  process.exitCode = undefined;
-  try {
-    const code = await run(args, {
-      out: (text) => (out += text),
-      err: (text) => (err += text),
-      env: {},
-      color: false,
-      ...defaultIo(),
-    });
-    return { code, out, err };
-  } finally {
-    process.exitCode = previous;
-  }
+  const code = await run(args, {
+    out: (text) => (out += text),
+    err: (text) => (err += text),
+    env: {},
+    color: false,
+    ...defaultIo(),
+  });
+  return { code, out, err };
 }
 
 describe('wheems CLI', () => {

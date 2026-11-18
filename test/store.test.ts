@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import type { SessionInfo } from '../src/contracts/runtime.js';
 import { ConversationStore, type Conversation } from '../src/service/store.js';
 import { MIGRATIONS, SCHEMA_VERSION } from '../src/state/schema.js';

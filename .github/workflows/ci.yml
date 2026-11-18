@@ -24,16 +24,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version-file: .nvmrc
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
       - name: CLI smoke test
         run: |
-          node dist/cli/main.js --version
-          node dist/cli/main.js validate examples/install
+          ./src/cli/main.ts --version
+          ./src/cli/main.ts validate examples/install
+      - name: One-file executable
+        run: |
+          bun run compile
+          dist/bin/wheems --version
+          dist/bin/wheems configuration validate examples/install

@@ -1,15 +1,17 @@
-#!/usr/bin/env node
-// Check the Node.js version before loading anything that needs a newer one, so an
-// unsupported Node.js gets a plain message rather than a stack trace from a dependency.
-import { nodeVersionProblem } from '../util/node-support.js';
-
-const problem = nodeVersionProblem(process.versions.node);
-if (problem !== null) {
-  // nvm users usually have a newer Node.js already, with an older one as their default.
-  const nvm = (process.env.NVM_DIR ?? '') !== '';
+#!/usr/bin/env bun
+// Check the runtime before loading anything else, so Node.js or an old Bun gets a plain message
+// rather than a stack trace. Node.js can't load Wheems's other files at all, so it's turned away
+// before importing any.
+if (!('bun' in process.versions)) {
   process.stderr.write(
-    `${problem}\nThis is ${process.execPath}.\n${nvm ? 'With nvm, make 22 the default for every new terminal: nvm install 22 && nvm alias default 22\n' : ''}`,
+    `Wheems runs on Bun, not Node.js. Install Bun: curl -fsSL https://bun.sh/install | bash\nThis is ${process.execPath}.\n`,
   );
+  process.exit(1);
+}
+const { bunVersionProblem } = await import('../util/bun-support.js');
+const problem = bunVersionProblem(process.versions.bun);
+if (problem !== null) {
+  process.stderr.write(`${problem}\nThis is ${process.execPath}.\n`);
   process.exit(1);
 }
 

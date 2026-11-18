@@ -15,7 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseToml } from 'smol-toml';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { claudeTrusts, codexTrusts } from '../src/util/trust.js';
 import { markClaudeTrusted, markCodexTrusted } from '../src/util/trust-write.js';
 
@@ -179,7 +179,7 @@ describe('marking a folder trusted', () => {
           return Promise.resolve();
         },
       });
-      expect(claudeCouldLock).toBe(false);
+      expect(claudeCouldLock as boolean | null).toBe(false);
       expect(await claudeTrusts(install, file)).toBe(true);
       // Let go of afterwards.
       expect(files(root)).toEqual(['.claude.json', 'wheems']);

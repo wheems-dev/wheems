@@ -1,4 +1,4 @@
-/** Writes schemas/<kind>.schema.json from the zod config schemas. Run with npm run schemas. */
+/** Writes schemas/<kind>.schema.json from the zod config schemas. Run with bun run schemas. */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { renderSchemas } from './render-schemas.js';
 

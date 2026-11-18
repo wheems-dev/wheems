@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { DriverError, type HealthCheck } from '../contracts/driver.js';
 import type { RuntimeDriver, SessionInfo } from '../contracts/runtime.js';
 

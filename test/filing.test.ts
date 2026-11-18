@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { installYaml } from '../src/cli/templates.js';
 import { loadInstall } from '../src/config/load.js';
@@ -390,7 +390,7 @@ describe('the filing queue', () => {
     expect(filed).toEqual(['personal']);
     const knowledge = knowledgePaths(join(home, 'workspaces', 'personal'));
     const boat = parsePage(readFileSync(join(knowledge.pages, 'boat-name.md'), 'utf8'));
-    expect(boat.sources).toEqual([note.split('/').at(-1)]);
+    expect(boat.sources).toEqual([note.split('/').at(-1) ?? '']);
     expect(boat.body).toContain('because it is calmer');
     expect(readFileSync(knowledge.brief, 'utf8')).toBe('The boat is Halcyon.\n');
     expect(readdirSync(knowledge.inbox)).toEqual([]);

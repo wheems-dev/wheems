@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { runReview, type ReviewUi } from '../src/cli/commands/review.js';
 import { defaultIo, run } from '../src/cli/program.js';
@@ -524,21 +524,15 @@ describe('wheems skill', () => {
   const cli = async (args: string[], env: NodeJS.ProcessEnv = {}) => {
     let out = '';
     let err = '';
-    const previous = process.exitCode;
-    process.exitCode = undefined;
-    try {
-      const code = await run(args, {
-        ...defaultIo(),
-        out: (t) => (out += t),
-        err: (t) => (err += t),
-        env: { WHEEMS_HOME: home, ...env },
-        color: false,
-        stdin: () => Promise.resolve(WEEKLY),
-      });
-      return { code, out, err };
-    } finally {
-      process.exitCode = previous;
-    }
+    const code = await run(args, {
+      ...defaultIo(),
+      out: (t) => (out += t),
+      err: (t) => (err += t),
+      env: { WHEEMS_HOME: home, ...env },
+      color: false,
+      stdin: () => Promise.resolve(WEEKLY),
+    });
+    return { code, out, err };
   };
 
   it('lists the library and shows a skill, at its latest version or the one asked for', async () => {

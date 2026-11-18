@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { initWorkspace } from '../src/cli/commands/init.js';
 import { setup } from '../src/cli/commands/setup.js';
 import { DriverRegistry } from '../src/contracts/registry.js';
@@ -700,10 +700,21 @@ describe('launchd', () => {
     expect(jobAbsent({ code: 5, stdout: '', stderr: 'Input/output error' })).toBe(false);
   });
 
+  it('runs a one-file executable as itself, with its own folder first on the PATH', () => {
+    const plist = renderPlist({
+      command: ['/Users/me/.local/bin/wheems'],
+      home: '/Users/me/wheems',
+      logFile: '/Users/me/wheems/.wheems/logs/service.log',
+    });
+    expect(plist).toContain(
+      '<string>/Users/me/.local/bin/wheems</string>\n    <string>service</string>\n    <string>run</string>',
+    );
+    expect(plist).toMatch(/<key>PATH<\/key>\s*<string>\/Users\/me\/\.local\/bin:/);
+  });
+
   it('reads back the install folder a plist was written for, so a restart keeps it', () => {
     const plist = renderPlist({
-      node: '/opt/homebrew/opt/node@22/bin/node',
-      cli: '/x/dist/cli/main.js',
+      command: ['/Users/me/.bun/bin/bun', '/x/src/cli/main.ts'],
       home: '/Users/me/Work & "Play"/wheems',
       logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });
@@ -713,8 +724,7 @@ describe('launchd', () => {
 
   it('writes a user agent that runs the service and restarts it', () => {
     const plist = renderPlist({
-      node: '/opt/homebrew/opt/node@22/bin/node',
-      cli: '/Users/me/Projects/wheems/dist/cli/main.js',
+      command: ['/Users/me/.bun/bin/bun', '/Users/me/Projects/wheems/src/cli/main.ts'],
       home: '/Users/me/wheems & co',
       logFile: '/Users/me/wheems/.wheems/logs/service.log',
     });
@@ -722,10 +732,10 @@ describe('launchd', () => {
     // Without it, launchd throttles the job's CPU and disk, and it takes seconds to start.
     expect(plist).toContain('<key>ProcessType</key>\n  <string>Interactive</string>');
     expect(plist).toContain(
-      '<string>/opt/homebrew/opt/node@22/bin/node</string>\n    <string>/Users/me/Projects/wheems/dist/cli/main.js</string>\n    <string>service</string>\n    <string>run</string>',
+      '<string>/Users/me/.bun/bin/bun</string>\n    <string>/Users/me/Projects/wheems/src/cli/main.ts</string>\n    <string>service</string>\n    <string>run</string>',
     );
     expect(plist).toContain('<string>/Users/me/wheems &amp; co</string>');
-    expect(plist).toMatch(/<key>PATH<\/key>\s*<string>\/opt\/homebrew\/opt\/node@22\/bin:/);
+    expect(plist).toMatch(/<key>PATH<\/key>\s*<string>\/Users\/me\/\.bun\/bin:/);
     expect(plist).toContain('<key>KeepAlive</key>\n  <true/>');
   });
 

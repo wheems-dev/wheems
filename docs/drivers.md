@@ -144,7 +144,7 @@ code: a few milliseconds for thousands of pages, with nothing to install.
 
 Each driver type ships a test suite that any driver of that type must pass, published as
 `wheems/testing`. A plugin written by an agent, by you or by a stranger is checked against the
-same contract before it's switched on. The suites use [Vitest](https://vitest.dev).
+same contract before it's switched on. The suites use Bun's test runner, [`bun test`](https://bun.com/docs/cli/test).
 
 ```ts
 // my-runtime.test.ts

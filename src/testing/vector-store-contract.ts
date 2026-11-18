@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import type { VectorStoreDriver } from '../contracts/vector-store.js';
 import { expectDriverError, expectHealthCheck } from './runtime-contract.js';
 

@@ -21,7 +21,7 @@ import { KnowledgeSearch, type IndexStatus } from '../knowledge/search.js';
 import { listAboutYou } from '../review/review.js';
 import { listProposals } from '../skills/proposals.js';
 import { compareVersions } from '../util/version.js';
-import { NODE_SUPPORTED, nodeVersionProblem } from '../util/node-support.js';
+import { BUN_INSTALL, BUN_SUPPORTED, bunVersionProblem } from '../util/bun-support.js';
 import { fullTextSearchProblem } from '../util/sqlite.js';
 import { StateStore, readConversationsFile } from '../state/store.js';
 export { defaultHome } from '../home.js';
@@ -33,8 +33,8 @@ export interface DoctorOptions {
   /** Skip starting a test session in the runtime. */
   quick?: boolean;
   env?: NodeJS.ProcessEnv;
-  /** Overrides for tests. */
-  nodeVersion?: string;
+  /** Overrides for tests: the Bun version, or null for none (Node.js). */
+  bunVersion?: string | null;
   platform?: NodeJS.Platform;
   /** Whether an engine trusts a folder: true, false, or null when it can't tell. */
   trust?: (engine: string, dir: string) => Promise<boolean | null>;
@@ -717,24 +717,30 @@ async function probeService(home: string): Promise<{ installed: boolean; answeri
 }
 
 async function systemChecks(options: DoctorOptions): Promise<HealthCheck[]> {
-  const nodeVersion = options.nodeVersion ?? process.versions.node;
+  const bunVersion =
+    options.bunVersion === undefined ? process.versions.bun : (options.bunVersion ?? undefined);
   const platform = options.platform ?? process.platform;
   const checks: HealthCheck[] = [];
-  const problem = nodeVersionProblem(nodeVersion);
+  const problem = bunVersionProblem(bunVersion);
   checks.push(
     problem === null
-      ? { name: 'Node.js', status: 'pass', message: `${nodeVersion} is supported` }
-      : { name: 'Node.js', status: 'fail', message: problem, hint: `Install ${NODE_SUPPORTED}.` },
+      ? { name: 'Bun', status: 'pass', message: `${bunVersion ?? ''} is supported` }
+      : {
+          name: 'Bun',
+          status: 'fail',
+          message: problem,
+          hint: `Install ${BUN_SUPPORTED}: ${BUN_INSTALL}`,
+        },
   );
   const search = await (options.fullTextSearch ?? (() => fullTextSearchProblem()))();
   checks.push(
     search === null
-      ? { name: 'SQLite search', status: 'pass', message: "Node's SQLite has full-text search" }
+      ? { name: 'SQLite search', status: 'pass', message: "Bun's SQLite has full-text search" }
       : {
           name: 'SQLite search',
           status: 'fail',
           message: search,
-          hint: `Install ${NODE_SUPPORTED}.`,
+          hint: `Install ${BUN_SUPPORTED}.`,
         },
   );
   checks.push(

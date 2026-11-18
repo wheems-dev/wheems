@@ -1,0 +1,4 @@
+[test]
+root = "test"
+# Temporary folders and the engines' records go in the repository, never this Mac's own.
+preload = ["./test/setup/preload.ts"]

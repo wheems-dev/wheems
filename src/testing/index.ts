@@ -1,6 +1,6 @@
 /**
  * Contract test suites and in-memory drivers, published as `wheems/testing`.
- * The suites use Vitest; a driver package runs one in its own test file:
+ * The suites use `bun:test`; a driver package runs one in its own test file, with `bun test`:
  *
  *   import { runtimeContract } from 'wheems/testing';
  *   runtimeContract('my-runtime', { create: () => new MyRuntime() });

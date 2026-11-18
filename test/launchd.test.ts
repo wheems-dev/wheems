@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 import { reloadJob, type Launchctl } from '../src/service/launchd.js';
 import type { RunResult } from '../src/util/process.js';
 

@@ -14,7 +14,7 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { loadInstall } from '../src/config/load.js';
 import { StubEngine } from '../src/testing/index.js';
 import { initWorkspace } from '../src/cli/commands/init.js';
@@ -26,6 +26,7 @@ import { MIGRATIONS } from '../src/state/schema.js';
 import { ConversationStore } from '../src/service/store.js';
 import { StateStore } from '../src/state/store.js';
 import { fingerprint } from '../src/web/data.js';
+import { embedApp } from '../src/util/standalone.js';
 import { startWeb, webToken, webUrl, type RunningWeb } from '../src/web/server.js';
 
 interface Answer {
@@ -208,6 +209,25 @@ describe('the web app', () => {
     const escape = await send('/%2e%2e/secret.txt', { token: null });
     expect(escape.body).not.toContain('never served');
     expect((await send('/assets/missing.js', { token: null })).status).toBe(404);
+  });
+
+  it('serves the app carried inside the one-file executable, and nothing else', async () => {
+    const inside = join(home, 'bunfs');
+    mkdirSync(inside);
+    writeFileSync(join(inside, 'page'), '<!doctype html><div id="embedded"></div>');
+    writeFileSync(join(inside, 'script'), 'console.log(2)');
+    embedApp({ 'index.html': join(inside, 'page'), 'assets/index-def.js': join(inside, 'script') });
+    try {
+      expect((await send('/w/default/review', { token: null })).body).toContain('embedded');
+      const asset = await send('/assets/index-def.js', { token: null });
+      expect(asset.body).toBe('console.log(2)');
+      expect(asset.headers['cache-control']).toContain('immutable');
+      // Not the app in appDir, nor anything else.
+      expect((await send('/assets/index-abc.js', { token: null })).status).toBe(404);
+      expect((await send('/%2e%2e/bunfs/script', { token: null })).body).not.toContain('log(2)');
+    } finally {
+      embedApp(undefined);
+    }
   });
 
   it("gives a workspace's sessions as a tree, with what was asked", async () => {

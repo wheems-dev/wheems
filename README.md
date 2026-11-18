@@ -83,15 +83,30 @@ You need:
 
 - macOS (the service runs under launchd; Linux, with systemd, comes with the always-on
   milestone)
-- Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
-  search, which Wheems needs)
 - Herdr core 0.1.20 or later (`hc`): see [herdr.dev/core](https://herdr.dev/core/) to install it
 - A Slack workspace where you can add apps
 
-Install the `wheems` command from npm:
+Wheems runs on [Bun](https://bun.com), which is its runtime, package manager, bundler and test
+runner in one. Install it in either of two ways.
+
+**One file, with nothing else to install.** Each [release](https://github.com/wheems-dev/wheems/releases)
+has the `wheems` command as one executable, with Bun and the web app inside it, for Macs with
+Apple silicon (`darwin-arm64`) or Intel (`darwin-x64`) and for Linux (`linux-x64`,
+`linux-arm64`). Download it with `curl` (a browser marks it as downloaded, and macOS then
+refuses to open it), unpack it and put it on your `PATH`:
 
 ```bash
-npm install -g wheems
+# The newest release, preview or not (0.x releases are previews, which "latest" skips).
+tag=$(curl -fsSL "https://api.github.com/repos/wheems-dev/wheems/releases?per_page=1" | grep -m1 '"tag_name"' | cut -d'"' -f4)
+curl -fsSL -o wheems.tar.gz "https://github.com/wheems-dev/wheems/releases/download/$tag/wheems-darwin-arm64.tar.gz"
+tar -xzf wheems.tar.gz && mv wheems-darwin-arm64 ~/.local/bin/wheems
+```
+
+**With Bun.** Install Bun 1.4.4 or later, then Wheems from npm:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+bun install -g wheems
 ```
 
 Or build it from this repository:
@@ -99,18 +114,17 @@ Or build it from this repository:
 ```bash
 git clone https://github.com/wheems-dev/wheems.git ~/Projects/wheems
 cd ~/Projects/wheems
-npm install
-npm run build
-npm link            # puts the wheems command on your PATH
+bun install
+bun run build       # the web app
+bun link            # puts the wheems command on your PATH
 ```
 
 Clone it anywhere except `~/wheems`. That folder is your install: your private config, notes
 and knowledge base, kept in a git folder of its own that is never pushed anywhere.
 
-If your default `node` isn't one of those (Homebrew's `node` may be 23), use one that is, such as Homebrew's
-(`brew install node@22`), and run `/opt/homebrew/opt/node@22/bin/node dist/cli/main.js` in place
-of `wheems`. `wheems doctor` says which Node.js it runs on, and fails when it's unsupported or its SQLite has no
-full-text search.
+Wheems runs from its TypeScript source, with no build step but the web app's. Node.js can't run
+it: run with Node.js, it says so and how to install Bun. `wheems doctor` says which Bun it runs
+on, and fails when it's older than 1.4.4.
 
 ## Set up
 
@@ -611,7 +625,7 @@ wheems knowledgebase search "what did we decide about the boat name"
 
 It searches the agent's own workspace: pages, filed notes and the inbox.
 
-- **By keyword**, always, with SQLite's full-text search, built into Node.js. Common words such
+- **By keyword**, always, with SQLite's full-text search, built into Bun. Common words such
   as "what" and "the" are left out, and any remaining word can match.
 - **By meaning** too, once you turn it on. The default is Ollama with `nomic-embed-text`, which
   runs on your Mac for free. Set it up in `wheems setup` → Knowledge, or in `install.yaml`.
@@ -760,8 +774,8 @@ Log: ~/wheems/.wheems/logs/service.log
 ```
 
 It runs as the launchd agent `dev.wheems.service`
-(`~/Library/LaunchAgents/dev.wheems.service.plist`), with the Node.js and the copy of Wheems you
-started it with; `wheems restart` picks up a newer one. Its log is
+(`~/Library/LaunchAgents/dev.wheems.service.plist`), with the Bun and the copy of Wheems you
+started it with, or the one-file executable; `wheems restart` picks up a newer one. Its log is
 `~/wheems/.wheems/logs/service.log`. It refuses to start when the config has errors, and the log
 says why: `wheems start` prints the end of the log when it doesn't answer. Run `wheems doctor`
 to see the errors. The commands are also under `wheems service` (`wheems service start` and so
@@ -785,7 +799,7 @@ Running `wheems start` again restarts it and starts the wait over, so there's no
 `wheems status` instead.
 
 Agents reach the service through the `wheems` command, which Wheems puts first on each session's
-`PATH`, pinned to the same Node.js and the same copy of Wheems. The command talks to the service
+`PATH`, pinned to the same Bun and copy of Wheems, or the same executable. The command talks to the service
 over a Unix socket in `.wheems/` that only you can open.
 
 ### The session store
@@ -845,7 +859,7 @@ gives, which carries a token kept in `.wheems/web-token`. What comes next is in
 
 | Section    | Checks                                                                                                                       |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| System     | Node.js version and platform                                                                                                 |
+| System     | Bun version and platform                                                                                                     |
 | Herdr core | `hc` is installed, new enough and answering. It also starts a tiny test session and removes it again (`--quick` skips that). |
 | Config     | Every config file, and the links between them                                                                                |
 | Agents     | Each engine is installed and signed in, and trusts each workspace folder and the folder sessions start in                    |
@@ -1212,13 +1226,17 @@ built, with a worked example: growing a website into a lead generator.
 ## Developing Wheems
 
 ```bash
-npm install
-npm run check              # lint, typecheck, test and build, as CI does
-npm test                   # tests only
-npm run schemas            # regenerate schemas/*.schema.json after changing src/config/schemas.ts
-npm run wheems -- doctor   # run the CLI from source
-npm run dev:web            # the web app with live reload, using the Wheems running on port 4317
+bun install
+bun run check              # lint, typecheck, test and build, as CI does
+bun run test               # tests only (with the 20-second timeout some tests need)
+bun run schemas            # regenerate schemas/*.schema.json after changing src/config/schemas.ts
+bun run wheems doctor      # run the CLI from source
+bun run dev:web            # the web app with live reload, using the Wheems running on port 4317
+bun run compile            # the one-file executable, in dist/bin/wheems
 ```
+
+Bun does everything: it runs Wheems from source, installs packages, bundles the web app, runs the
+tests (`bun:test`) and builds the executable. TypeScript checks the types (`bun run typecheck`).
 
 The tests run the runtime contract suite against the real `hc` when it's installed, in a Herdr
 core of their own so your terminals are never touched; `WHEEMS_TEST_HC=0` turns that off. They
@@ -1237,7 +1255,7 @@ also run it against a fake `hc`, which is what CI uses. Set `WHEEMS_TEST_OLLAMA_
 | `src/skills/`       | The skill library and proposals                                                  |
 | `src/review/`       | Approving and turning down what waits for review                                 |
 | `src/web/`          | The web app's server: its JSON API, what it reads, and its actions               |
-| `web/`              | The web app itself: React, built with Vite into `dist/web/app`                   |
+| `web/`              | The web app itself: React, built with Bun into `dist/web/app`                    |
 | `src/agents/`       | Built-in instructions, and the filer                                             |
 | `src/doctor/`       | `wheems doctor`                                                                  |
 | `src/testing/`      | Contract test suites and in-memory drivers, published as `wheems/testing`        |
@@ -1249,12 +1267,13 @@ also run it against a fake `hc`, which is what CI uses. Set `WHEEMS_TEST_OLLAMA_
 
 GitHub publishes each release. To release, merge a pull request to `main` that:
 
-1. changes `version` in `package.json` (and `package-lock.json`);
+1. changes `version` in `package.json`;
 2. adds a `## <version>` section to `CHANGELOG.md`.
 
 The [release workflow](.github/workflows/release.yml) then runs the full check on Linux and
 macOS and publishes to npm. It then tags the commit `v<version>` and creates a GitHub release
-with that changelog section as its notes. A push to `main` whose version is already published and
+with that changelog section as its notes, and attaches the one-file executables, built on a Mac
+so the Mac ones can be signed. A push to `main` whose version is already published and
 tagged does nothing.
 
 npm trusts the workflow through

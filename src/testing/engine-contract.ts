@@ -1,5 +1,5 @@
 import { isAbsolute, normalize } from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'bun:test';
 import type { AgentDefinition, EngineContext, EngineDriver } from '../contracts/engine.js';
 import { expectHealthCheck } from './runtime-contract.js';
 
@@ -120,14 +120,12 @@ export function engineContract(label: string, options: EngineContractOptions): v
       expect(await driver.prepare(agent, context)).toEqual(await driver.prepare(agent, context));
     });
 
-    it('names the conversation, and carries it on when resuming', async (ctx) => {
+    it('names the conversation, and carries it on when resuming', async () => {
       const fresh = await driver.prepare(agent, context);
       // An engine that chooses its own ids finds them later (findSession); others take Wheems's.
       if (!driver.findSession) expect(JSON.stringify(fresh)).toContain(context.session.id);
-      if (!driver.capabilities.resume) {
-        ctx.skip();
-        return;
-      }
+      // An engine that can't resume has nothing more to show here.
+      if (!driver.capabilities.resume) return;
       const engineId = driver.findSession ? 'contract-engine-session' : context.session.id;
       const resumed = await driver.prepare(agent, {
         ...context,
