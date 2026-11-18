@@ -163,6 +163,22 @@ a:hover {
   padding: 32px clamp(16px, 4vw, 48px) 48px;
   background: var(--main);
 }
+/* Side by side, only the content scrolls: the sidebar stays in view, scrolling on its own when
+   it's taller than the window. Narrower, the sidebar sits above the content and scrolls with it. */
+@media (min-width: 800px) {
+  .app {
+    flex-wrap: nowrap;
+  }
+  .side {
+    flex: 0 0 240px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
 .wrap {
   max-width: 1080px;
   margin: 0 auto;
