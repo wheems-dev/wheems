@@ -97,7 +97,7 @@ refuses to open it), unpack it and put it on your `PATH`:
 
 ```bash
 # The newest release, preview or not (0.x releases are previews, which "latest" skips).
-tag=$(curl -fsSL https://api.github.com/repos/wheems-dev/wheems/releases?per_page=1 | grep -m1 '"tag_name"' | cut -d'"' -f4)
+tag=$(curl -fsSL "https://api.github.com/repos/wheems-dev/wheems/releases?per_page=1" | grep -m1 '"tag_name"' | cut -d'"' -f4)
 curl -fsSL -o wheems.tar.gz "https://github.com/wheems-dev/wheems/releases/download/$tag/wheems-darwin-arm64.tar.gz"
 tar -xzf wheems.tar.gz && mv wheems-darwin-arm64 ~/.local/bin/wheems
 ```
