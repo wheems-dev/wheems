@@ -96,7 +96,7 @@ Part of using the terminal once, then everything else in chat (built):
 ## Installing on a new machine
 
 ```bash
-npm install -g wheems   # the same way Claude Code is installed; the command is wheems
+bun install -g wheems   # or the one-file executable from a release; the command is wheems
 wheems setup            # installs the pinned Herdr core, asks for channel tokens,
                        # writes config, installs the service, runs doctor
 wheems workspace create acme   # creates a workspace
@@ -224,7 +224,7 @@ Agents search before answering about past work:
 searches their own workspace's pages and notes (filed and in the inbox). The map in their
 instructions tells them when, and the built-in `wheems-knowledge` skill how.
 
-- **By keyword**, always: SQLite's full-text search, built into Node.js, so it needs nothing
+- **By keyword**, always: SQLite's full-text search, built into Bun, so it needs nothing
   installed.
 - **By meaning** too, when install.yaml names an embeddings driver (`knowledge.embeddings`), such
   as Ollama with `nomic-embed-text`, which runs on the machine for free. `wheems setup`
@@ -657,7 +657,7 @@ none named, the session runs the owner's own agent file.
 
 ### The session store
 
-`.wheems/state.sqlite`, one per install, using Node's built-in `node:sqlite` as the search index
+`.wheems/state.sqlite`, one per install, using Bun's built-in SQLite (`node:sqlite`) as the search index
 does. It and its `-wal` and `-shm` files are owner-only (0600), like the secrets; the service
 mends older ones when it starts.
 

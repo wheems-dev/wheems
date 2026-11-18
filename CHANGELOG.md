@@ -5,8 +5,22 @@ change anything, including commands and config formats, without a migration path
 
 ## Unreleased
 
-Approvals and updates, the second half of milestone 3. The session store moves to schema 7, with
-an `approvals` table; the service updates it when it starts. Still an early preview.
+Approvals and updates, the second half of milestone 3, and Wheems moves from Node.js to Bun. The
+session store moves to schema 7, with an `approvals` table; the service updates it when it
+starts. Still an early preview.
+
+**Changed**
+
+- **Wheems runs on Bun, not Node.js.** Install [Bun](https://bun.com) 1.4.4 or later and then
+  `bun install -g wheems`, or download the one-file executable from the release, which needs
+  nothing else installed. Run with Node.js, Wheems says so and how to install Bun. After
+  updating, run `wheems restart`, so the service and the agents' `wheems` command run with Bun.
+- **One executable.** Each release attaches `wheems` as one file, with Bun and the web app
+  inside, for Macs with Apple silicon or Intel and for Linux. `bun run compile` builds it.
+- **Bun builds and tests Wheems too:** it bundles the web app (`bun run build`, in place of Vite)
+  and runs the tests (`bun:test`, in place of Vitest). The package ships the TypeScript source,
+  which Bun runs directly. The `wheems/testing` contract suites now use `bun:test`.
+- `wheems doctor` checks the Bun version in place of the Node.js one.
 
 **Added**
 

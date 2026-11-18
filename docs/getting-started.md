@@ -5,8 +5,6 @@ most of it in Slack's app settings.
 
 You need:
 
-- Node.js 22.16 or later in the 22 line, or 24 or later (not 23: its SQLite has no full-text
-  search, which Wheems needs)
 - Herdr core 0.1.20 or later (`hc`): see [herdr.dev/core](https://herdr.dev/core/) to install it
 - A Slack workspace where you can add apps
 
@@ -14,22 +12,35 @@ Setup installs the agent CLIs for you: Claude Code, Codex or opencode.
 
 ## 1. Install
 
+The simplest way is the one-file executable from the latest
+[release](https://github.com/wheems-dev/wheems/releases), with everything inside it. On a Mac
+with Apple silicon:
+
 ```bash
-npm install -g wheems
+curl -fsSL -o wheems.tar.gz https://github.com/wheems-dev/wheems/releases/latest/download/wheems-darwin-arm64.tar.gz
+tar -xzf wheems.tar.gz && mv wheems-darwin-arm64 ~/.local/bin/wheems
+```
+
+On an Intel Mac, use `wheems-darwin-x64`. Use `curl` rather than a browser, which marks the file
+as downloaded so that macOS refuses to open it.
+
+Or install [Bun](https://bun.com) 1.4.4 or later, Wheems's runtime, and Wheems with it:
+
+```bash
+curl -fsSL https://bun.sh/install | bash
+bun install -g wheems
 ```
 
 Or build it from this repository (clone it anywhere except `~/wheems`, which is your install),
 and link the command:
 
 ```bash
-npm install
-npm run build
-npm link
+bun install
+bun run build
+bun link
 ```
 
-If your default `node` isn't one of those (Homebrew's `node` may be 23), run Wheems with one that is, such as Homebrew's 22:
-`brew install node@22`, then `/opt/homebrew/opt/node@22/bin/node /path/to/wheems/dist/cli/main.js`.
-`wheems doctor` says which Node.js it is running on, and checks its SQLite has full-text search.
+`wheems doctor` says which Bun it is running on.
 
 ## 2. Run setup
 
@@ -69,8 +80,8 @@ Slack, so setup asks once whether Wheems may mark your install folder trusted fo
 That covers every workspace in the install, so it's asked only once (see
 [Trusting the install folder](../README.md#trusting-the-install-folder)).
 
-**Service** runs Wheems in the background under launchd, now and at every login, with the Node.js
-you ran setup with. Nothing answers in chat until it runs, so setup asks again if you leave
+**Service** runs Wheems in the background under launchd, now and at every login, with the Bun
+(or the executable) you ran setup with. Nothing answers in chat until it runs, so setup asks again if you leave
 without starting it. Afterwards, `wheems status`, `wheems logs` and `wheems restart` look after
 it; restart it after changing config. `wheems stop` stops it until `wheems start`.
 
@@ -128,5 +139,5 @@ that failed to start. It says each problem once, until it's fixed.
 
 If nothing answers at all, run `wheems status`: it says whether the service is running and where
 each workspace chats. For everything else, run `wheems doctor`, or `wheems doctor --fix`, which
-offers to fix what it safely can and asks before each fix. It checks Node.js, Herdr core, Claude
+offers to fix what it safely can and asks before each fix. It checks Bun, Herdr core, Claude
 Code, the folder trust, Slack and the service.
