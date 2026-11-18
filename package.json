@@ -42,7 +42,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "vite build --config web/vite.config.ts --logLevel warn",
+    "build": "bun scripts/build-web.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
@@ -53,7 +53,7 @@
     "check": "bun run lint && bun run typecheck && bun run test && bun run build",
     "clean": "rm -rf dist",
     "prepublishOnly": "bun run clean && bun run check",
-    "dev:web": "vite --config web/vite.config.ts"
+    "dev:web": "bun scripts/dev-web.ts"
   },
   "repository": {
     "type": "git",
@@ -75,7 +75,6 @@
     "@types/node": "^22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.2.1",
     "eslint": "^10.14.0",
     "globals": "^17.14.0",
     "prettier": "^3.9.10",
@@ -83,8 +82,7 @@
     "react-dom": "19.3.1",
     "react-router": "8.5.1",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.72.2",
-    "vite": "8.3.5"
+    "typescript-eslint": "^8.72.2"
   },
   "publishConfig": {
     "access": "public"

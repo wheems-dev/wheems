@@ -41,7 +41,7 @@ export interface WebOptions {
   log?: (message: string) => void;
   /** How long a send waits before answering; tests shorten it. */
   sendWaitMs?: number;
-  /** The built app's folder. Default: `app/` beside this file, as `npm run build` makes it. */
+  /** The built app's folder. Default: dist/web/app, as `bun run build` makes it. */
   appDir?: string;
 }
 
