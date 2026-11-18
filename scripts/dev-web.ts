@@ -1,8 +1,12 @@
 /**
  * Serves the web app with live reload (`bun run dev:web`), passing /api to a running Wheems
  * (WHEEMS_WEB_PORT, or 4317) as if from its own page, with its Host and Origin, which it requires.
- * It listens on PORT, or on 5173 or the next free port after it, as Vite did.
+ * It listens on PORT, or on 5173 or the next free port after it, as Vite did, and prints the
+ * link with the token of the Wheems in ~/wheems (or WHEEMS_HOME), so the page opens signed in.
  */
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { defaultHome, paths } from '../src/home.js';
 import app from '../web/index.html';
 
 const wheems = `http://127.0.0.1:${process.env.WHEEMS_WEB_PORT ?? '4317'}`;
@@ -46,4 +50,11 @@ for (let port = 5173; server === undefined; port++) {
     if (!inUse || chosen !== undefined || port >= 5199) throw error;
   }
 }
-console.log(`Web app: ${server.url.href}, with /api from ${wheems}`);
+// The link with the running Wheems's token after the #, so the page opens signed in (read only:
+// a Wheems that has never served its web app has no token yet).
+const token = await readFile(join(paths(defaultHome()).state, 'web-token'), 'utf8').then(
+  (text) => text.trim(),
+  () => '',
+);
+console.log(`Web app: ${server.url.href}${token === '' ? '' : `#token=${token}`}`);
+console.log(`Passing /api to the Wheems at ${wheems}`);
