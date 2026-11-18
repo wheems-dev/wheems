@@ -1,6 +1,6 @@
 {
   "name": "wheems",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "An opinionated framework for running teams of AI agents, on Herdr core",
   "license": "Apache-2.0",
   "homepage": "https://wheems.dev",

@@ -3,11 +3,11 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
-## Unreleased
+## 0.1.14
 
-Approvals and updates, the second half of milestone 3, and Wheems moves from Node.js to Bun. The
-session store moves to schema 7, with an `approvals` table; the service updates it when it
-starts. Still an early preview.
+Released 18 November 2026. Approvals and updates, the second half of milestone 3, and Wheems
+moves from Node.js to Bun. The session store moves to schema 7, with an `approvals` table; the
+service updates it when it starts. Still an early preview.
 
 **Changed**
 
