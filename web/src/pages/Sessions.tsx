@@ -50,9 +50,16 @@ export function Sessions() {
       <div className={`bench${details && chosen !== null ? ' with-details' : ''}`}>
         {chosen === null ? (
           <section className="card convo empty-convo">
-            <p className="muted">
-              No sessions yet. They show up here as soon as the chief starts one.
-            </p>
+            {ended ? (
+              <p className="muted">
+                No sessions yet. They show up here as soon as the chief starts one.
+              </p>
+            ) : (
+              <p className="muted">
+                None is open right now.{' '}
+                <Link to={withS(base, null, true)}>Show ended sessions</Link>
+              </p>
+            )}
           </section>
         ) : (
           <Conversation
