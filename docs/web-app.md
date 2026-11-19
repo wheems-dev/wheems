@@ -74,9 +74,14 @@ and the workspace's skills.
 
 ### Sessions
 
-The same tree on the left, and the chosen session on the right: its state, its id in Herdr, **your
-original ask** (the message that started the chain), its purpose, who started it, and its latest
-messages: what was said in its chat thread (your messages, its answers and Wheems's notices, kept
+One session at a time, at the same width as every page. Its name, at the top, is a switcher like
+the workspace one: a menu of the open sessions, or all of them with the ended ones, which a few
+letters of a name narrow down, with the chief's team nested under the conversation it came
+from. Under it are its state and its latest messages as a chat, newest at the bottom, with a
+reply box pinned underneath; beside it, details you can hide: **your original ask** (the message
+that started the chain), its purpose and finish line, its agent, who it works for and its team,
+each linked, and its id in Herdr. On a wide screen the page fills the window, and the messages
+and details scroll on their own. The messages are what was said in its chat thread (your messages, its answers and Wheems's notices, kept
 in the session store as they're posted) and messages sent to it through Wheems. A message that
 seems to hold a password, token or key is kept only as a line saying so. You can send it a
 message, watch it in Herdr or end it; ending asks first, in the page, since it can't be undone.
@@ -85,7 +90,8 @@ ended here. A chat thread's session hears you in its thread, so the page says to
 and offers **Hand over** and **Start fresh**, each asking first, with its handovers listed:
 who wrote each, from which engine and model, and whether a new session has taken it over.
 Sessions you started yourself with `wheems session create` are a group of their
-own. A session you end stays in view, with how it went, even while ended sessions are hidden.
+own. A session you end stays in view, with how it went, even while ended sessions are hidden;
+with none open, the page links to the ended ones.
 
 Showing the original ask on every session follows a lesson from running many agents: work drifts
 from what was asked one sensible step at a time, so the ask stays visible all the way down.
@@ -169,7 +175,7 @@ then remembers it.
 
 ## What can be built when
 
-| Page             | Can show now (0.1.14)                                                           | Waits for                                                       |
+| Page             | Can show now (0.1.15)                                                           | Waits for                                                       |
 | ---------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Overview         | Workspace, chief, session tree, knowledge base stats and search, skills, health | Projects in the tree (milestone 4)                              |
 | Sessions         | The session store: tree, detail, messages, send and end                         | Sub-agents read-only, with End as a stop ([team.md](team.md))   |
