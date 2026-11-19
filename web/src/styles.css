@@ -316,29 +316,40 @@ a:hover {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 10px;
-  background: var(--chip);
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 6px 0;
+  border-top: 1px solid var(--line);
   font-size: 12.5px;
 }
-.theme {
+/* The version, in small print at the very bottom. */
+.version {
+  font-size: 11px;
+  color: var(--muted);
+}
+.brandrow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  min-height: 30px;
-  padding: 0 10px;
+}
+.theme {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 12.5px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--soft);
   cursor: pointer;
 }
 .theme:hover {
-  background: var(--hover);
+  background: var(--navhover);
+  color: var(--ink);
 }
 .card {
   background: var(--surface);

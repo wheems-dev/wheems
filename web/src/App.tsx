@@ -79,10 +79,13 @@ function Layout() {
   return (
     <div className="app">
       <aside className="side">
-        <Link className="brand" to="/">
-          <Logo />
-          Wheems
-        </Link>
+        <div className="brandrow">
+          <Link className="brand" to="/">
+            <Logo />
+            Wheems
+          </Link>
+          <ThemeSwitch />
+        </div>
         {workspace && install.data && <Switcher install={install.data} current={workspace} />}
         <nav className="nav" aria-label="Main">
           {workspace && (
@@ -136,7 +139,9 @@ function Layout() {
           ) : install.data?.service.running === true ? (
             <>
               <span className="badge ok">● Service running</span>
-              <span className="soft small">Wheems {install.data.service.report?.version}</span>
+              {install.data.service.report?.version !== undefined && (
+                <span className="version">Wheems {install.data.service.report.version}</span>
+              )}
             </>
           ) : install.data ? (
             <>
@@ -146,7 +151,6 @@ function Layout() {
               </span>
             </>
           ) : null}
-          <ThemeSwitch />
         </div>
       </aside>
       <main className="mainp">
@@ -227,13 +231,15 @@ function ThemeSwitch() {
     <button
       type="button"
       className="theme"
+      aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+      title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
       onClick={() => {
         const next = theme === 'dark' ? 'light' : 'dark';
         applyTheme(next);
         setTheme(next);
       }}
     >
-      {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
     </button>
   );
 }
