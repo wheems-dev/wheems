@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router';
 import type { ConversationsFlash, Flash } from '../../../src/web/actions.js';
 import type { SessionMessage, TreeItem, WorkspacePage } from '../../../src/web/data.js';
 import type { Handover, SessionRecord } from '../../../src/state/store.js';
@@ -16,9 +16,9 @@ interface SessionView {
 }
 
 /**
- * Sessions as a workspace of three panes, like an inbox: the list, the open session's messages
- * with its actions and reply box, and its details, which can be hidden. Each pane scrolls on its
- * own, so choosing a session never moves the others.
+ * Sessions, at the same width as every other page: a switcher at the top to choose one, then the
+ * chosen session's messages with its actions and reply box, and its details, which can be
+ * hidden. On a wide screen the page fills the window's height, and each part scrolls on its own.
  */
 export function Sessions() {
   const id = useParams().id ?? '';
@@ -48,42 +48,6 @@ export function Sessions() {
         <p className="card pad">Couldn't read the session store: {page.data.storeProblem}</p>
       )}
       <div className={`bench${details && chosen !== null ? ' with-details' : ''}`}>
-        <nav className="card pane-list" aria-label="Sessions">
-          <div className="tabs" role="tablist" aria-label="Which sessions">
-            <Link
-              role="tab"
-              aria-selected={!ended}
-              className={ended ? '' : 'on'}
-              to={withS(base, chosen, false)}
-            >
-              Open
-            </Link>
-            <Link
-              role="tab"
-              aria-selected={ended}
-              className={ended ? 'on' : ''}
-              to={withS(base, chosen, true)}
-            >
-              All, with ended
-            </Link>
-          </div>
-          <ListGroup
-            title="With you"
-            items={page.data.chiefTree}
-            base={base}
-            chosen={chosen}
-            ended={ended}
-          />
-          {page.data.mine.length > 0 && (
-            <ListGroup
-              title="Started by you"
-              items={page.data.mine}
-              base={base}
-              chosen={chosen}
-              ended={ended}
-            />
-          )}
-        </nav>
         {chosen === null ? (
           <section className="card convo empty-convo">
             <p className="muted">
@@ -100,6 +64,17 @@ export function Sessions() {
             ended={ended}
             details={details}
             onToggleDetails={toggleDetails}
+            switcher={
+              <SessionSwitcher
+                groups={[
+                  { title: 'With you', items: page.data.chiefTree },
+                  { title: 'Started by you', items: page.data.mine },
+                ]}
+                current={all.find((i) => i.session.id === chosen)}
+                base={base}
+                ended={ended}
+              />
+            }
           />
         )}
       </div>
@@ -107,19 +82,158 @@ export function Sessions() {
   );
 }
 
-/** One group of the list: the chief's conversations with their team, or yours. */
+interface Group {
+  title: string;
+  items: TreeItem[];
+}
+
+/**
+ * Chooses the session to show, like the workspace switcher: the chosen one's name is the button,
+ * at the top of its conversation, and opens a menu of them all, open or with ended ones too, that
+ * a few letters narrow down.
+ */
+function SessionSwitcher({
+  groups,
+  current,
+  base,
+  ended,
+}: {
+  groups: Group[];
+  current: TreeItem | undefined;
+  base: string;
+  ended: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  const location = useLocation();
+  // Choosing a session, or switching tabs, closes the menu.
+  useEffect(() => {
+    setOpen(false);
+    setFilter('');
+  }, [location.search]);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('keydown', close);
+    };
+  }, [open]);
+  const words = filter.trim().toLowerCase();
+  const shown = groups
+    .map((g) => ({
+      ...g,
+      items: words === '' ? g.items : g.items.filter((i) => i.label.toLowerCase().includes(words)),
+    }))
+    .filter((g) => g.items.length > 0 || (words === '' && g.title === 'With you'));
+  const count = groups.reduce((n, g) => n + g.items.length, 0);
+  const s = current?.session;
+  return (
+    <div className="sswitch">
+      <button
+        type="button"
+        className="sswitch-button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => {
+          setOpen(!open);
+        }}
+      >
+        {s !== undefined && current !== undefined ? (
+          <span className="grow">
+            <span className="sswitch-title">
+              <span className="convo-title">{current.label}</span>
+              <Icon name="updown" />
+            </span>
+            <span className="row convo-sub">
+              <SessionBadge session={s} />
+              <span className="muted small">{current.kind}</span>
+            </span>
+          </span>
+        ) : (
+          <span className="grow muted">Choose a session</span>
+        )}
+      </button>
+      {open && (
+        <>
+          <div
+            className="switcher-menu-backdrop"
+            onClick={() => {
+              setOpen(false);
+            }}
+          />
+          <div className="menu sswitch-menu" role="menu">
+            <div className="tabs" role="tablist" aria-label="Which sessions">
+              <Link
+                role="tab"
+                aria-selected={!ended}
+                className={ended ? '' : 'on'}
+                to={withS(base, s?.id ?? null, false)}
+              >
+                Open{ended ? '' : ` · ${String(count)}`}
+              </Link>
+              <Link
+                role="tab"
+                aria-selected={ended}
+                className={ended ? 'on' : ''}
+                to={withS(base, s?.id ?? null, true)}
+              >
+                All, with ended{ended ? ` · ${String(count)}` : ''}
+              </Link>
+            </div>
+            <input
+              className="field sswitch-filter"
+              type="search"
+              placeholder="Find a session…"
+              aria-label="Find a session"
+              value={filter}
+              autoFocus
+              onChange={(event) => {
+                setFilter(event.target.value);
+              }}
+            />
+            <div className="sswitch-list">
+              {shown.length === 0 ? (
+                <p className="muted small lempty">No session's name has that in it.</p>
+              ) : (
+                shown.map((g) => (
+                  <ListGroup
+                    key={g.title}
+                    title={g.title}
+                    items={g.items}
+                    base={base}
+                    chosen={s?.id ?? null}
+                    ended={ended}
+                    flat={words !== ''}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** One group in the menu: the chief's conversations with their team nested under them, or yours. */
 function ListGroup({
   title,
   items,
   base,
   chosen,
   ended,
+  flat,
 }: {
   title: string;
   items: TreeItem[];
   base: string;
   chosen: string | null;
   ended: boolean;
+  /** Narrowed by a filter: no nesting, since a match's parent may not be shown. */
+  flat: boolean;
 }) {
   return (
     <div className="lgroup">
@@ -134,10 +248,11 @@ function ListGroup({
           return (
             <Link
               key={s.id}
+              role="menuitem"
               className={`lrow${s.id === chosen ? ' sel' : ''}${s.state === 'ended' ? ' ended' : ''}`}
-              style={{ paddingLeft: 10 + (item.depth - 1) * 16 }}
+              style={{ paddingLeft: 10 + (flat ? 0 : (item.depth - 1) * 16) }}
               to={withS(base, s.id, ended)}
-              aria-current={s.id === chosen ? 'page' : undefined}
+              aria-current={s.id === chosen ? 'true' : undefined}
             >
               <span className={`sdot ${s.state}`} title={stateName(s)} />
               <span className="grow">
@@ -147,6 +262,7 @@ function ListGroup({
                   {ago(s.lastActiveAt)} ago
                 </span>
               </span>
+              {s.id === chosen && <span aria-hidden="true">✓</span>}
             </Link>
           );
         })
@@ -170,6 +286,7 @@ function Conversation({
   ended,
   details,
   onToggleDetails,
+  switcher,
 }: {
   workspace: string;
   session: string;
@@ -178,6 +295,8 @@ function Conversation({
   ended: boolean;
   details: boolean;
   onToggleDetails: () => void;
+  /** The switcher, which names this session and chooses another. */
+  switcher: ReactNode;
 }) {
   const [, setSearch] = useSearchParams();
   // Always with ended sessions, so one you've just ended stays in view, with how it went.
@@ -267,13 +386,7 @@ function Conversation({
     <>
       <section className="card convo" aria-label="Session">
         <header className="convo-head">
-          <div className="grow">
-            <h2 className="convo-title">{item.label}</h2>
-            <span className="row convo-sub">
-              <SessionBadge session={s} />
-              <span className="muted small">{item.kind}</span>
-            </span>
-          </div>
+          <div className="grow">{switcher}</div>
           <div className="row convo-actions">
             {s.state !== 'ended' && s.kind === 'thread' && (
               <>

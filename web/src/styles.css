@@ -754,21 +754,25 @@ button.tree {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
 }
 
-/* Sessions: three panes, like an inbox. The list, the open session and its details each scroll
-   on their own; on a wide screen the page fills the window and doesn't scroll itself. */
+/* Sessions: a switcher, then the chosen session and its details, at the same width as every
+   other page. On a wide screen the page fills the window's height, and the messages and details
+   scroll on their own; narrower, it stacks and the page scrolls. */
 .bench-page {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 .bench {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-@media (min-width: 800px) {
+.convo-msgs {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+@media (min-width: 1100px) {
   .wrap:has(> .bench-page) {
-    max-width: none;
     height: calc(100dvh - 64px);
   }
   .bench-page {
@@ -779,43 +783,75 @@ button.tree {
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
   .bench.with-details {
-    grid-template-columns: 260px minmax(0, 1fr) 260px;
+    grid-template-columns: minmax(0, 1fr) 270px;
   }
   .bench > * {
     min-height: 0;
   }
-  .pane-list,
   .pane-details {
     overflow-y: auto;
-  }
-  .convo {
-    overflow: hidden;
   }
   .convo-msgs {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    max-height: none;
   }
 }
-@media (min-width: 800px) and (max-width: 1099px) {
-  .bench,
-  .bench.with-details {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-  /* No room for a third column: the details sit under the conversation's list instead. */
-  .bench.with-details .pane-details {
-    grid-column: 1;
-    grid-row: 2;
-  }
-  .bench.with-details .pane-list {
-    grid-row: 1;
-  }
-  .bench.with-details .convo {
-    grid-row: 1 / span 2;
-  }
+.sswitch {
+  position: relative;
+}
+.sswitch-button {
+  display: flex;
+  width: 100%;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sswitch-button:hover {
+  background: var(--hover);
+}
+.sswitch-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sswitch-title svg {
+  flex: none;
+  color: var(--soft);
+}
+.sswitch-menu {
+  position: absolute;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px var(--shadow);
+  top: calc(100% + 6px);
+  right: auto;
+  width: min(480px, 100%);
+  max-height: min(70vh, 560px);
+  padding: 0;
+  overflow: hidden;
+}
+.sswitch-filter {
+  margin: 0 8px 4px;
+  width: auto;
+}
+.sswitch-list {
+  overflow-y: auto;
+  padding-bottom: 4px;
 }
 .tabs {
   display: flex;
