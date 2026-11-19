@@ -3,6 +3,28 @@
 Wheems follows [semantic versioning](https://semver.org). While it's 0.x, any release may
 change anything, including commands and config formats, without a migration path.
 
+## 0.1.15
+
+Released 19 November 2026. The web app is a size smaller and easier to find your way around,
+with a new Sessions page. No change to the session store. Still an early preview.
+
+**Changed**
+
+- **Everything a size smaller,** so more fits on screen, with the same colours, rounded corners
+  and bold headings: body text 14px (was 16), page titles 22px (was 30), a narrower sidebar and
+  smaller buttons, fields and badges. Pages may be up to 1240px wide (was 1080).
+- **Only the content scrolls.** On a wide screen the sidebar stays in view, with the service's
+  status at its bottom and the version in small print under it. The light and dark switch is a
+  sun or moon beside the logo.
+- **Sessions, reworked.** The session's name is a switcher, like the workspace one, with Open and
+  All tabs and a box to find a session by name. Under it are the session's messages as a chat,
+  newest at the bottom, with its actions (hand over, start fresh, end) at the top and a reply
+  box pinned underneath, ⌘ Enter to send. Its details sit beside it and can be hidden: what was
+  asked, what it's for, when it's done, who it works for and its team, linked, and how to watch
+  it in Herdr. With no session open, it links to the ended ones.
+- `bun run dev:web` uses the next free port when 5173 is taken, and prints the link with the
+  running Wheems's token, so the page opens signed in.
+
 ## 0.1.14
 
 Released 18 November 2026. Approvals and updates, the second half of milestone 3, and Wheems
