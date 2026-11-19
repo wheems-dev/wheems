@@ -6,23 +6,38 @@ import type { SessionRecord } from '../../src/state/store.js';
 /** Stroke icons, drawn in the current text colour. */
 const PATHS = {
   home: ['M3 11l9-7 9 7', 'M5 10v10h14V10'],
+  info: ['M12 16v-5', 'M12 8h.01'],
   chat: ['M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z'],
   check: ['M9 12l2 2 4-4'],
   gear: ['M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'],
   link: ['M9 7H7a5 5 0 0 0 0 10h2', 'M15 7h2a5 5 0 0 1 0 10h-2', 'M8 12h8'],
+  moon: ['M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z'],
   person: ['M4 21a8 8 0 0 1 16 0'],
+  sun: [
+    'M12 2v2',
+    'M12 20v2',
+    'M4.9 4.9l1.4 1.4',
+    'M17.7 17.7l1.4 1.4',
+    'M2 12h2',
+    'M20 12h2',
+    'M4.9 19.1l1.4-1.4',
+    'M17.7 6.3l1.4-1.4',
+  ],
   tool: ['M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z'],
   twig: ['M5 2v10a4 4 0 0 0 4 4h12'],
+  x: ['M6 6l12 12', 'M18 6L6 18'],
   updown: ['M8 9l4-4 4 4', 'M8 15l4 4 4-4'],
 } as const;
 
 const CIRCLES: Partial<Record<keyof typeof PATHS, [number, number, number]>> = {
   check: [12, 12, 9],
   gear: [12, 12, 3],
+  info: [12, 12, 9],
   person: [12, 8, 4],
+  sun: [12, 12, 4],
 };
 
-export function Icon({ name, size = 18 }: { name: keyof typeof PATHS; size?: number }) {
+export function Icon({ name, size = 16 }: { name: keyof typeof PATHS; size?: number }) {
   const circle = CIRCLES[name];
   return (
     <svg
@@ -46,7 +61,7 @@ export function Icon({ name, size = 18 }: { name: keyof typeof PATHS; size?: num
 
 export function Logo() {
   return (
-    <svg width="30" height="25" viewBox="78 94 372 306" aria-hidden="true">
+    <svg width="25" height="21" viewBox="78 94 372 306" aria-hidden="true">
       <path
         className="cloud"
         d="M170 400C116 400 78 364 78 315C78 278 100 248 132 234C124 195 148 158 183 158C195 158 208 162 220 170C230 123 267 94 311 94C370 94 414 138 414 200C414 222 408 243 396 259C430 271 450 296 450 326C450 369 415 400 372 400Z"

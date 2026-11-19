@@ -160,7 +160,7 @@ export function TreeLinks({
           <Link
             key={s.id}
             className={`tree${s.id === selected ? ' sel' : ''}${s.state === 'ended' ? ' ended' : ''}`}
-            style={{ paddingLeft: 20 + (item.depth - 1) * 28 }}
+            style={{ paddingLeft: 16 + (item.depth - 1) * 24 }}
             to={`/w/${encodeURIComponent(workspace)}/sessions?${query.toString()}`}
           >
             <Icon name="twig" />

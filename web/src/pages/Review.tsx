@@ -44,7 +44,7 @@ export function Review() {
         </section>
       )}
       <section className="card pad stack">
-        <h2 style={{ fontSize: 16 }}>Approvals history</h2>
+        <h2>Approvals history</h2>
         {view.data.approvals.history.length === 0 ? (
           <p className="soft small">
             No approvals yet. When an agent asks before acting, its question and the answer are

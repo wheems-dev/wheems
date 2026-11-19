@@ -135,7 +135,8 @@ body {
     -apple-system,
     'Segoe UI',
     sans-serif;
-  line-height: 1.45;
+  line-height: 1.5;
+  font-size: 14px;
 }
 a {
   color: var(--link);
@@ -149,34 +150,50 @@ a:hover {
   min-height: 100vh;
 }
 .side {
-  flex: 1 1 240px;
+  flex: 1 1 220px;
   max-width: 100%;
-  padding: 20px 16px;
+  padding: 14px 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   border-right: 1px solid var(--line);
 }
 .mainp {
   flex: 999 1 560px;
   min-width: 0;
-  padding: 32px clamp(16px, 4vw, 48px) 48px;
+  padding: 24px clamp(16px, 3vw, 36px) 40px;
   background: var(--main);
 }
+/* Side by side, only the content scrolls: the sidebar stays in view, scrolling on its own when
+   it's taller than the window. Narrower, the sidebar sits above the content and scrolls with it. */
+@media (min-width: 800px) {
+  .app {
+    flex-wrap: nowrap;
+  }
+  .side {
+    flex: 0 0 216px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+}
 .wrap {
-  max-width: 1080px;
+  max-width: 1240px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 4px 8px;
+  gap: 8px;
+  padding: 2px 6px;
   font-weight: 800;
-  font-size: 17px;
+  font-size: 15px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -196,11 +213,11 @@ a:hover {
   list-style: none;
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 8px 10px;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   cursor: pointer;
 }
@@ -212,15 +229,15 @@ a:hover {
 }
 .switcher .menu {
   position: absolute;
-  top: 62px;
+  top: 50px;
   left: 0;
   right: 0;
   z-index: 5;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   box-shadow: 0 12px 32px var(--shadow);
-  padding: 6px;
+  padding: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -228,9 +245,9 @@ a:hover {
 .mi {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 6px 10px;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
   border-radius: 8px;
   color: var(--ink);
   text-decoration: none;
@@ -241,14 +258,14 @@ a:hover {
 }
 .av {
   flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
   background: var(--ws-bg);
   color: var(--ws-ink);
 }
@@ -257,10 +274,10 @@ a:hover {
   color: var(--inv-ink);
 }
 .av.big {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  font-size: 22px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  font-size: 17px;
 }
 .nav {
   display: flex;
@@ -270,14 +287,14 @@ a:hover {
 .nav a {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
   color: var(--ink);
   text-decoration: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
 }
 .nav a:hover {
   background: var(--navhover);
@@ -288,47 +305,59 @@ a:hover {
   color: var(--inv-ink);
 }
 .navlabel {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  padding: 14px 12px 4px;
+  padding: 12px 10px 2px;
 }
 .foot {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 12px;
-  background: var(--chip);
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px 6px 0;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
 }
-.theme {
+/* The version, in small print at the very bottom. */
+.version {
+  font-size: 11px;
+  color: var(--muted);
+}
+.brandrow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 13px;
+}
+.theme {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--soft);
   cursor: pointer;
 }
 .theme:hover {
-  background: var(--hover);
+  background: var(--navhover);
+  color: var(--ink);
 }
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 14px;
 }
 .pad {
-  padding: 20px;
+  padding: 16px;
 }
 .notice {
   background: var(--notice);
@@ -344,22 +373,22 @@ a:hover {
   color: var(--soft);
 }
 .small {
-  font-size: 13px;
+  font-size: 12.5px;
 }
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 22px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 }
 h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 700;
 }
 h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
 }
 p {
@@ -369,7 +398,7 @@ p {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .between {
   justify-content: space-between;
@@ -381,19 +410,23 @@ p {
 }
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
 }
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+/* A badge keeps its own width, even as the only thing in a column. */
+.stack > .badge {
+  align-self: flex-start;
 }
 .ok {
   background: var(--ok-bg);
@@ -418,13 +451,13 @@ p {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 0 12px;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink);
   text-decoration: none;
@@ -446,34 +479,34 @@ p {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--sunk);
 }
 .stat b {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 800;
 }
 .stat span {
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--soft);
 }
 .stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 .tag {
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border-radius: 7px;
   background: var(--sunk);
 }
 .tree {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 9px 16px;
   text-decoration: none;
   color: var(--ink);
   border-top: 1px solid var(--hair);
@@ -507,18 +540,18 @@ p {
 .group {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 20px;
+  gap: 8px;
+  padding: 12px 16px;
   font-weight: 800;
 }
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  padding: 14px;
-  border-radius: 12px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
   background: var(--sunk);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 .facts span:first-child {
   color: var(--soft);
@@ -527,53 +560,20 @@ p {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.msg {
-  display: flex;
-  gap: 12px;
-}
-.msg .av {
-  font-size: 12px;
-}
-.msg pre {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font: inherit;
-  font-size: 14px;
-}
-.split {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: flex-start;
-}
-.split > .list {
-  flex: 1 1 320px;
-  min-width: 0;
-  overflow: hidden;
-}
-.split > .detail {
-  flex: 2 1 420px;
-  min-width: 0;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
 .check {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
-  padding: 12px 20px;
+  gap: 10px;
+  padding: 10px 16px;
   border-top: 1px solid var(--hair);
-  font-size: 14px;
+  font-size: 13px;
 }
 .check .grow {
   flex: 1 1 300px;
 }
 .empty {
-  padding: 20px;
+  padding: 16px;
   color: var(--muted);
 }
 .code {
@@ -586,9 +586,9 @@ p {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--hair);
-  font-size: 14px;
+  font-size: 13px;
 }
 .kv span:first-child {
   color: var(--muted);
@@ -600,12 +600,12 @@ p {
 }
 .preview {
   margin: 0;
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
   background: #202735;
   color: #e7e9ef;
   font:
-    400 13px/1.6 'IBM Plex Mono',
+    400 12.5px/1.6 'IBM Plex Mono',
     ui-monospace,
     monospace;
   white-space: pre-wrap;
@@ -620,13 +620,13 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
   font-family: inherit;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   border: 1px solid var(--field-line);
   background: var(--surface);
@@ -654,13 +654,13 @@ p {
 }
 .field {
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
   border: 1px solid var(--field-line);
   background: var(--main);
   color: var(--ink);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 textarea.field {
   resize: vertical;
@@ -681,7 +681,7 @@ textarea.field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 28px;
 }
 .flash.ok {
   border-color: var(--ok);
@@ -699,14 +699,14 @@ textarea.field {
   z-index: 4;
 }
 .loading {
-  padding: 20px;
+  padding: 16px;
   color: var(--muted);
 }
 .live {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   color: var(--muted);
 }
 .live::before {
@@ -725,20 +725,15 @@ button.tree {
   text-align: left;
   cursor: pointer;
 }
-.msg-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
 .switcher-button {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 56px;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -757,4 +752,365 @@ button.tree {
   bottom: 12px;
   z-index: 2;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Sessions: a switcher, then the chosen session and its details, at the same width as every
+   other page. On a wide screen the page fills the window's height, and the messages and details
+   scroll on their own; narrower, it stacks and the page scrolls. */
+.bench-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bench {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.convo-msgs {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+@media (min-width: 1100px) {
+  .wrap:has(> .bench-page) {
+    height: calc(100dvh - 64px);
+  }
+  .bench-page {
+    flex: 1;
+    min-height: 0;
+  }
+  .bench {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bench.with-details {
+    grid-template-columns: minmax(0, 1fr) 270px;
+  }
+  .bench > * {
+    min-height: 0;
+  }
+  .pane-details {
+    overflow-y: auto;
+  }
+  .convo-msgs {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+  }
+}
+.sswitch {
+  position: relative;
+}
+.sswitch-button {
+  display: flex;
+  width: 100%;
+  margin: -4px -8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sswitch-button:hover {
+  background: var(--hover);
+}
+.sswitch-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sswitch-title svg {
+  flex: none;
+  color: var(--soft);
+}
+.sswitch-menu {
+  position: absolute;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px var(--shadow);
+  top: calc(100% + 6px);
+  right: auto;
+  width: min(480px, 100%);
+  max-height: min(70vh, 560px);
+  padding: 0;
+  overflow: hidden;
+}
+.sswitch-filter {
+  margin: 0 8px 4px;
+  width: auto;
+}
+.sswitch-list {
+  overflow-y: auto;
+  padding-bottom: 4px;
+}
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin: 8px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--sunk);
+}
+.tabs a {
+  flex: 1;
+  padding: 4px 8px;
+  border-radius: 7px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--soft);
+  text-decoration: none;
+}
+.tabs a:hover {
+  color: var(--ink);
+}
+.tabs a.on {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px var(--shadow);
+}
+.lgroup {
+  padding: 4px 0 8px;
+}
+.lgroup-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.lempty {
+  padding: 4px 14px;
+}
+.lrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 1px 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.lrow:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.lrow.sel {
+  background: var(--sel);
+}
+.lrow.ended {
+  opacity: 0.6;
+}
+.lrow-title {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lrow-sub {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+/* A session's state as a small dot: blue while it works, grey when idle, amber when stopped. */
+.sdot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.sdot.working,
+.sdot.starting {
+  background: var(--link);
+  box-shadow: 0 0 0 3px var(--info-bg);
+}
+.sdot.idle {
+  background: var(--good);
+}
+.sdot.stopped {
+  background: var(--amber);
+}
+.sdot.ended {
+  background: var(--twig);
+}
+.convo {
+  display: flex;
+  flex-direction: column;
+}
+.empty-convo {
+  padding: 24px;
+}
+.convo-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+.convo-title {
+  font-size: 16px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.convo-sub {
+  gap: 8px;
+  margin-top: 4px;
+}
+.convo-actions {
+  flex: none;
+  gap: 6px;
+}
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--field-line);
+  background: var(--surface);
+  color: var(--soft);
+  cursor: pointer;
+}
+.iconbtn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.iconbtn.on {
+  background: var(--sel);
+  border-color: var(--sel);
+  color: var(--link);
+}
+.pane-details .iconbtn {
+  width: 26px;
+  height: 26px;
+  border-color: transparent;
+}
+.asking {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--notice);
+}
+.convo .flash {
+  margin: 10px 16px 0;
+}
+.convo-msgs {
+  padding: 16px;
+}
+.convo-msgs-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+}
+.convo-none {
+  margin: auto;
+  text-align: center;
+}
+.bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 82%;
+}
+.bubble-row.mine {
+  align-self: flex-end;
+}
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 14px 14px 14px 4px;
+  background: var(--sunk);
+}
+.bubble-row.mine .bubble {
+  border-radius: 14px 14px 4px 14px;
+  background: var(--sel);
+}
+.bubble-who {
+  font-size: 11px;
+  color: var(--muted);
+}
+.bubble pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 13.5px;
+}
+.convo-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--hair);
+}
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.composer textarea {
+  flex: 1;
+  resize: none;
+}
+.pane-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 16px;
+}
+.dlist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+.dlist dt,
+.dlabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.dlist dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.teamrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.teamrow:hover {
+  color: var(--link);
+}
+.tiny {
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
 }
